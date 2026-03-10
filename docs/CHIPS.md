@@ -29,6 +29,21 @@ spark-researcher chips validate
 
 The canonical schema lives at `schemas/spark-chip.schema.json`.
 
+Create a new chip scaffold with:
+
+```powershell
+spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score --goal maximize
+```
+
+The starter writes only the minimum valid repo:
+
+- `pyproject.toml`
+- `spark-chip.json`
+- `spark-researcher.project.json`
+- `README.md`
+- `src/<package>/__init__.py`
+- `src/<package>/cli.py`
+
 ## Config
 
 Point a Spark project at a chip with:

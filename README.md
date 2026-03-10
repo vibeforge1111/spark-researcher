@@ -43,6 +43,7 @@ spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
+spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
 spark-researcher trainers run
@@ -86,6 +87,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
+spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
 spark-researcher trainers run
@@ -135,3 +137,5 @@ Domain chips keep domain intelligence out of the core repo. A chip is an externa
 - `watchtower`
 
 Spark still owns the loop, ledger, memory index, self-edit policy, and collective export. The chip only supplies domain-specific logic. See `docs/CHIPS.md`.
+
+New chips should usually start from `spark-researcher chips init`, then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.

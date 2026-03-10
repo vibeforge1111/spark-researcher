@@ -23,7 +23,7 @@ spark-researcher packets search "proof quality"
 spark-researcher advisory adapters
 spark-researcher advisory providers
 spark-researcher advisory build --task "draft a content belief packet" --model claude
-spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command my-wrapper --command {system_prompt_path} --command {user_prompt_path} --command {response_path}
+spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
 spark-researcher advisory log --task "draft a content belief packet" --model claude --status ok --packet-id belief-run-...
 spark-researcher advisory review
 spark-researcher optimizer status

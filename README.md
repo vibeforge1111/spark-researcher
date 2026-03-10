@@ -102,7 +102,7 @@ spark-researcher packets status
 spark-researcher packets search "learning rate"
 spark-researcher advisory adapters
 spark-researcher advisory build --task "draft a startup doctrine update" --model claude
-spark-researcher advisory execute --task "draft a startup doctrine update" --model claude --dry-run --command my-wrapper --command {system_prompt_path} --command {user_prompt_path} --command {response_path}
+spark-researcher advisory execute --task "draft a startup doctrine update" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
 spark-researcher advisory log --task "draft a startup doctrine update" --model claude --status ok --packet-id startup_factor-theme-distribution-velocity-retention
 spark-researcher advisory review
 spark-researcher optimizer status

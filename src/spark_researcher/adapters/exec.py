@@ -26,7 +26,10 @@ def _now_slug() -> str:
 
 def _resolve_command(model: str, command_override: list[str] | None = None) -> list[str]:
     if command_override:
-        return [str(item) for item in command_override]
+        parts: list[str] = []
+        for item in command_override:
+            parts.extend(shlex.split(str(item), posix=False))
+        return parts
     raw = os.environ.get(ENV_KEYS[model], "").strip()
     return shlex.split(raw, posix=False) if raw else []
 

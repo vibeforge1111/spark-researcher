@@ -6,6 +6,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,10 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
     return self_edit_root(runtime_root) / proposal_id
+
+
+def _workspace_dir(proposal_id: str) -> Path:
+    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / proposal_id / "workspace"
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -252,7 +257,9 @@ def propose(
         raise RuntimeError("Git worktree must be clean before self-edit proposals.")
     proposal_id = f"{now_stamp()}-self-edit"
     proposal_root = self_edit_root(runtime_root) / proposal_id
-    workspace_root = proposal_root / "workspace"
+    workspace_root = _workspace_dir(proposal_id)
+    if workspace_root.exists():
+        shutil.rmtree(workspace_root)
     copy_repo(repo_root, workspace_root)
     request_path = proposal_root / "request.md"
     last_message_path = proposal_root / "agent-last-message.txt"

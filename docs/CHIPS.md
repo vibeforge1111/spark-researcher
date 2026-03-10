@@ -79,7 +79,7 @@ The chip owns:
 - domain packets
 - domain watchtower pages
 
-Suggestion hooks should keep expanding the frontier from evidence:
+Suggestion hooks should keep expanding the frontier from evidence, and Spark can fall back to an LLM frontier constrained by manifest grammar:
 
 - test stronger combinations from winners
 - run transfer checks on strong primitives

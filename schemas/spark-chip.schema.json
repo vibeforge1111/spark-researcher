@@ -72,6 +72,33 @@
           }
         }
       }
+    },
+    "frontier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "model": {"enum": ["claude", "codex", "openclaw", "generic"]},
+        "web_search": {"type": "boolean"},
+        "required_fields": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "allowed_mutations": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-z0-9][a-z0-9._-]{1,63}$": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -7,6 +7,7 @@ from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
 from .config import CandidateTrial, MutationSpec, load_config, save_config
+from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
 
@@ -232,6 +233,11 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
                     mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
                 )
             )
+        if not suggestions:
+            frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
+            if int(frontier_packet.get("suggestion_count", 0)) > 0:
+                return frontier_packet
+            packet["reasons"] = [*packet.get("reasons", []), *frontier_packet.get("reasons", [])]
         return {
             "command_name": command_name,
             "baseline_metric": packet.get("baseline_metric"),

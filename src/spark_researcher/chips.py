@@ -14,6 +14,7 @@ from .paths import chips_root, resolve_runtime_root
 CHIP_SCHEMA_VERSION = "spark-chip.v1"
 CHIP_IO_PROTOCOL = "spark-hook-io.v1"
 HOOK_NAMES = ("evaluate", "suggest", "packets", "watchtower")
+FRONTIER_MODELS = ("claude", "codex", "openclaw", "generic")
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -111,6 +112,32 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
             _command_parts(command)
         except RuntimeError as exc:
             errors.append(f"`commands.{hook_name}` {exc}")
+    frontier = manifest.get("frontier")
+    if frontier is not None:
+        if not isinstance(frontier, dict):
+            errors.append("`frontier` must be an object when present.")
+        else:
+            if not isinstance(frontier.get("enabled", True), bool):
+                errors.append("`frontier.enabled` must be a boolean.")
+            model = str(frontier.get("model", "generic"))
+            if model not in FRONTIER_MODELS:
+                errors.append(f"`frontier.model` must be one of: {', '.join(FRONTIER_MODELS)}.")
+            if not isinstance(frontier.get("web_search", False), bool):
+                errors.append("`frontier.web_search` must be a boolean.")
+            allowed = frontier.get("allowed_mutations", {})
+            if not isinstance(allowed, dict) or not allowed:
+                errors.append("`frontier.allowed_mutations` must be a non-empty object.")
+                allowed = {}
+            for field_name, values in allowed.items():
+                if not _NAME_RE.fullmatch(str(field_name)):
+                    errors.append(f"`frontier.allowed_mutations.{field_name}` must use a lowercase field slug.")
+                if not isinstance(values, list) or not values or not all(isinstance(item, str) and str(item).strip() for item in values):
+                    errors.append(f"`frontier.allowed_mutations.{field_name}` must be a non-empty array of strings.")
+            required_fields = frontier.get("required_fields", [])
+            if not isinstance(required_fields, list) or not all(isinstance(item, str) for item in required_fields):
+                errors.append("`frontier.required_fields` must be an array of strings when present.")
+            elif any(str(item) not in allowed for item in required_fields):
+                errors.append("`frontier.required_fields` must refer only to keys in `frontier.allowed_mutations`.")
     return {
         "valid": not errors,
         "manifest_path": str(manifest_path),

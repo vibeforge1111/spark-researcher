@@ -216,9 +216,10 @@ def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:
         raise RuntimeError(f"Unknown backend profile: {profile_name}")
     spec = BUILTIN_BACKEND_PROFILES[key]
     executable = str(spec["command"][0])
-    if shutil.which(executable) is None:
+    resolved_executable = shutil.which(executable)
+    if resolved_executable is None:
         raise RuntimeError(f"Backend profile '{profile_name}' requires '{executable}' in PATH.")
-    return {"name": key, **spec}
+    return {"name": key, "description": spec["description"], "command": [resolved_executable, *spec["command"][1:]]}
 
 
 def _proposal_summary(proposal: dict[str, Any], review: dict[str, Any] | None = None) -> dict[str, Any]:

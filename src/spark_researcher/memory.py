@@ -32,6 +32,15 @@ def _manifest_path(runtime_root: Path) -> Path:
     return memory_root(runtime_root) / "manifest.json"
 
 
+def _safe_unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except PermissionError:
+        # Windows/Obsidian can transiently hold generated docs open. Keep going;
+        # later writes will refresh files that still exist.
+        return
+
+
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
     return slug.strip("-") or "item"
@@ -201,7 +210,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     docs_root.mkdir(parents=True, exist_ok=True)
     for path in docs_root.glob("*"):
         if path.is_file():
-            path.unlink()
+            _safe_unlink(path)
     build_beliefs(repo_root, runtime_root)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)

@@ -13,6 +13,7 @@
 - Reject complexity growth without measured gain.
 - Switch axes after plateaus instead of endlessly retuning the same knob.
 - Treat self-edit as proposal generation, not autonomous authority.
+- Autonomy must stay bounded: suggest only from observed evidence and stop after explicit round limits.
 
 ## Safety Rules
 

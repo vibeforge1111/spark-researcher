@@ -21,6 +21,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - scaffolds coding, research, and content projects with one init command
 - builds compact belief packets from improved runs and approved self-edits
 - supports external coding agents through a shared repo contract in `AGENTS.md`
+- can suggest and append next candidate trials from ledger history with a bounded autoloop
 
 ## Core Rules
 
@@ -39,6 +40,7 @@ cd C:\Users\USER\Desktop\spark-researcher
 python -m pip install -e .
 spark-researcher run --command train
 spark-researcher loop --command train
+spark-researcher autoloop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
 spark-researcher trainers run
 spark-researcher memory sync
@@ -79,8 +81,11 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 ```powershell
 spark-researcher run --command train
 spark-researcher loop --command train
+spark-researcher autoloop --command train
 spark-researcher trainers run
 spark-researcher trainers status
+spark-researcher candidates suggest --command train
+spark-researcher candidates apply --command train
 spark-researcher memory backend-policy
 spark-researcher memory backend-policy --backend ruvector
 spark-researcher memory sync
@@ -109,3 +114,7 @@ This repo is allowed to become more capable, but not more theatrical. If a featu
 ## Memory Rule
 
 Local Markdown memory is still the source of truth. The optional `ruvector` backend is only an external delegated search surface, not Spark's internal database.
+
+## Autonomy Boundary
+
+`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds.

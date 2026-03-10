@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .beliefs import build_beliefs
+from .candidates import append_suggestions, run_autoloop, suggest_trials
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
 from .config import load_config, memory_policy, save_config, self_edit_policy, update_memory_policy, update_self_edit_policy
@@ -47,6 +48,25 @@ def build_parser() -> argparse.ArgumentParser:
     loop_parser.add_argument("--command", dest="project_command", required=True)
     loop_parser.add_argument("--limit", type=int)
     loop_parser.add_argument("--dry-run", action="store_true")
+
+    autoloop_parser = sub.add_parser("autoloop")
+    add_config_argument(autoloop_parser)
+    autoloop_parser.add_argument("--command", dest="project_command", required=True)
+    autoloop_parser.add_argument("--rounds", type=int, default=3)
+    autoloop_parser.add_argument("--suggest-limit", type=int, default=3)
+    autoloop_parser.add_argument("--dry-run", action="store_true")
+    autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
+
+    candidates_parser = sub.add_parser("candidates")
+    candidates_sub = candidates_parser.add_subparsers(dest="candidates_command")
+    candidates_suggest = candidates_sub.add_parser("suggest")
+    add_config_argument(candidates_suggest)
+    candidates_suggest.add_argument("--command", dest="project_command", required=True)
+    candidates_suggest.add_argument("--limit", type=int, default=3)
+    candidates_apply = candidates_sub.add_parser("apply")
+    add_config_argument(candidates_apply)
+    candidates_apply.add_argument("--command", dest="project_command", required=True)
+    candidates_apply.add_argument("--limit", type=int, default=3)
 
     trainer_parser = sub.add_parser("trainers")
     trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
@@ -166,6 +186,25 @@ def main() -> None:
         return
     if args.action == "loop":
         print_json(run_loop(config_path, args.project_command, dry_run=args.dry_run, limit=args.limit))
+        return
+    if args.action == "autoloop":
+        print_json(
+            run_autoloop(
+                config_path,
+                args.project_command,
+                rounds=args.rounds,
+                suggest_limit=args.suggest_limit,
+                dry_run=args.dry_run,
+                apply_suggestions=not args.no_apply_suggestions,
+            )
+        )
+        return
+    if args.action == "candidates":
+        if args.candidates_command == "apply":
+            packet = suggest_trials(config_path, args.project_command, limit=args.limit)
+            print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"])})
+            return
+        print_json(suggest_trials(config_path, args.project_command, limit=args.limit))
         return
     if args.action == "trainers":
         if args.trainers_command == "run":

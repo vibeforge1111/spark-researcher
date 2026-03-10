@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -81,6 +82,113 @@ class ProjectConfig:
     mutable_targets: list[str] = field(default_factory=list)
     self_edit: SelfEditSpec = field(default_factory=SelfEditSpec)
     guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
+
+
+def _command_to_payload(spec: CommandSpec) -> dict[str, object]:
+    return {
+        "args": list(spec.args),
+        "cwd": spec.cwd,
+        "kind": spec.kind,
+        "log_name": spec.log_name,
+    }
+
+
+def _metric_to_payload(spec: MetricSpec) -> dict[str, object]:
+    return {
+        "pattern": spec.pattern,
+        "kind": spec.kind,
+    }
+
+
+def _candidate_to_payload(spec: CandidateTrial) -> dict[str, object]:
+    return {
+        "candidate_id": spec.candidate_id,
+        "candidate_summary": spec.candidate_summary,
+        "hypothesis": spec.hypothesis,
+        "mutations": dict(spec.mutations),
+    }
+
+
+def _trainer_to_payload(spec: TrainerSpec) -> dict[str, object]:
+    return {
+        "name": spec.name,
+        "examples_path": spec.examples_path,
+        "compile_command": list(spec.compile_command),
+        "min_examples": spec.min_examples,
+        "recompile_every": spec.recompile_every,
+        "max_examples": spec.max_examples,
+    }
+
+
+def config_to_payload(config: ProjectConfig) -> dict[str, object]:
+    return {
+        "project_name": config.project_name,
+        "project_root": config.project_root,
+        "eval_metric": config.eval_metric,
+        "eval_goal": config.eval_goal,
+        "commands": {name: _command_to_payload(spec) for name, spec in config.commands.items()},
+        "metrics": {name: _metric_to_payload(spec) for name, spec in config.metrics.items()},
+        "mutable_parameters": [asdict(item) for item in config.mutable_parameters],
+        "candidate_trials": [_candidate_to_payload(item) for item in config.candidate_trials],
+        "trainers": [_trainer_to_payload(item) for item in config.trainers],
+        "mutable_targets": list(config.mutable_targets),
+        "self_edit": {
+            "command": list(config.self_edit.command),
+            "mutable_targets": list(config.self_edit.mutable_targets),
+            "prompt_preamble": config.self_edit.prompt_preamble,
+            "git_mode": config.self_edit.git_mode,
+            "auto_push": config.self_edit.auto_push,
+            "branch_prefix": config.self_edit.branch_prefix,
+            "main_branch": config.self_edit.main_branch,
+            "commit_message_template": config.self_edit.commit_message_template,
+        },
+        "guardrails": {
+            "max_loop_iterations": config.guardrails.max_loop_iterations,
+            "consecutive_discard_limit": config.guardrails.consecutive_discard_limit,
+            "require_clean_git_for_self_edit": config.guardrails.require_clean_git_for_self_edit,
+            "require_human_approval_for_self_edit": config.guardrails.require_human_approval_for_self_edit,
+            "blocked_command_fragments": list(config.guardrails.blocked_command_fragments),
+        },
+    }
+
+
+def save_config(path: Path, config: ProjectConfig) -> None:
+    payload = config_to_payload(config)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def self_edit_policy(config: ProjectConfig) -> dict[str, object]:
+    return {
+        "git_mode": config.self_edit.git_mode,
+        "auto_push": config.self_edit.auto_push,
+        "branch_prefix": config.self_edit.branch_prefix,
+        "main_branch": config.self_edit.main_branch,
+        "commit_message_template": config.self_edit.commit_message_template,
+        "mutable_targets": list(config.self_edit.mutable_targets),
+        "backend_command": list(config.self_edit.command),
+    }
+
+
+def update_self_edit_policy(
+    config: ProjectConfig,
+    *,
+    git_mode: str | None = None,
+    auto_push: bool | None = None,
+    branch_prefix: str | None = None,
+    main_branch: str | None = None,
+    commit_message_template: str | None = None,
+) -> ProjectConfig:
+    if git_mode is not None:
+        config.self_edit.git_mode = str(git_mode)
+    if auto_push is not None:
+        config.self_edit.auto_push = bool(auto_push)
+    if branch_prefix is not None:
+        config.self_edit.branch_prefix = str(branch_prefix)
+    if main_branch is not None:
+        config.self_edit.main_branch = str(main_branch)
+    if commit_message_template is not None:
+        config.self_edit.commit_message_template = str(commit_message_template)
+    return config
 
 
 def load_config(path: Path) -> ProjectConfig:

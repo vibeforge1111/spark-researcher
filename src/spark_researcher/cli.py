@@ -7,6 +7,7 @@ from pathlib import Path
 from .beliefs import build_beliefs
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
+from .config import load_config, save_config, self_edit_policy, update_self_edit_policy
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
 from .obsidian import build_vault
@@ -96,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_propose.add_argument("--backend-command", action="append")
     self_edit_propose.add_argument("--dry-run", action="store_true")
     self_edit_profiles = self_edit_sub.add_parser("profiles")
+    self_edit_policy_parser = self_edit_sub.add_parser("policy")
+    add_config_argument(self_edit_policy_parser)
+    self_edit_policy_parser.add_argument("--git-mode", choices=["manual", "branch", "main"])
+    self_edit_policy_parser.add_argument("--push", action="store_true")
+    self_edit_policy_parser.add_argument("--no-push", action="store_true")
+    self_edit_policy_parser.add_argument("--branch-prefix")
+    self_edit_policy_parser.add_argument("--main-branch")
+    self_edit_policy_parser.add_argument("--commit-message-template")
     self_edit_review = self_edit_sub.add_parser("review")
     add_config_argument(self_edit_review)
     self_edit_review.add_argument("--proposal-id", required=True)
@@ -146,8 +155,6 @@ def main() -> None:
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
     if args.action == "run":
-        from .config import load_config
-
         config = load_config(config_path)
         trial = next((item for item in config.candidate_trials if item.candidate_id == args.candidate_id), None)
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
@@ -199,6 +206,37 @@ def main() -> None:
             return
         if args.self_edit_command == "profiles":
             print_json({"profiles": backend_profiles()})
+            return
+        if args.self_edit_command == "policy":
+            config = load_config(config_path)
+            push_override = None
+            if args.push and args.no_push:
+                raise RuntimeError("Choose only one of --push or --no-push.")
+            if args.push:
+                push_override = True
+            elif args.no_push:
+                push_override = False
+            has_updates = any(
+                value is not None
+                for value in (
+                    args.git_mode,
+                    push_override,
+                    args.branch_prefix,
+                    args.main_branch,
+                    args.commit_message_template,
+                )
+            )
+            if has_updates:
+                update_self_edit_policy(
+                    config,
+                    git_mode=args.git_mode,
+                    auto_push=push_override,
+                    branch_prefix=args.branch_prefix,
+                    main_branch=args.main_branch,
+                    commit_message_template=args.commit_message_template,
+                )
+                save_config(config_path, config)
+            print_json({"config_path": str(config_path), "updated": has_updates, "policy": self_edit_policy(config)})
             return
         if args.self_edit_command == "review":
             print_json(

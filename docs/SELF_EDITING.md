@@ -35,6 +35,14 @@ Use the installed Codex CLI profile:
 spark-researcher self-edit propose --prompt "..." --backend-profile codex-exec
 ```
 
+Set repo-wide defaults once:
+
+```powershell
+spark-researcher self-edit policy --git-mode branch --push
+spark-researcher self-edit policy --git-mode main --push
+spark-researcher self-edit policy --git-mode manual --no-push
+```
+
 ## Git Modes
 
 - `manual`: apply files only, no commit, no push

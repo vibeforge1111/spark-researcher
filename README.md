@@ -82,6 +82,8 @@ spark-researcher collective publish
 spark-researcher collective status
 spark-researcher collective sync-local
 spark-researcher self-edit profiles
+spark-researcher self-edit policy
+spark-researcher self-edit policy --git-mode branch --push
 spark-researcher self-edit propose --prompt "simplify the trainer status output" --backend-profile codex-exec
 spark-researcher self-edit review --proposal-id <id> --decision approve --root-lesson "..." --lineage-failure "..." --lineage-failure "..." --lineage-failure "..." --counterfactual "..." --ghost-check "..." --rollback-condition "..."
 spark-researcher self-edit apply --proposal-id <id>

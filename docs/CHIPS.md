@@ -10,6 +10,8 @@ A chip is an external repo with:
 - one or more command hooks
 - its own source code and tests
 
+The manifest now follows `spark-chip.v1` with `spark-hook-io.v1` hook I/O.
+
 Spark calls chip hooks with `--input <json> --output <json>`.
 
 Supported hooks:
@@ -18,6 +20,14 @@ Supported hooks:
 - `suggest`: domain-specific next-candidate generation
 - `packets`: domain-specific memory documents
 - `watchtower`: domain-specific Obsidian pages
+
+Validate a configured chip with:
+
+```powershell
+spark-researcher chips validate
+```
+
+The canonical schema lives at `schemas/spark-chip.schema.json`.
 
 ## Config
 
@@ -53,3 +63,7 @@ The chip owns:
 - domain watchtower pages
 
 This keeps the kernel portable while letting domains evolve in separate repos.
+
+## Registry
+
+Current known chips are listed in `docs/CHIP_REGISTRY.md`.

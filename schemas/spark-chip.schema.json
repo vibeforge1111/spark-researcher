@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spark-researcher.local/schemas/spark-chip.schema.json",
+  "title": "Spark Chip Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "io_protocol",
+    "chip_name",
+    "domain",
+    "version",
+    "description",
+    "capabilities",
+    "commands"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "spark-chip.v1"
+    },
+    "io_protocol": {
+      "const": "spark-hook-io.v1"
+    },
+    "chip_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "evaluate",
+          "suggest",
+          "packets",
+          "watchtower"
+        ]
+      }
+    },
+    "commands": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "evaluate",
+          "suggest",
+          "packets",
+          "watchtower"
+        ]
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(evaluate|suggest|packets|watchtower)$": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

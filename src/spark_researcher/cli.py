@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, suggest_trials
-from .chips import chip_status
+from .chips import chip_status, chip_validation
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
 from .config import load_config, memory_policy, save_config, self_edit_policy, update_memory_policy, update_self_edit_policy
@@ -73,6 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
     chips_sub = chips_parser.add_subparsers(dest="chips_command")
     chips_status_parser = chips_sub.add_parser("status")
     add_config_argument(chips_status_parser)
+    chips_validate_parser = chips_sub.add_parser("validate")
+    add_config_argument(chips_validate_parser)
 
     trainer_parser = sub.add_parser("trainers")
     trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
@@ -213,6 +215,9 @@ def main() -> None:
         print_json(suggest_trials(config_path, args.project_command, limit=args.limit))
         return
     if args.action == "chips":
+        if args.chips_command == "validate":
+            print_json(chip_validation(config_path))
+            return
         print_json(chip_status(config_path))
         return
     if args.action == "trainers":

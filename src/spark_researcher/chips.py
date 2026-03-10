@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -10,6 +11,12 @@ from typing import Any
 from .config import ProjectConfig, load_config
 from .paths import chips_root, resolve_runtime_root
 
+CHIP_SCHEMA_VERSION = "spark-chip.v1"
+CHIP_IO_PROTOCOL = "spark-hook-io.v1"
+HOOK_NAMES = ("evaluate", "suggest", "packets", "watchtower")
+_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
+_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
 
 @dataclass(frozen=True)
 class ChipContext:
@@ -18,6 +25,10 @@ class ChipContext:
     chip_root: Path
     manifest_path: Path
     manifest: dict[str, Any]
+
+
+def schema_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "schemas" / "spark-chip.schema.json"
 
 
 def _now_slug() -> str:
@@ -54,21 +65,108 @@ def load_chip_context(config_path: Path, config: ProjectConfig | None = None) ->
     )
 
 
+def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str, Any]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if str(manifest.get("schema_version", "")) != CHIP_SCHEMA_VERSION:
+        errors.append(f"`schema_version` must be `{CHIP_SCHEMA_VERSION}`.")
+    if str(manifest.get("io_protocol", "")) != CHIP_IO_PROTOCOL:
+        errors.append(f"`io_protocol` must be `{CHIP_IO_PROTOCOL}`.")
+    chip_name = str(manifest.get("chip_name", ""))
+    if not _NAME_RE.fullmatch(chip_name):
+        errors.append("`chip_name` must be a lowercase slug using letters, digits, `.`, `_`, or `-`.")
+    domain = str(manifest.get("domain", ""))
+    if not _NAME_RE.fullmatch(domain):
+        errors.append("`domain` must be a lowercase slug using letters, digits, `.`, `_`, or `-`.")
+    version = str(manifest.get("version", ""))
+    if not _VERSION_RE.fullmatch(version):
+        errors.append("`version` must use `MAJOR.MINOR.PATCH` semver.")
+    description = str(manifest.get("description", "")).strip()
+    if not description:
+        errors.append("`description` is required.")
+    capabilities = manifest.get("capabilities", [])
+    if not isinstance(capabilities, list) or not capabilities:
+        errors.append("`capabilities` must be a non-empty array.")
+        capabilities = []
+    capability_names = [str(item) for item in capabilities]
+    invalid_caps = [item for item in capability_names if item not in HOOK_NAMES]
+    if invalid_caps:
+        errors.append(f"`capabilities` contains unknown hooks: {', '.join(sorted(set(invalid_caps)))}.")
+    commands = manifest.get("commands", {})
+    if not isinstance(commands, dict) or not commands:
+        errors.append("`commands` must be a non-empty object.")
+        commands = {}
+    command_names = [str(name) for name in commands.keys()]
+    invalid_commands = [item for item in command_names if item not in HOOK_NAMES]
+    if invalid_commands:
+        errors.append(f"`commands` contains unknown hooks: {', '.join(sorted(set(invalid_commands)))}.")
+    missing_commands = [item for item in capability_names if item not in commands]
+    if missing_commands:
+        errors.append(f"`commands` is missing capability entries: {', '.join(sorted(missing_commands))}.")
+    extra_commands = [item for item in command_names if item not in capability_names]
+    if extra_commands:
+        warnings.append(f"`commands` declares hooks not listed in capabilities: {', '.join(sorted(extra_commands))}.")
+    for hook_name, command in commands.items():
+        try:
+            _command_parts(command)
+        except RuntimeError as exc:
+            errors.append(f"`commands.{hook_name}` {exc}")
+    return {
+        "valid": not errors,
+        "manifest_path": str(manifest_path),
+        "schema_version": CHIP_SCHEMA_VERSION,
+        "io_protocol": CHIP_IO_PROTOCOL,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def chip_validation(config_path: Path) -> dict[str, Any]:
+    config = load_config(config_path)
+    context = load_chip_context(config_path, config)
+    if context is None:
+        return {
+            "configured": False,
+            "valid": False,
+            "errors": ["No chip is configured for this project."],
+            "schema_path": str(schema_path()),
+        }
+    result = validate_manifest(context.manifest, context.manifest_path)
+    result.update(
+        {
+            "configured": True,
+            "chip_name": str(context.manifest.get("chip_name", context.chip_root.name)),
+            "domain": str(context.manifest.get("domain", "unknown")),
+            "version": str(context.manifest.get("version", "0.0.0")),
+            "chip_root": str(context.chip_root),
+            "schema_path": str(schema_path()),
+        }
+    )
+    return result
+
+
 def chip_status(config_path: Path) -> dict[str, Any]:
     config = load_config(config_path)
     context = load_chip_context(config_path, config)
     if context is None:
         return {"configured": False, "notes": ["No chip is configured for this project."]}
     commands = context.manifest.get("commands", {})
+    validation = validate_manifest(context.manifest, context.manifest_path)
     return {
         "configured": True,
         "chip_name": str(context.manifest.get("chip_name", context.chip_root.name)),
         "domain": str(context.manifest.get("domain", "unknown")),
         "version": str(context.manifest.get("version", "0.0.0")),
+        "schema_version": str(context.manifest.get("schema_version", "")),
+        "io_protocol": str(context.manifest.get("io_protocol", "")),
         "chip_root": str(context.chip_root),
         "manifest_path": str(context.manifest_path),
+        "schema_path": str(schema_path()),
         "capabilities": [str(item) for item in context.manifest.get("capabilities", [])],
         "commands": sorted(str(name) for name in commands.keys()) if isinstance(commands, dict) else [],
+        "valid": validation["valid"],
+        "validation_errors": validation["errors"],
+        "validation_warnings": validation["warnings"],
     }
 
 

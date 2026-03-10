@@ -44,6 +44,7 @@ spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
 spark-researcher chips status
+spark-researcher chips validate
 spark-researcher trainers run
 spark-researcher memory sync
 spark-researcher memory backend-policy
@@ -86,6 +87,7 @@ spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher chips status
+spark-researcher chips validate
 spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher candidates suggest --command train
@@ -125,7 +127,7 @@ Local Markdown memory is still the source of truth. The optional `ruvector` back
 
 ## Domain Chips
 
-Domain chips keep domain intelligence out of the core repo. A chip is an external repo with a `spark-chip.json` manifest and up to four hooks:
+Domain chips keep domain intelligence out of the core repo. A chip is an external repo with a `spark-chip.json` manifest using `spark-chip.v1` and up to four hooks:
 
 - `evaluate`
 - `suggest`

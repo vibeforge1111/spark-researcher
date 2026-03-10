@@ -18,6 +18,7 @@ The current recommender is intentionally simple:
 - find baseline metric from zero-mutation runs
 - find single mutations that beat that baseline or already produced an improved run
 - combine beneficial primitives across different parameters
+- optionally probe numeric neighbors around winning values when a mutable parameter declares `value_range` and `value_step`
 - skip any mutation signature already present in config or already tested in the ledger
 
 This is enough to recover the common plateau case:
@@ -25,6 +26,13 @@ This is enough to recover the common plateau case:
 - one single mutation clearly helps
 - another single mutation is better than the raw baseline but worse than the current best
 - the combined trial is still worth testing
+
+Neighborhood exploration stays bounded:
+
+- only parameters with declared `value_range` and `value_step` are eligible
+- only values near already beneficial runs are explored
+- only one step up or down is suggested at a time
+- existing or already-tested signatures are skipped
 
 ## Commands
 

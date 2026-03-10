@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
-from .config import CandidateTrial, load_config, save_config
+from .config import CandidateTrial, MutationSpec, load_config, save_config
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
 
@@ -32,6 +33,20 @@ def _best_value(values: list[float], goal: str) -> float | None:
 
 def _format_value(value: str) -> str:
     return value.replace(".", "").replace("-", "m")
+
+
+def _parse_decimal(value: str) -> Decimal | None:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _format_decimal(value: Decimal) -> str:
+    text = format(value.normalize(), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return "0" if text in {"-0", ""} else text
 
 
 def _candidate_id(mutations: dict[str, str]) -> str:
@@ -86,6 +101,108 @@ def _best_single_primitives(rows: list[dict[str, Any]], command_name: str, goal:
     return best
 
 
+def _numeric_specs(config: Any) -> dict[str, MutationSpec]:
+    specs: dict[str, MutationSpec] = {}
+    for spec in config.mutable_parameters:
+        if spec.value_step and len(spec.value_range) == 2:
+            specs[spec.name] = spec
+    return specs
+
+
+def _beneficial_numeric_anchors(
+    rows: list[dict[str, Any]],
+    command_name: str,
+    goal: str,
+    baseline_metric: float | None,
+    specs: dict[str, MutationSpec],
+) -> dict[str, dict[str, Any]]:
+    anchors: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.get("command_name") != command_name:
+            continue
+        metric_value = row.get("metric_value")
+        if not isinstance(metric_value, (int, float)):
+            continue
+        mutation_map = {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}
+        if not mutation_map:
+            continue
+        row_metric = float(metric_value)
+        beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
+        if not beneficial:
+            continue
+        for name, value in mutation_map.items():
+            spec = specs.get(name)
+            if spec is None or _parse_decimal(value) is None:
+                continue
+            current = anchors.get(name)
+            if current is None or _metric_is_better(row_metric, float(current["metric_value"]), goal):
+                anchors[name] = {
+                    "name": name,
+                    "value": value,
+                    "metric_value": row_metric,
+                    "candidate_id": row.get("candidate_id"),
+                    "base_mutations": mutation_map,
+                }
+    return anchors
+
+
+def _neighborhood_suggestions(
+    anchors: dict[str, dict[str, Any]],
+    specs: dict[str, MutationSpec],
+    *,
+    tested: set[tuple[tuple[str, str], ...]],
+    existing: set[tuple[tuple[str, str], ...]],
+    limit: int,
+) -> tuple[list[CandidateTrial], list[str]]:
+    suggestions: list[CandidateTrial] = []
+    reasons: list[str] = []
+    queued = set(tested | existing)
+    for name, anchor in sorted(anchors.items()):
+        if len(suggestions) >= limit:
+            break
+        spec = specs[name]
+        step = _parse_decimal(spec.value_step)
+        lower = _parse_decimal(spec.value_range[0])
+        upper = _parse_decimal(spec.value_range[1])
+        current_value = _parse_decimal(str(anchor["value"]))
+        if None in {step, lower, upper, current_value}:
+            continue
+        base_mutations = {str(key): str(value) for key, value in dict(anchor["base_mutations"]).items()}
+        for direction in (-1, 1):
+            if len(suggestions) >= limit:
+                break
+            neighbor = current_value + (step * direction)
+            if neighbor < lower or neighbor > upper:
+                continue
+            neighbor_value = _format_decimal(neighbor)
+            if neighbor_value == str(anchor["value"]):
+                continue
+            candidate_mutations = dict(base_mutations) if base_mutations else {name: str(anchor["value"])}
+            candidate_mutations[name] = neighbor_value
+            sig = _signature(candidate_mutations)
+            if sig in queued:
+                continue
+            queued.add(sig)
+            focused = len(candidate_mutations) > 1
+            focus_text = "best combo" if focused else "best observed primitive"
+            suggestions.append(
+                CandidateTrial(
+                    candidate_id=f"neighbor-{_candidate_id(candidate_mutations)}",
+                    candidate_summary=(
+                        f"Probe `{name}` near the {focus_text} by moving from {anchor['value']} to {neighbor_value}."
+                    ),
+                    hypothesis=(
+                        f"A small numeric move around the current winning value for `{name}` may improve further without changing the search axis."
+                    ),
+                    mutations=candidate_mutations,
+                )
+            )
+            reasons.append(
+                f"Explore the numeric neighborhood around {name}={anchor['value']} within the declared range {spec.value_range[0]}..{spec.value_range[1]}."
+            )
+    return suggestions, reasons
+
+
 def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> dict[str, Any]:
     config = load_config(config_path)
     runtime_root = resolve_runtime_root(config_path)
@@ -129,6 +246,8 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
     tested = _tested_signatures(rows, command_name)
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
     primitives = _best_single_primitives(rows, command_name, config.eval_goal, baseline_metric)
+    numeric_specs = _numeric_specs(config)
+    anchors = _beneficial_numeric_anchors(rows, command_name, config.eval_goal, baseline_metric, numeric_specs)
 
     suggestions: list[CandidateTrial] = []
     reasons: list[str] = []
@@ -147,6 +266,16 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
                 )
             )
             reasons.append("Combine beneficial single-parameter mutations that each beat the baseline.")
+
+    neighborhood_trials, neighborhood_reasons = _neighborhood_suggestions(
+        anchors,
+        numeric_specs,
+        tested=tested,
+        existing=existing,
+        limit=max(limit - len(suggestions), 0),
+    )
+    suggestions.extend(neighborhood_trials)
+    reasons.extend(neighborhood_reasons)
 
     for name, item in sorted(primitives.items()):
         single_mutation = {name: str(item["value"])}

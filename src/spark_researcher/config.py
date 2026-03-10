@@ -27,6 +27,8 @@ class MutationSpec:
     pattern: str
     template: str
     description: str = ""
+    value_step: str = ""
+    value_range: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -245,6 +247,8 @@ def load_config(path: Path) -> ProjectConfig:
             pattern=str(item["pattern"]),
             template=str(item["template"]),
             description=str(item.get("description", "")),
+            value_step=str(item.get("value_step", "")),
+            value_range=[str(part) for part in item.get("value_range", [])],
         )
         for item in payload.get("mutable_parameters", [])
     ]

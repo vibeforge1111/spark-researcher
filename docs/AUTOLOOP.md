@@ -40,11 +40,13 @@ Neighborhood exploration stays bounded:
 spark-researcher candidates suggest --command train
 spark-researcher candidates apply --command train
 spark-researcher autoloop --command train
+spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limit 2 --pause-seconds 300
 ```
 
 ## Boundaries
 
 - bounded by explicit round count
+- continuous mode still runs bounded passes and only repeats until interrupted
 - bounded by existing loop discard limits
 - appends suggestions to config transparently
 - does not invent new mutable parameters

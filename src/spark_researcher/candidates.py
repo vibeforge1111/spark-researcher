@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -405,3 +406,36 @@ def run_autoloop(
         "round_count": len(history),
         "history": history,
     }
+
+
+def run_continuous_autoloop(
+    config_path: Path,
+    command_name: str,
+    *,
+    rounds: int = 2,
+    suggest_limit: int = 2,
+    pause_seconds: int = 60,
+    dry_run: bool = False,
+    apply_suggestions: bool = True,
+) -> dict[str, Any]:
+    passes: list[dict[str, Any]] = []
+    try:
+        while True:
+            packet = run_autoloop(
+                config_path,
+                command_name,
+                rounds=rounds,
+                suggest_limit=suggest_limit,
+                dry_run=dry_run,
+                apply_suggestions=apply_suggestions,
+            )
+            passes.append({
+                "pass": len(passes) + 1,
+                "round_count": packet["round_count"],
+                "run_count": sum(int(item.get("run_count", 0)) for item in packet["history"]),
+                "appended_count": sum(int(item["appended"]["appended_count"]) for item in packet["history"]),
+                "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
+            })
+            time.sleep(max(pause_seconds, 1))
+    except KeyboardInterrupt:
+        return {"command_name": command_name, "project_name": load_config(config_path).project_name, "continuous": True, "pass_count": len(passes), "passes": passes, "interrupted": True}

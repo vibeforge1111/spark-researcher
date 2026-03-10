@@ -45,6 +45,7 @@ python -m pip install -e .
 spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
+spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limit 2 --pause-seconds 300
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
@@ -95,6 +96,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
+spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limit 2 --pause-seconds 300
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
@@ -142,7 +144,7 @@ Local Markdown memory is still the source of truth. The optional `ruvector` back
 
 ## Autonomy Boundary
 
-`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values.
+`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds. `autoloop --continuous` simply repeats those bounded passes until interrupted. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values.
 
 ## Domain Chips
 

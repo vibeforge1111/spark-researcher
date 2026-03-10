@@ -7,7 +7,7 @@ from pathlib import Path
 from .adapters import adapter_status, execute_advisory, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
-from .candidates import append_suggestions, run_autoloop, suggest_trials
+from .candidates import append_suggestions, run_autoloop, run_continuous_autoloop, suggest_trials
 from .chip_starter import init_chip
 from .chips import chip_status, chip_validation
 from .collective import collective_status, publish_latest
@@ -63,6 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
     autoloop_parser.add_argument("--suggest-limit", type=int, default=3)
     autoloop_parser.add_argument("--dry-run", action="store_true")
     autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
+    autoloop_parser.add_argument("--continuous", action="store_true")
+    autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
 
     candidates_parser = sub.add_parser("candidates")
     candidates_sub = candidates_parser.add_subparsers(dest="candidates_command")
@@ -254,16 +256,16 @@ def main() -> None:
         print_json(run_loop(config_path, args.project_command, dry_run=args.dry_run, limit=args.limit))
         return
     if args.action == "autoloop":
-        print_json(
-            run_autoloop(
-                config_path,
-                args.project_command,
-                rounds=args.rounds,
-                suggest_limit=args.suggest_limit,
-                dry_run=args.dry_run,
-                apply_suggestions=not args.no_apply_suggestions,
-            )
-        )
+        runner = run_continuous_autoloop if args.continuous else run_autoloop
+        kwargs = {
+            "rounds": args.rounds,
+            "suggest_limit": args.suggest_limit,
+            "dry_run": args.dry_run,
+            "apply_suggestions": not args.no_apply_suggestions,
+        }
+        if args.continuous:
+            kwargs["pause_seconds"] = args.pause_seconds
+        print_json(runner(config_path, args.project_command, **kwargs))
         return
     if args.action == "candidates":
         if args.candidates_command == "apply":

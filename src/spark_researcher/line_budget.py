@@ -24,7 +24,8 @@ def build_line_budget(repo_root: Path) -> dict[str, object]:
             continue
         for path in sorted(root.rglob("*")):
             ignored_part = any(part in IGNORED_PARTS or part.endswith(".egg-info") for part in path.parts)
-            if path.is_file() and not ignored_part and path.name not in IGNORED_FILE_NAMES:
+            generated_doc = path.parent.name == "beliefs"
+            if path.is_file() and not ignored_part and not generated_doc and path.name not in IGNORED_FILE_NAMES:
                 lines = count_lines(path)
                 rows.append({"path": str(path.relative_to(repo_root)), "lines": lines})
                 total += lines

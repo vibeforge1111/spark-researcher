@@ -13,17 +13,11 @@ from .advisory import build_advisory
 from .chips import load_chip_context
 from .config import load_config
 from .paths import resolve_runtime_root
-
-
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
-
-
 def _candidate_id(mutations: dict[str, str]) -> str:
     parts = [f"{name}-{value}".replace(":", "-").replace(".", "").replace(" ", "-") for name, value in sorted(mutations.items())]
     return "frontier-" + "-".join(parts)
-
-
 def _parse_json(text: str) -> dict[str, Any] | None:
     for candidate in (text.strip(), text[text.find("{") : text.rfind("}") + 1] if "{" in text and "}" in text else ""):
         if not candidate:
@@ -35,8 +29,17 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         if isinstance(payload, dict):
             return payload
     return None
-
-
+def _parse_text(text: str, allowed: dict[str, list[str]]) -> dict[str, Any]:
+    proposals = []
+    for block in [item.strip() for item in re.split(r"\n\s*(?:#{2,}\s*|\d+\.\s+)", text) if item.strip()]:
+        mutations = {name: next((value for value in values if value in block), "") for name, values in allowed.items()}
+        mutations = {name: value for name, value in mutations.items() if value}
+        if not mutations:
+            continue
+        rationale = re.search(r"Rationale\s*:\s*(.*)", block)
+        hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
+        proposals.append({"candidate_summary": block.splitlines()[0][:160], "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
+    return {"proposals": proposals}
 def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     url = "https://html.duckduckgo.com/html/?" + urlencode({"q": query})
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
@@ -51,8 +54,6 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
         if clean:
             notes.append(clean)
     return notes
-
-
 def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[str, Any]], limit: int = 3) -> dict[str, Any]:
     config = load_config(config_path)
     context = load_chip_context(config_path, config)
@@ -99,6 +100,8 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         parsed = payload
     else:
         parsed = _parse_json(str(payload.get("raw_response", ""))) if isinstance(payload, dict) else None
+    if not isinstance(parsed, dict) or "proposals" not in parsed:
+        parsed = _parse_text(str(payload.get("raw_response", "")), allowed) if isinstance(payload, dict) else {"proposals": []}
     proposals = parsed.get("proposals", []) if isinstance(parsed, dict) else []
     required = {str(item) for item in spec.get("required_fields", [])}
     suggestions: list[dict[str, Any]] = []
@@ -131,6 +134,6 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         "chip_name": context.manifest.get("chip_name"),
         "suggestion_count": len(suggestions),
         "suggestions": suggestions,
-        "reasons": reasons[: len(suggestions)] or ["Frontier sidecar did not produce any valid new candidates."],
+        "reasons": reasons[: len(suggestions)] or (["Frontier sidecar recovered valid bounded candidates from the model response."] if suggestions else ["Frontier sidecar did not produce any valid new candidates."]),
         "web_notes": web_notes,
     }

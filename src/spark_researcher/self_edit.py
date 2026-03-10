@@ -24,6 +24,8 @@ BUILTIN_BACKEND_PROFILES = {
         "description": "Run Codex CLI non-interactively against the copied workspace.",
         "command": [
             "codex",
+            "--ask-for-approval",
+            "never",
             "exec",
             "--cd",
             "{workspace}",
@@ -337,6 +339,8 @@ def propose(
     allowed_changes, blocked_changes = collect_changes(repo_root, workspace_root, mutable_targets)
     if blocked_changes:
         status = "blocked_scope_violation"
+    elif status == "pending_review" and not allowed_changes:
+        status = "no_changes"
     proposal = {
         "proposal_id": proposal_id,
         "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),

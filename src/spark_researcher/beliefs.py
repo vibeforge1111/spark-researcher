@@ -93,6 +93,12 @@ def _render_self_edit_belief(proposal: dict[str, Any], review: dict[str, Any]) -
 def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str, Any]:
     runtime_root = runtime_root or resolve_runtime_root(repo_root / "spark-researcher.project.json")
     output_root = _docs_root(repo_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    for path in output_root.glob("*.md"):
+        path.unlink()
+    manifest_path = output_root / "manifest.json"
+    if manifest_path.exists():
+        manifest_path.unlink()
     rows = read_jsonl(_ledger_path(runtime_root))
     written: list[dict[str, Any]] = []
     for run in rows:

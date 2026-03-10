@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .chips import invoke_chip_hook
-from .config import CandidateTrial, ProjectConfig, load_config, mutation_lookup, resolve_project_root
+from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 
 
@@ -143,6 +143,7 @@ def run_chip_evaluate(
         "metrics": {name: {"kind": spec.kind, "pattern": spec.pattern} for name, spec in config.metrics.items()},
         "eval_metric": config.eval_metric,
         "eval_goal": config.eval_goal,
+        "intent": intent_policy(config),
     }
     response = invoke_chip_hook(config_path, "evaluate", payload, config=config, dry_run=dry_run)
     stdout = str(response.get("stdout", ""))

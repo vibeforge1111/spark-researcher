@@ -16,6 +16,20 @@ class AdapterSpec:
 
 def _brief(advisory: dict[str, Any], max_chars: int) -> str:
     lines = ["Advisory Brief", ""]
+    intent = advisory.get("intent", {})
+    if isinstance(intent, dict) and intent.get("active"):
+        goal = str(intent.get("goal") or "").strip()
+        outcome = str(intent.get("outcome") or "").strip()
+        criteria = [str(item) for item in intent.get("success_criteria", [])][:3]
+        if goal:
+            lines.append(f"Goal: {goal}")
+        if outcome:
+            lines.append(f"Target Outcome: {outcome}")
+        if criteria:
+            lines.extend(["", "Success Criteria"])
+            for item in criteria:
+                lines.append(f"- {item}")
+        lines.append("")
     for item in advisory.get("guidance", [])[:4]:
         lines.append(f"- {item}")
     boundaries = advisory.get("boundaries", [])

@@ -12,7 +12,8 @@ from .chip_starter import init_chip
 from .chips import chip_status, chip_validation
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
-from .config import load_config, memory_policy, save_config, self_edit_policy, update_memory_policy, update_self_edit_policy
+from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
+from .intent import build_intent_brief
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
 from .obsidian import build_vault
@@ -135,6 +136,22 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(chips_status_parser)
     chips_validate_parser = chips_sub.add_parser("validate")
     add_config_argument(chips_validate_parser)
+
+    intent_parser = sub.add_parser("intent")
+    intent_sub = intent_parser.add_subparsers(dest="intent_command")
+    intent_show = intent_sub.add_parser("show")
+    add_config_argument(intent_show)
+    intent_set = intent_sub.add_parser("set")
+    add_config_argument(intent_set)
+    intent_set.add_argument("--goal")
+    intent_set.add_argument("--outcome")
+    intent_set.add_argument("--success-criterion", action="append", default=None)
+    intent_set.add_argument("--search-query", action="append", default=None)
+    intent_set.add_argument("--frontier-mode", choices=["bounded", "relaxed", "open"])
+    intent_set.add_argument("--resource", action="append", default=None)
+    intent_set.add_argument("--notes")
+    intent_clear = intent_sub.add_parser("clear")
+    add_config_argument(intent_clear)
 
     trainer_parser = sub.add_parser("trainers")
     trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
@@ -341,6 +358,38 @@ def main() -> None:
             print_json(chip_validation(config_path))
             return
         print_json(chip_status(config_path))
+        return
+    if args.action == "intent":
+        config = load_config(config_path)
+        if args.intent_command == "clear":
+            update_intent_policy(
+                config,
+                goal="",
+                outcome="",
+                success_criteria=[],
+                search_queries=[],
+                frontier_mode="relaxed",
+                resource_modes=["packets", "memory", "web"],
+                notes="",
+            )
+            save_config(config_path, config)
+            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+            return
+        if args.intent_command == "set":
+            update_intent_policy(
+                config,
+                goal=args.goal,
+                outcome=args.outcome,
+                success_criteria=args.success_criterion,
+                search_queries=args.search_query,
+                frontier_mode=args.frontier_mode,
+                resource_modes=args.resource,
+                notes=args.notes,
+            )
+            save_config(config_path, config)
+            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+            return
+        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
         return
     if args.action == "trainers":
         if args.trainers_command == "run":

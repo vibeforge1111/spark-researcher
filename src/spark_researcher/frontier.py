@@ -12,6 +12,7 @@ from .adapters import execute_advisory
 from .advisory import build_advisory
 from .chips import load_chip_context
 from .config import load_config
+from .intent import build_intent_brief
 from .paths import resolve_runtime_root
 
 
@@ -103,20 +104,34 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     ]
     query = f"{context.manifest.get('domain', 'generic')} " + " ".join(str(value) for row in winner_text[:1] for value in row["mutations"].values())
     web_notes = _web_notes(query) if spec.get("web_search", False) and query.strip() else []
+    intent = build_intent_brief(config_path, domain=str(context.manifest.get("domain", "generic")), query=query)
+    frontier_mode = str(intent.get("frontier_mode") or "relaxed")
+    effective_open_fields = set() if frontier_mode == "bounded" else open_fields
     task = "\n".join(
         [
             f"Propose at most {limit} new bounded research candidates for the `{context.manifest.get('domain', 'generic')}` chip.",
             f"Command: {command_name}. Metric: {config.eval_metric}. Goal: {config.eval_goal}.",
+            f"Mission goal: {intent.get('goal') or ''}",
+            f"Mission target outcome: {intent.get('outcome') or ''}",
+            f"Mission success criteria: {json.dumps(intent.get('success_criteria', []))}",
+            f"Mission frontier mode: {intent.get('frontier_mode') or 'relaxed'}",
+            f"Mission resources: {json.dumps(intent.get('resource_modes', []))}",
             f"Seed mutation grammar: {json.dumps(allowed, sort_keys=True)}",
-            f"Open mutation fields: {json.dumps(sorted(open_fields))}",
+            f"Open mutation fields: {json.dumps(sorted(effective_open_fields))}",
             f"Field patterns for open fields: {json.dumps(field_patterns, sort_keys=True)}",
             f"Required fields: {json.dumps([str(item) for item in spec.get('required_fields', [])])}",
             f"Already tested or queued signatures: {json.dumps([[name, value] for sig in sorted(tested | existing) for name, value in sig][:24])}",
             f"Current strongest rows: {json.dumps(winner_text, sort_keys=True)}",
             f"Web notes: {json.dumps(web_notes)}",
+            f"Intent packet hits: {json.dumps(intent.get('memory_context', {}).get('packet_hits', []), sort_keys=True)}",
+            f"Intent memory hits: {json.dumps(intent.get('memory_context', {}).get('memory_hits', []), sort_keys=True)}",
+            f"RuVector status: {json.dumps(intent.get('memory_context', {}).get('ruvector_status', {}), sort_keys=True)}",
+            f"RuVector hits: {json.dumps(intent.get('memory_context', {}).get('ruvector_hits', []), sort_keys=True)}",
+            f"DSPy optimizer status: {json.dumps(intent.get('optimizer', {}), sort_keys=True)}",
             f"Prompt hints: {json.dumps(prompt_hints)}",
             'Return JSON only in the shape {"proposals":[{"candidate_id":"","candidate_summary":"","hypothesis":"","mutations":{},"why_now":["",""]}]}',
-            "Rules: use only allowed field names, do not repeat tested signatures, prefer transfer or contradiction probes near the strongest winner, and only invent new values for fields listed in `open_mutation_fields`.",
+            "Rules: use only allowed field names, do not repeat tested signatures, prefer proposals that serve the active mission, and only invent new values for fields listed in `open_mutation_fields`.",
+            "If frontier mode is `open`, prefer at least one serious novel proposal on an open field before repeating seeded values.",
         ]
     )
     advisory = build_advisory(config_path, task, model=str(spec.get("model", "generic")), limit=3, domain=str(context.manifest.get("domain", "generic")))
@@ -130,7 +145,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     else:
         parsed = _parse_json(str(payload.get("raw_response", ""))) if isinstance(payload, dict) else None
     if not isinstance(parsed, dict) or "proposals" not in parsed:
-        parsed = _parse_text(str(payload.get("raw_response", "")), allowed, open_fields, field_patterns) if isinstance(payload, dict) else {"proposals": []}
+        parsed = _parse_text(str(payload.get("raw_response", "")), allowed, effective_open_fields, field_patterns) if isinstance(payload, dict) else {"proposals": []}
     proposals = parsed.get("proposals", []) if isinstance(parsed, dict) else []
     required = {str(item) for item in spec.get("required_fields", [])}
     suggestions: list[dict[str, Any]] = []
@@ -148,7 +163,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
                 break
             if value in allowed[name]:
                 continue
-            if name in open_fields:
+            if name in effective_open_fields:
                 pattern = field_patterns.get(name, r"^[a-z0-9:_-]+$")
                 if re.fullmatch(pattern, value):
                     continue

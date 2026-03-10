@@ -50,6 +50,8 @@ spark-researcher init --path C:\work\my-project --preset coding --project-name m
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
+spark-researcher intent set --goal "Build the strongest startup-understanding agent" --outcome "Create agentic startups from first-principles doctrine" --success-criterion "Find reusable startup doctrines" --success-criterion "Map failure boundaries" --resource web --resource memory --resource ruvector --resource dspy --frontier-mode open
+spark-researcher intent show
 spark-researcher packets search "learning rate"
 spark-researcher advisory build --task "summarize the strongest current trading rule" --model codex
 spark-researcher advisory adapters
@@ -100,6 +102,7 @@ spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limi
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
+spark-researcher intent show
 spark-researcher packets status
 spark-researcher packets search "learning rate"
 spark-researcher advisory adapters
@@ -168,6 +171,14 @@ Spark now has one lightweight intelligence path for LLM use:
 `task -> advisory -> packets -> adapter -> model -> outcome`
 
 Packets are loaded from local memory exports. Advisory selects only the few packets that matter for the current task. Adapters format that advice for Claude, Codex, OpenClaw, or a generic fallback. See `docs/ADVISORY.md`.
+
+## Intent Path
+
+Spark can keep a persistent mission for a project or chip:
+
+`intent -> advisory -> frontier -> chip -> autoloop`
+
+Use `spark-researcher intent set` to define the goal, target outcome, success criteria, and which resources the loop should actively exploit. Frontier generation then optimizes for that mission instead of exploring aimlessly. See `docs/INTENT.md`.
 
 ## Provider Commands
 

@@ -73,6 +73,17 @@ class ChipSpec:
 
 
 @dataclass
+class IntentSpec:
+    goal: str = ""
+    outcome: str = ""
+    success_criteria: list[str] = field(default_factory=list)
+    search_queries: list[str] = field(default_factory=list)
+    frontier_mode: str = "relaxed"
+    resource_modes: list[str] = field(default_factory=lambda: ["packets", "memory", "web"])
+    notes: str = ""
+
+
+@dataclass
 class GuardrailSpec:
     max_loop_iterations: int = 8
     consecutive_discard_limit: int = 3
@@ -96,6 +107,7 @@ class ProjectConfig:
     mutable_targets: list[str] = field(default_factory=list)
     memory: MemorySpec = field(default_factory=MemorySpec)
     chip: ChipSpec = field(default_factory=ChipSpec)
+    intent: IntentSpec = field(default_factory=IntentSpec)
     self_edit: SelfEditSpec = field(default_factory=SelfEditSpec)
     guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
 
@@ -155,6 +167,15 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
             "path": config.chip.path,
             "manifest": config.chip.manifest,
         },
+        "intent": {
+            "goal": config.intent.goal,
+            "outcome": config.intent.outcome,
+            "success_criteria": list(config.intent.success_criteria),
+            "search_queries": list(config.intent.search_queries),
+            "frontier_mode": config.intent.frontier_mode,
+            "resource_modes": list(config.intent.resource_modes),
+            "notes": config.intent.notes,
+        },
         "self_edit": {
             "command": list(config.self_edit.command),
             "mutable_targets": list(config.self_edit.mutable_targets),
@@ -199,6 +220,19 @@ def memory_policy(config: ProjectConfig) -> dict[str, object]:
     }
 
 
+def intent_policy(config: ProjectConfig) -> dict[str, object]:
+    return {
+        "goal": config.intent.goal,
+        "outcome": config.intent.outcome,
+        "success_criteria": list(config.intent.success_criteria),
+        "search_queries": list(config.intent.search_queries),
+        "frontier_mode": config.intent.frontier_mode,
+        "resource_modes": list(config.intent.resource_modes),
+        "notes": config.intent.notes,
+        "active": bool(config.intent.goal.strip() or config.intent.outcome.strip()),
+    }
+
+
 def update_memory_policy(config: ProjectConfig, *, backend: str | None = None) -> ProjectConfig:
     if backend is not None:
         config.memory.backend = str(backend)
@@ -224,6 +258,34 @@ def update_self_edit_policy(
         config.self_edit.main_branch = str(main_branch)
     if commit_message_template is not None:
         config.self_edit.commit_message_template = str(commit_message_template)
+    return config
+
+
+def update_intent_policy(
+    config: ProjectConfig,
+    *,
+    goal: str | None = None,
+    outcome: str | None = None,
+    success_criteria: list[str] | None = None,
+    search_queries: list[str] | None = None,
+    frontier_mode: str | None = None,
+    resource_modes: list[str] | None = None,
+    notes: str | None = None,
+) -> ProjectConfig:
+    if goal is not None:
+        config.intent.goal = str(goal)
+    if outcome is not None:
+        config.intent.outcome = str(outcome)
+    if success_criteria is not None:
+        config.intent.success_criteria = [str(item) for item in success_criteria]
+    if search_queries is not None:
+        config.intent.search_queries = [str(item) for item in search_queries]
+    if frontier_mode is not None:
+        config.intent.frontier_mode = str(frontier_mode)
+    if resource_modes is not None:
+        config.intent.resource_modes = [str(item) for item in resource_modes]
+    if notes is not None:
+        config.intent.notes = str(notes)
     return config
 
 
@@ -278,6 +340,7 @@ def load_config(path: Path) -> ProjectConfig:
     memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})
     chip_payload = payload.get("chip", {})
+    intent_payload = payload.get("intent", {})
     return ProjectConfig(
         project_name=str(payload["project_name"]),
         project_root=str(payload.get("project_root", ".")),
@@ -295,6 +358,15 @@ def load_config(path: Path) -> ProjectConfig:
         chip=ChipSpec(
             path=str(chip_payload.get("path", "")),
             manifest=str(chip_payload.get("manifest", "spark-chip.json")),
+        ),
+        intent=IntentSpec(
+            goal=str(intent_payload.get("goal", "")),
+            outcome=str(intent_payload.get("outcome", "")),
+            success_criteria=[str(item) for item in intent_payload.get("success_criteria", [])],
+            search_queries=[str(item) for item in intent_payload.get("search_queries", [])],
+            frontier_mode=str(intent_payload.get("frontier_mode", "relaxed")),
+            resource_modes=[str(item) for item in intent_payload.get("resource_modes", ["packets", "memory", "web"])],
+            notes=str(intent_payload.get("notes", "")),
         ),
         self_edit=SelfEditSpec(
             command=[str(part) for part in self_edit_payload.get("command", [])],

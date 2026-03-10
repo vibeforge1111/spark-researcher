@@ -6,6 +6,7 @@ from typing import Any
 from .adapters import adapter_request
 from .chips import load_chip_context
 from .config import load_config
+from .intent import build_intent_brief
 from .optimizer import optimizer_status
 from .packets import search_packets
 
@@ -66,6 +67,7 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
         "boundaries": boundaries,
         "packets": packet_rows,
         "optimizer": optimizer_status(),
+        "intent": build_intent_brief(config_path, domain=selected_domain, query=task),
     }
     advisory["adapter_request"] = adapter_request(model, task, advisory)
     return advisory

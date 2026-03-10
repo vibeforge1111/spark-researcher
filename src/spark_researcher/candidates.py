@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
-from .config import CandidateTrial, MutationSpec, load_config, save_config
+from .config import CandidateTrial, MutationSpec, intent_policy, load_config, save_config
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
@@ -219,6 +219,7 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
                 "limit": limit,
                 "eval_metric": config.eval_metric,
                 "eval_goal": config.eval_goal,
+                "intent": intent_policy(config),
                 "ledger_rows": rows,
                 "candidate_trials": [asdict(item) for item in config.candidate_trials],
             },

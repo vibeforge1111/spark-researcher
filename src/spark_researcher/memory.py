@@ -65,6 +65,37 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
+    manifest_path = _manifest_path(runtime_root)
+    if manifest_path.exists():
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    return sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
+
+
+def _local_search_results(docs_root: Path, query: str, *, limit: int) -> list[dict[str, Any]]:
+    normalized_query = _normalize_query(query)
+    terms = [term for term in normalized_query.lower().split() if term]
+    results = []
+    for path in sorted(docs_root.glob("*.md")):
+        text = _read_text(path)
+        lowered = text.lower()
+        score = sum(lowered.count(term) for term in terms)
+        if score <= 0:
+            continue
+        first_line = text.splitlines()[0].lstrip("# ").strip() if text else path.stem
+        results.append(
+            {
+                "backend": "local",
+                "path": str(path),
+                "title": first_line,
+                "score": score,
+                "snippet": _build_snippet(text, normalized_query),
+            }
+        )
+    results.sort(key=lambda item: (-int(item["score"]), str(item["path"])))
+    return results[: _normalize_limit(limit)]
+
+
 def _build_snippet(text: str, query: str, *, width: int = 180) -> str:
     lowered = text.lower()
     query_lower = query.lower()
@@ -313,31 +344,25 @@ def search_memory(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    if backend == "ruvector":
-        return run_ruvector_search(query)
     sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
     docs_root = _documents_root(runtime_root)
-    normalized_query = _normalize_query(query)
-    terms = [term for term in normalized_query.lower().split() if term]
-    results = []
-    for path in sorted(docs_root.glob("*.md")):
-        text = _read_text(path)
-        lowered = text.lower()
-        score = sum(lowered.count(term) for term in terms)
-        if score <= 0:
-            continue
-        first_line = text.splitlines()[0].lstrip("# ").strip() if text else path.stem
-        results.append(
-            {
-                "backend": "local",
-                "path": str(path),
-                "title": first_line,
-                "score": score,
-                "snippet": _build_snippet(text, normalized_query),
-            }
-        )
-    results.sort(key=lambda item: (-int(item["score"]), str(item["path"])))
-    return results[: _normalize_limit(limit)]
+    local_results = _local_search_results(docs_root, query, limit=limit)
+    if backend != "ruvector":
+        return local_results
+    status = ruvector_status()
+    if str(status.get("status")) == "available":
+        return run_ruvector_search(query)
+    return {
+        "backend": "ruvector",
+        "active_backend": "local",
+        "fallback_reason": status.get("status"),
+        "ruvector_status": status,
+        "results": local_results,
+        "notes": [
+            "RuVector is configured as the default retrieval backend.",
+            "Spark fell back to local memory search because RuVector is not fully ready in this shell.",
+        ],
+    }
 
 
 def memory_status(
@@ -349,12 +374,17 @@ def memory_status(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> dict[str, Any]:
+    manifest_path = _manifest_path(runtime_root)
+    manifest = _local_manifest(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
     if backend == "ruvector":
         status = ruvector_status()
         status["configured_backend"] = configured_backend
+        status["local_documents_root"] = manifest["documents_root"]
+        status["local_document_count"] = manifest["document_count"]
+        status["local_kinds"] = manifest.get("kinds", {})
+        status["local_storage_backend"] = "local"
+        status["default_role"] = "retrieval"
         return status
-    manifest_path = _manifest_path(runtime_root)
-    manifest = sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path) if not manifest_path.exists() else json.loads(manifest_path.read_text(encoding="utf-8"))
     return {
         "backend": "local",
         "configured_backend": configured_backend,
@@ -363,7 +393,7 @@ def memory_status(
         "kinds": manifest.get("kinds", {}),
         "manifest_present": manifest_path.exists(),
         "notes": [
-            "Local memory is the zero-setup default.",
+            "Local memory remains Spark's canonical storage layer.",
             "Search runs over exported Markdown memory documents.",
         ],
     }

@@ -205,51 +205,74 @@ def _neighborhood_suggestions(
     return suggestions, reasons
 
 
-def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> dict[str, Any]:
-    config = load_config(config_path)
-    runtime_root = resolve_runtime_root(config_path)
-    rows = read_jsonl(ledger_path(runtime_root))
-    if chip_has_hook(config_path, "suggest", config):
-        packet = invoke_chip_hook(
-            config_path,
-            "suggest",
-            {
-                "project_name": config.project_name,
-                "command_name": command_name,
-                "limit": limit,
-                "eval_metric": config.eval_metric,
-                "eval_goal": config.eval_goal,
-                "intent": intent_policy(config),
-                "ledger_rows": rows,
-                "candidate_trials": [asdict(item) for item in config.candidate_trials],
-            },
-            config=config,
-        )
-        suggestions = []
-        for item in packet.get("suggestions", []):
-            suggestions.append(
-                CandidateTrial(
-                    candidate_id=str(item["candidate_id"]),
-                    candidate_summary=str(item.get("candidate_summary", "")),
-                    hypothesis=str(item.get("hypothesis", "")),
-                    mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
-                )
-            )
-        if not suggestions:
-            frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
-            if int(frontier_packet.get("suggestion_count", 0)) > 0:
-                return frontier_packet
-            packet["reasons"] = [*packet.get("reasons", []), *frontier_packet.get("reasons", [])]
+def _trial_from_packet(item: dict[str, Any]) -> CandidateTrial:
+    return CandidateTrial(
+        candidate_id=str(item["candidate_id"]),
+        candidate_summary=str(item.get("candidate_summary", "")),
+        hypothesis=str(item.get("hypothesis", "")),
+        mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+    )
+
+
+def _serialize_trials(trials: list[CandidateTrial], *, limit: int) -> list[dict[str, Any]]:
+    return [asdict(item) for item in trials[:limit]]
+
+
+def _pending_trials(config: Any, tested: set[tuple[tuple[str, str], ...]]) -> list[CandidateTrial]:
+    return [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
+
+
+def _chip_suggestion_packet(
+    config_path: Path,
+    config: Any,
+    command_name: str,
+    rows: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> dict[str, Any]:
+    packet = invoke_chip_hook(
+        config_path,
+        "suggest",
+        {
+            "project_name": config.project_name,
+            "command_name": command_name,
+            "limit": limit,
+            "eval_metric": config.eval_metric,
+            "eval_goal": config.eval_goal,
+            "intent": intent_policy(config),
+            "ledger_rows": rows,
+            "candidate_trials": [asdict(item) for item in config.candidate_trials],
+        },
+        config=config,
+    )
+    suggestions = [_trial_from_packet(item) for item in packet.get("suggestions", [])]
+    if suggestions:
         return {
             "command_name": command_name,
             "baseline_metric": packet.get("baseline_metric"),
             "beneficial_primitives": packet.get("beneficial_primitives", []),
             "suggestion_count": len(suggestions[:limit]),
             "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
-            "suggestions": [asdict(item) for item in suggestions[:limit]],
+            "suggestions": _serialize_trials(suggestions, limit=limit),
             "source": "chip",
             "chip_name": packet.get("chip_name"),
         }
+    frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
+    if int(frontier_packet.get("suggestion_count", 0)) > 0:
+        return frontier_packet
+    return {
+        "command_name": command_name,
+        "baseline_metric": packet.get("baseline_metric"),
+        "beneficial_primitives": packet.get("beneficial_primitives", []),
+        "suggestion_count": 0,
+        "reasons": [*packet.get("reasons", []), *frontier_packet.get("reasons", [])][:limit],
+        "suggestions": [],
+        "source": "chip",
+        "chip_name": packet.get("chip_name"),
+    }
+
+
+def _core_suggestion_packet(config: Any, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
     baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
     tested = _tested_signatures(rows, command_name)
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
@@ -302,16 +325,24 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
         if len(suggestions) >= limit:
             break
 
-    trimmed = suggestions[:limit]
     return {
         "command_name": command_name,
         "baseline_metric": baseline_metric,
         "beneficial_primitives": list(primitives.values()),
-        "suggestion_count": len(trimmed),
-        "reasons": reasons[: len(trimmed)],
-        "suggestions": [asdict(item) for item in trimmed],
+        "suggestion_count": len(suggestions[:limit]),
+        "reasons": reasons[: len(suggestions[:limit])],
+        "suggestions": _serialize_trials(suggestions, limit=limit),
         "source": "core",
     }
+
+
+def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> dict[str, Any]:
+    config = load_config(config_path)
+    runtime_root = resolve_runtime_root(config_path)
+    rows = read_jsonl(ledger_path(runtime_root))
+    if chip_has_hook(config_path, "suggest", config):
+        return _chip_suggestion_packet(config_path, config, command_name, rows, limit=limit)
+    return _core_suggestion_packet(config, command_name, rows, limit=limit)
 
 
 def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> dict[str, Any]:
@@ -319,12 +350,7 @@ def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> 
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
     appended: list[dict[str, Any]] = []
     for item in suggestions:
-        trial = CandidateTrial(
-            candidate_id=str(item["candidate_id"]),
-            candidate_summary=str(item.get("candidate_summary", "")),
-            hypothesis=str(item.get("hypothesis", "")),
-            mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
-        )
+        trial = _trial_from_packet(item)
         sig = _signature(trial.mutations)
         if sig in existing:
             continue
@@ -334,6 +360,29 @@ def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> 
     if appended:
         save_config(config_path, config)
     return {"appended_count": len(appended), "appended": appended, "config_path": str(config_path)}
+
+
+def _run_pending_trials(
+    config_path: Path,
+    command_name: str,
+    *,
+    pending: list[CandidateTrial],
+    max_iterations: int,
+    discard_limit: int,
+    dry_run: bool,
+) -> tuple[list[dict[str, Any]], bool]:
+    consecutive_discards = 0
+    results: list[dict[str, Any]] = []
+    for trial in pending[:max_iterations]:
+        record = run_once(config_path, command_name, trial=trial, dry_run=dry_run)
+        results.append(record)
+        if record["verdict"] == "improved":
+            consecutive_discards = 0
+        elif record["verdict"] == "regressed":
+            consecutive_discards += 1
+        if consecutive_discards >= discard_limit:
+            return results, True
+    return results, False
 
 
 def run_autoloop(
@@ -352,7 +401,7 @@ def run_autoloop(
         runtime_root = resolve_runtime_root(config_path)
         rows = read_jsonl(ledger_path(runtime_root))
         tested = _tested_signatures(rows, command_name)
-        pending = [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
+        pending = _pending_trials(config, tested)
 
         if not pending:
             suggestion_packet = queued_packet or suggest_trials(config_path, command_name, limit=suggest_limit)
@@ -371,22 +420,19 @@ def run_autoloop(
                 )
                 break
             config = load_config(config_path)
-            pending = [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
+            pending = _pending_trials(config, tested)
         else:
             suggestion_packet = {"suggestion_count": 0, "suggestions": [], "reasons": []}
             append_packet = {"appended_count": 0, "appended": []}
 
-        consecutive_discards = 0
-        results: list[dict[str, Any]] = []
-        for trial in pending[: config.guardrails.max_loop_iterations]:
-            record = run_once(config_path, command_name, trial=trial, dry_run=dry_run)
-            results.append(record)
-            if record["verdict"] == "improved":
-                consecutive_discards = 0
-            elif record["verdict"] == "regressed":
-                consecutive_discards += 1
-            if consecutive_discards >= config.guardrails.consecutive_discard_limit:
-                break
+        results, stopped_for_discard_limit = _run_pending_trials(
+            config_path,
+            command_name,
+            pending=pending,
+            max_iterations=config.guardrails.max_loop_iterations,
+            discard_limit=config.guardrails.consecutive_discard_limit,
+            dry_run=dry_run,
+        )
 
         next_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
         queued_packet = next_suggestions if next_suggestions.get("suggestion_count", 0) else None
@@ -398,7 +444,7 @@ def run_autoloop(
                 "suggestions": suggestion_packet,
                 "appended": append_packet,
                 "next_suggestions": next_suggestions,
-                "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
+                "stopped_for_discard_limit": stopped_for_discard_limit,
             }
         )
         if len(results) == 0 and queued_packet is None:

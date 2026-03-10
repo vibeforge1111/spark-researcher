@@ -52,8 +52,8 @@ def ruvector_status() -> dict[str, Any]:
         "has_pi_identity": has_pi,
         "api_key_required": False,
         "notes": [
-            "RuVector is an optional external backend.",
-            "Spark only delegates terminal search to the RuVector CLI.",
+            "RuVector is Spark's recommended retrieval backend once the corpus grows.",
+            "Spark delegates external/shared-brain retrieval to the RuVector CLI.",
             "Spark local memory remains the source of truth.",
         ],
     }

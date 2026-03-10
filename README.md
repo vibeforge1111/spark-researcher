@@ -6,14 +6,14 @@ Spark Researcher is a compressed blend of three ideas:
 - Spark Recursion: bounded recursive improvement, trainer recompiles, and anti-drift rules.
 - Spark Autoresearch: non-complex local memory, Obsidian watchtower output, and collective sharing.
 
-The design target is simple: keep the whole repo well under `7000` counted lines while still being useful on real projects.
+The design target is simple: keep the whole repo well under `8000` counted lines while still being useful on real projects.
 
 ## What It Does
 
 - runs arbitrary project commands from one small JSON config
 - evaluates candidates against a fixed metric and writes an immutable JSONL ledger
 - exports searchable Markdown memory documents instead of building a heavy memory stack
-- keeps local memory as the default backend and supports optional delegated RuVector search
+- keeps local Markdown memory as the default backend and supports optional RuVector retrieval
 - watches trainer example files and triggers bounded recompiles like a lightweight DSPy loop
 - generates an Obsidian vault as the operator watchtower
 - publishes capsule files that `autoresearch-collective` can ingest
@@ -64,7 +64,7 @@ spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
 spark-researcher collective sync-local
-spark-researcher line-budget --limit 7000
+spark-researcher line-budget --limit 8000
 ```
 
 The bundled config points at `examples/toy-project/` so the loop is runnable without extra setup.
@@ -134,7 +134,7 @@ spark-researcher self-edit review --proposal-id <id> --decision approve --root-l
 spark-researcher self-edit apply --proposal-id <id>
 spark-researcher self-edit apply --proposal-id <id> --git-mode branch --push
 spark-researcher self-edit apply --proposal-id <id> --git-mode main --push
-spark-researcher line-budget --limit 7000
+spark-researcher line-budget --limit 8000
 ```
 
 ## Intent
@@ -143,7 +143,7 @@ This repo is allowed to become more capable, but not more theatrical. If a featu
 
 ## Memory Rule
 
-Local Markdown memory is still the source of truth. The optional `ruvector` backend is only an external delegated search surface, not Spark's internal database.
+Local Markdown memory is still the source of truth. `ruvector` remains the recommended retrieval upgrade once your corpus grows, and Spark falls back cleanly to local search when RuVector is not ready in the current shell.
 
 ## Autonomy Boundary
 

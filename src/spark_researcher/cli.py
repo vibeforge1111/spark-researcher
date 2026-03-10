@@ -246,10 +246,226 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(summary_parser)
 
     budget_parser = sub.add_parser("line-budget")
-    budget_parser.add_argument("--limit", type=int, default=7000)
+    budget_parser.add_argument("--limit", type=int, default=8000)
     budget_parser.add_argument("--repo-root", default=".")
 
     return parser
+
+
+def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_root: Path) -> None:
+    if args.advisory_command == "adapters":
+        print_json(adapter_status())
+        return
+    if args.advisory_command == "providers":
+        print_json(execution_status())
+        return
+    if args.advisory_command == "execute":
+        advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
+        print_json(
+            execute_advisory(
+                runtime_root,
+                advisory=advisory,
+                model=args.model,
+                command_override=args.command,
+                dry_run=args.dry_run,
+            )
+        )
+        return
+    if args.advisory_command == "log":
+        print_json(
+            log_advisory_outcome(
+                runtime_root,
+                task=args.task,
+                model=args.model,
+                status=args.status,
+                packet_ids=args.packet_id,
+                score=args.score,
+                notes=args.notes,
+                domain=args.domain or "generic",
+            )
+        )
+        return
+    if args.advisory_command == "review":
+        print_json(review_advisory_outcomes(runtime_root))
+        return
+    print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+
+
+def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
+    config = load_config(config_path)
+    if args.intent_command == "clear":
+        update_intent_policy(
+            config,
+            goal="",
+            outcome="",
+            success_criteria=[],
+            search_queries=[],
+            frontier_mode="relaxed",
+            resource_modes=["packets", "memory", "web"],
+            notes="",
+        )
+        save_config(config_path, config)
+        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+        return
+    if args.intent_command == "set":
+        update_intent_policy(
+            config,
+            goal=args.goal,
+            outcome=args.outcome,
+            success_criteria=args.success_criterion,
+            search_queries=args.search_query,
+            frontier_mode=args.frontier_mode,
+            resource_modes=args.resource,
+            notes=args.notes,
+        )
+        save_config(config_path, config)
+        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+        return
+    print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+
+
+def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
+    config = load_config(config_path)
+    selected_backend = getattr(args, "backend", None) or config.memory.backend
+    if args.memory_command == "backend-policy":
+        updated = args.backend is not None
+        if updated:
+            update_memory_policy(config, backend=args.backend)
+            save_config(config_path, config)
+        print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
+        return
+    if args.memory_command == "sync":
+        print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=config_path))
+        return
+    if args.memory_command == "search":
+        print_json(
+            search_memory(
+                repo_root,
+                runtime_root,
+                args.query,
+                limit=args.limit,
+                backend=selected_backend,
+                goal=config.eval_goal,
+                config_path=config_path,
+            )
+        )
+        return
+    print_json(
+        memory_status(
+            repo_root,
+            runtime_root,
+            backend=selected_backend,
+            configured_backend=config.memory.backend,
+            goal=config.eval_goal,
+            config_path=config_path,
+        )
+    )
+
+
+def _handle_collective(args: argparse.Namespace, *, repo_root: Path, runtime_root: Path) -> None:
+    if args.collective_command == "publish":
+        print_json(publish_latest(repo_root, runtime_root))
+        return
+    if args.collective_command == "sync-local":
+        print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
+        return
+    if args.collective_command == "absorb":
+        print_json(
+            absorb(
+                repo_root,
+                runtime_root,
+                source_repo=args.repo,
+                limit=args.limit,
+                dry_run=args.dry_run,
+                bundle_only=args.bundle_only,
+                merge_policy=args.merge_policy,
+            )
+        )
+        return
+    print_json(collective_status(repo_root, runtime_root))
+
+
+def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
+    if args.self_edit_command == "propose":
+        print_json(
+            propose(
+                config_path,
+                args.prompt,
+                dry_run=args.dry_run,
+                command_override=args.backend_command,
+                backend_profile=args.backend_profile,
+            )
+        )
+        return
+    if args.self_edit_command == "profiles":
+        print_json({"profiles": backend_profiles()})
+        return
+    if args.self_edit_command == "policy":
+        config = load_config(config_path)
+        push_override = None
+        if args.push and args.no_push:
+            raise RuntimeError("Choose only one of --push or --no-push.")
+        if args.push:
+            push_override = True
+        elif args.no_push:
+            push_override = False
+        has_updates = any(
+            value is not None
+            for value in (
+                args.git_mode,
+                push_override,
+                args.branch_prefix,
+                args.main_branch,
+                args.commit_message_template,
+            )
+        )
+        if has_updates:
+            update_self_edit_policy(
+                config,
+                git_mode=args.git_mode,
+                auto_push=push_override,
+                branch_prefix=args.branch_prefix,
+                main_branch=args.main_branch,
+                commit_message_template=args.commit_message_template,
+            )
+            save_config(config_path, config)
+        print_json({"config_path": str(config_path), "updated": has_updates, "policy": self_edit_policy(config)})
+        return
+    if args.self_edit_command == "review":
+        print_json(
+            review_proposal(
+                config_path,
+                args.proposal_id,
+                decision=args.decision,
+                root_lesson=args.root_lesson,
+                lineage_failures=args.lineage_failure,
+                counterfactual=args.counterfactual,
+                ghost_improvement_check=args.ghost_check,
+                rollback_condition=args.rollback_condition,
+                notes=args.notes,
+            )
+        )
+        return
+    if args.self_edit_command == "apply":
+        push_override = None
+        if args.push and args.no_push:
+            raise RuntimeError("Choose only one of --push or --no-push.")
+        if args.push:
+            push_override = True
+        elif args.no_push:
+            push_override = False
+        print_json(
+            apply_proposal(
+                config_path,
+                args.proposal_id,
+                git_mode_override=args.git_mode,
+                push_override=push_override,
+                branch_name_override=args.branch_name,
+                commit_message_override=args.commit_message,
+            )
+        )
+        return
+    print_json(proposal_status(config_path))
 
 
 def main() -> None:
@@ -304,42 +520,7 @@ def main() -> None:
         print_json(packet_status(config_path))
         return
     if args.action == "advisory":
-        if args.advisory_command == "adapters":
-            print_json(adapter_status())
-            return
-        if args.advisory_command == "providers":
-            print_json(execution_status())
-            return
-        if args.advisory_command == "execute":
-            advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
-            print_json(
-                execute_advisory(
-                    runtime_root,
-                    advisory=advisory,
-                    model=args.model,
-                    command_override=args.command,
-                    dry_run=args.dry_run,
-                )
-            )
-            return
-        if args.advisory_command == "log":
-            print_json(
-                log_advisory_outcome(
-                    runtime_root,
-                    task=args.task,
-                    model=args.model,
-                    status=args.status,
-                    packet_ids=args.packet_id,
-                    score=args.score,
-                    notes=args.notes,
-                    domain=args.domain or "generic",
-                )
-            )
-            return
-        if args.advisory_command == "review":
-            print_json(review_advisory_outcomes(runtime_root))
-            return
-        print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+        _handle_advisory(args, config_path=config_path, runtime_root=runtime_root)
         return
     if args.action == "optimizer":
         if args.optimizer_command == "export-advisory-dataset":
@@ -366,36 +547,7 @@ def main() -> None:
         print_json(chip_status(config_path))
         return
     if args.action == "intent":
-        config = load_config(config_path)
-        if args.intent_command == "clear":
-            update_intent_policy(
-                config,
-                goal="",
-                outcome="",
-                success_criteria=[],
-                search_queries=[],
-                frontier_mode="relaxed",
-                resource_modes=["packets", "memory", "web"],
-                notes="",
-            )
-            save_config(config_path, config)
-            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
-            return
-        if args.intent_command == "set":
-            update_intent_policy(
-                config,
-                goal=args.goal,
-                outcome=args.outcome,
-                success_criteria=args.success_criterion,
-                search_queries=args.search_query,
-                frontier_mode=args.frontier_mode,
-                resource_modes=args.resource,
-                notes=args.notes,
-            )
-            save_config(config_path, config)
-            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
-            return
-        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+        _handle_intent(args, config_path=config_path)
         return
     if args.action == "trainers":
         if args.trainers_command == "run":
@@ -404,22 +556,7 @@ def main() -> None:
         print_json(trainer_status(config_path))
         return
     if args.action == "memory":
-        config = load_config(config_path)
-        selected_backend = getattr(args, "backend", None) or config.memory.backend
-        if args.memory_command == "backend-policy":
-            updated = args.backend is not None
-            if updated:
-                update_memory_policy(config, backend=args.backend)
-                save_config(config_path, config)
-            print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
-            return
-        if args.memory_command == "sync":
-            print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=config_path))
-            return
-        if args.memory_command == "search":
-            print_json(search_memory(repo_root, runtime_root, args.query, limit=args.limit, backend=selected_backend, goal=config.eval_goal, config_path=config_path))
-            return
-        print_json(memory_status(repo_root, runtime_root, backend=selected_backend, configured_backend=config.memory.backend, goal=config.eval_goal, config_path=config_path))
+        _handle_memory(args, config_path=config_path, repo_root=repo_root, runtime_root=runtime_root)
         return
     if args.action == "beliefs":
         print_json(build_beliefs(repo_root, runtime_root))
@@ -428,108 +565,10 @@ def main() -> None:
         print_json(build_vault(repo_root, runtime_root, load_config(config_path), config_path=config_path))
         return
     if args.action == "collective":
-        if args.collective_command == "publish":
-            print_json(publish_latest(repo_root, runtime_root))
-            return
-        if args.collective_command == "sync-local":
-            print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
-            return
-        if args.collective_command == "absorb":
-            print_json(
-                absorb(
-                    repo_root,
-                    runtime_root,
-                    source_repo=args.repo,
-                    limit=args.limit,
-                    dry_run=args.dry_run,
-                    bundle_only=args.bundle_only,
-                    merge_policy=args.merge_policy,
-                )
-            )
-            return
-        print_json(collective_status(repo_root, runtime_root))
+        _handle_collective(args, repo_root=repo_root, runtime_root=runtime_root)
         return
     if args.action == "self-edit":
-        if args.self_edit_command == "propose":
-            print_json(
-                propose(
-                    config_path,
-                    args.prompt,
-                    dry_run=args.dry_run,
-                    command_override=args.backend_command,
-                    backend_profile=args.backend_profile,
-                )
-            )
-            return
-        if args.self_edit_command == "profiles":
-            print_json({"profiles": backend_profiles()})
-            return
-        if args.self_edit_command == "policy":
-            config = load_config(config_path)
-            push_override = None
-            if args.push and args.no_push:
-                raise RuntimeError("Choose only one of --push or --no-push.")
-            if args.push:
-                push_override = True
-            elif args.no_push:
-                push_override = False
-            has_updates = any(
-                value is not None
-                for value in (
-                    args.git_mode,
-                    push_override,
-                    args.branch_prefix,
-                    args.main_branch,
-                    args.commit_message_template,
-                )
-            )
-            if has_updates:
-                update_self_edit_policy(
-                    config,
-                    git_mode=args.git_mode,
-                    auto_push=push_override,
-                    branch_prefix=args.branch_prefix,
-                    main_branch=args.main_branch,
-                    commit_message_template=args.commit_message_template,
-                )
-                save_config(config_path, config)
-            print_json({"config_path": str(config_path), "updated": has_updates, "policy": self_edit_policy(config)})
-            return
-        if args.self_edit_command == "review":
-            print_json(
-                review_proposal(
-                    config_path,
-                    args.proposal_id,
-                    decision=args.decision,
-                    root_lesson=args.root_lesson,
-                    lineage_failures=args.lineage_failure,
-                    counterfactual=args.counterfactual,
-                    ghost_improvement_check=args.ghost_check,
-                    rollback_condition=args.rollback_condition,
-                    notes=args.notes,
-                )
-            )
-            return
-        if args.self_edit_command == "apply":
-            push_override = None
-            if args.push and args.no_push:
-                raise RuntimeError("Choose only one of --push or --no-push.")
-            if args.push:
-                push_override = True
-            elif args.no_push:
-                push_override = False
-            print_json(
-                apply_proposal(
-                    config_path,
-                    args.proposal_id,
-                    git_mode_override=args.git_mode,
-                    push_override=push_override,
-                    branch_name_override=args.branch_name,
-                    commit_message_override=args.commit_message,
-                )
-            )
-            return
-        print_json(proposal_status(config_path))
+        _handle_self_edit(args, config_path=config_path)
         return
     if args.action == "summary":
         print_json(ledger_summary(runtime_root, goal=load_config(config_path).eval_goal))

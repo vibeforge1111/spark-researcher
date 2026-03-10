@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+from .adapters import adapter_status
+from .advisory import build_advisory
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, suggest_trials
 from .chip_starter import init_chip
@@ -14,6 +16,9 @@ from .config import load_config, memory_policy, save_config, self_edit_policy, u
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
 from .obsidian import build_vault
+from .optimizer import optimizer_status
+from .outcomes import log_advisory_outcome
+from .packets import packet_status, search_packets
 from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
@@ -69,6 +74,39 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(candidates_apply)
     candidates_apply.add_argument("--command", dest="project_command", required=True)
     candidates_apply.add_argument("--limit", type=int, default=3)
+
+    packets_parser = sub.add_parser("packets")
+    packets_sub = packets_parser.add_subparsers(dest="packets_command")
+    packets_status_parser = packets_sub.add_parser("status")
+    add_config_argument(packets_status_parser)
+    packets_search_parser = packets_sub.add_parser("search")
+    add_config_argument(packets_search_parser)
+    packets_search_parser.add_argument("query")
+    packets_search_parser.add_argument("--limit", type=int, default=5)
+    packets_search_parser.add_argument("--domain")
+
+    advisory_parser = sub.add_parser("advisory")
+    advisory_sub = advisory_parser.add_subparsers(dest="advisory_command")
+    advisory_build_parser = advisory_sub.add_parser("build")
+    add_config_argument(advisory_build_parser)
+    advisory_build_parser.add_argument("--task", required=True)
+    advisory_build_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], default="generic")
+    advisory_build_parser.add_argument("--limit", type=int, default=4)
+    advisory_build_parser.add_argument("--domain")
+    advisory_adapters_parser = advisory_sub.add_parser("adapters")
+    advisory_log_parser = advisory_sub.add_parser("log")
+    add_config_argument(advisory_log_parser)
+    advisory_log_parser.add_argument("--task", required=True)
+    advisory_log_parser.add_argument("--model", required=True)
+    advisory_log_parser.add_argument("--status", choices=["ok", "mixed", "fail"], required=True)
+    advisory_log_parser.add_argument("--packet-id", action="append", default=[])
+    advisory_log_parser.add_argument("--score", type=float)
+    advisory_log_parser.add_argument("--notes", default="")
+    advisory_log_parser.add_argument("--domain")
+
+    optimizer_parser = sub.add_parser("optimizer")
+    optimizer_sub = optimizer_parser.add_subparsers(dest="optimizer_command")
+    optimizer_sub.add_parser("status")
 
     chips_parser = sub.add_parser("chips")
     chips_sub = chips_parser.add_subparsers(dest="chips_command")
@@ -221,6 +259,35 @@ def main() -> None:
             print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"])})
             return
         print_json(suggest_trials(config_path, args.project_command, limit=args.limit))
+        return
+    if args.action == "packets":
+        if args.packets_command == "search":
+            print_json(search_packets(config_path, args.query, limit=args.limit, domain=args.domain))
+            return
+        print_json(packet_status(config_path))
+        return
+    if args.action == "advisory":
+        if args.advisory_command == "adapters":
+            print_json(adapter_status())
+            return
+        if args.advisory_command == "log":
+            print_json(
+                log_advisory_outcome(
+                    runtime_root,
+                    task=args.task,
+                    model=args.model,
+                    status=args.status,
+                    packet_ids=args.packet_id,
+                    score=args.score,
+                    notes=args.notes,
+                    domain=args.domain or "generic",
+                )
+            )
+            return
+        print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+        return
+    if args.action == "optimizer":
+        print_json(optimizer_status())
         return
     if args.action == "chips":
         if args.chips_command == "init":

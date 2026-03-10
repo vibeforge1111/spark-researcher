@@ -57,6 +57,10 @@ def self_edit_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "self-edit"
 
 
+def advisory_root(runtime_root: Path) -> Path:
+    return artifacts_root(runtime_root) / "advisory"
+
+
 def chips_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "chips"
 

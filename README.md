@@ -23,6 +23,8 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips
+- can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
+- keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
 
 ## Core Rules
 
@@ -46,6 +48,10 @@ spark-researcher init --path C:\work\my-project --preset coding --project-name m
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
+spark-researcher packets search "learning rate"
+spark-researcher advisory build --task "summarize the strongest current trading rule" --model codex
+spark-researcher advisory adapters
+spark-researcher optimizer status
 spark-researcher trainers run
 spark-researcher memory sync
 spark-researcher memory backend-policy
@@ -90,6 +96,12 @@ spark-researcher autoloop --command train
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
+spark-researcher packets status
+spark-researcher packets search "learning rate"
+spark-researcher advisory adapters
+spark-researcher advisory build --task "draft a startup doctrine update" --model claude
+spark-researcher advisory log --task "draft a startup doctrine update" --model claude --status ok --packet-id startup_factor-theme-distribution-velocity-retention
+spark-researcher optimizer status
 spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher candidates suggest --command train
@@ -141,3 +153,11 @@ Spark still owns the loop, ledger, memory index, self-edit policy, and collectiv
 Use `docs/CHIP_VALIDATION.md` as the standard pass/fail protocol for validating any chip against the current core.
 
 New chips should usually start from `spark-researcher chips init`, then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.
+
+## Advisory Path
+
+Spark now has one lightweight intelligence path for LLM use:
+
+`task -> advisory -> packets -> adapter -> model -> outcome`
+
+Packets are loaded from local memory exports. Advisory selects only the few packets that matter for the current task. Adapters format that advice for Claude, Codex, OpenClaw, or a generic fallback. See `docs/ADVISORY.md`.

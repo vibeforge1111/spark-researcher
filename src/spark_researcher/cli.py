@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .adapters import adapter_status
+from .adapters import adapter_status, execute_advisory, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, suggest_trials
@@ -16,8 +16,8 @@ from .config import load_config, memory_policy, save_config, self_edit_policy, u
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
 from .obsidian import build_vault
-from .optimizer import optimizer_status
-from .outcomes import log_advisory_outcome
+from .optimizer import export_advisory_dataset, optimizer_status
+from .outcomes import log_advisory_outcome, review_advisory_outcomes
 from .packets import packet_status, search_packets
 from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
@@ -94,6 +94,15 @@ def build_parser() -> argparse.ArgumentParser:
     advisory_build_parser.add_argument("--limit", type=int, default=4)
     advisory_build_parser.add_argument("--domain")
     advisory_adapters_parser = advisory_sub.add_parser("adapters")
+    advisory_providers_parser = advisory_sub.add_parser("providers")
+    advisory_execute_parser = advisory_sub.add_parser("execute")
+    add_config_argument(advisory_execute_parser)
+    advisory_execute_parser.add_argument("--task", required=True)
+    advisory_execute_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], required=True)
+    advisory_execute_parser.add_argument("--limit", type=int, default=4)
+    advisory_execute_parser.add_argument("--domain")
+    advisory_execute_parser.add_argument("--command", action="append")
+    advisory_execute_parser.add_argument("--dry-run", action="store_true")
     advisory_log_parser = advisory_sub.add_parser("log")
     add_config_argument(advisory_log_parser)
     advisory_log_parser.add_argument("--task", required=True)
@@ -103,10 +112,13 @@ def build_parser() -> argparse.ArgumentParser:
     advisory_log_parser.add_argument("--score", type=float)
     advisory_log_parser.add_argument("--notes", default="")
     advisory_log_parser.add_argument("--domain")
+    advisory_review_parser = advisory_sub.add_parser("review")
+    add_config_argument(advisory_review_parser)
 
     optimizer_parser = sub.add_parser("optimizer")
     optimizer_sub = optimizer_parser.add_subparsers(dest="optimizer_command")
     optimizer_sub.add_parser("status")
+    optimizer_sub.add_parser("export-advisory-dataset")
 
     chips_parser = sub.add_parser("chips")
     chips_sub = chips_parser.add_subparsers(dest="chips_command")
@@ -270,6 +282,21 @@ def main() -> None:
         if args.advisory_command == "adapters":
             print_json(adapter_status())
             return
+        if args.advisory_command == "providers":
+            print_json(execution_status())
+            return
+        if args.advisory_command == "execute":
+            advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
+            print_json(
+                execute_advisory(
+                    runtime_root,
+                    advisory=advisory,
+                    model=args.model,
+                    command_override=args.command,
+                    dry_run=args.dry_run,
+                )
+            )
+            return
         if args.advisory_command == "log":
             print_json(
                 log_advisory_outcome(
@@ -284,9 +311,15 @@ def main() -> None:
                 )
             )
             return
+        if args.advisory_command == "review":
+            print_json(review_advisory_outcomes(runtime_root))
+            return
         print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
         return
     if args.action == "optimizer":
+        if args.optimizer_command == "export-advisory-dataset":
+            print_json(export_advisory_dataset(runtime_root))
+            return
         print_json(optimizer_status())
         return
     if args.action == "chips":

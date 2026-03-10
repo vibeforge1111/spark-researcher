@@ -79,6 +79,14 @@ The chip owns:
 - domain packets
 - domain watchtower pages
 
+Suggestion hooks should keep expanding the frontier from evidence:
+
+- test stronger combinations from winners
+- run transfer checks on strong primitives
+- run contradiction probes on promoted doctrines
+
+Do this through the existing `suggest` hook rather than inventing a new orchestration surface.
+
 This keeps the kernel portable while letting domains evolve in separate repos.
 
 ## Registry

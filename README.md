@@ -25,6 +25,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
+- can execute advisory-backed model requests through lightweight command templates instead of hardwiring provider SDKs
 
 ## Core Rules
 
@@ -51,6 +52,7 @@ spark-researcher chips validate
 spark-researcher packets search "learning rate"
 spark-researcher advisory build --task "summarize the strongest current trading rule" --model codex
 spark-researcher advisory adapters
+spark-researcher advisory providers
 spark-researcher optimizer status
 spark-researcher trainers run
 spark-researcher memory sync
@@ -100,8 +102,11 @@ spark-researcher packets status
 spark-researcher packets search "learning rate"
 spark-researcher advisory adapters
 spark-researcher advisory build --task "draft a startup doctrine update" --model claude
+spark-researcher advisory execute --task "draft a startup doctrine update" --model claude --dry-run --command my-wrapper --command {system_prompt_path} --command {user_prompt_path} --command {response_path}
 spark-researcher advisory log --task "draft a startup doctrine update" --model claude --status ok --packet-id startup_factor-theme-distribution-velocity-retention
+spark-researcher advisory review
 spark-researcher optimizer status
+spark-researcher optimizer export-advisory-dataset
 spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher candidates suggest --command train

@@ -10,6 +10,7 @@ Prove four things:
 - the chip still runs through the current Spark bridge
 - the chip produces memory and watchtower output correctly
 - the chip converges cleanly without hidden system errors
+- the chip can reopen the frontier from winners and failures instead of only replaying a fixed candidate list
 
 ## Use A Clean Repo
 
@@ -47,7 +48,7 @@ python -m spark_researcher.cli summary
 - run count
 - memory document count
 - domain page count
-- whether suggestions were appended or the chip exhausted its declared space
+- whether suggestions were appended or the chip exhausted its current frontier
 - any regressions, plateaus, or system errors
 
 ## Current Reference Results

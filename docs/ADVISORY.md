@@ -21,9 +21,13 @@ Spark Researcher uses one lightweight intelligence path:
 spark-researcher packets status
 spark-researcher packets search "proof quality"
 spark-researcher advisory adapters
+spark-researcher advisory providers
 spark-researcher advisory build --task "draft a content belief packet" --model claude
+spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command my-wrapper --command {system_prompt_path} --command {user_prompt_path} --command {response_path}
 spark-researcher advisory log --task "draft a content belief packet" --model claude --status ok --packet-id belief-run-...
+spark-researcher advisory review
 spark-researcher optimizer status
+spark-researcher optimizer export-advisory-dataset
 ```
 
 ## Adapter Policy
@@ -51,3 +55,23 @@ Only use DSPy to optimize measurable subroutines such as:
 - contradiction extraction
 
 Do not make DSPy the core runtime.
+
+## Provider Execution
+
+Spark can execute advisory-backed model calls through lightweight command templates.
+
+Set one of these environment variables:
+
+- `SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND`
+- `SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND`
+- `SPARK_RESEARCHER_ADAPTER_OPENCLAW_COMMAND`
+- `SPARK_RESEARCHER_ADAPTER_GENERIC_COMMAND`
+
+Supported placeholders:
+
+- `{system_prompt_path}`
+- `{user_prompt_path}`
+- `{request_path}`
+- `{response_path}`
+
+This keeps provider execution outside the core logic while still letting Spark prepare the right request shape for each model family.

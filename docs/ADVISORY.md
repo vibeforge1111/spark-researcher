@@ -74,4 +74,10 @@ Supported placeholders:
 - `{request_path}`
 - `{response_path}`
 
+Windows Claude Opus example:
+
+```powershell
+$env:SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND='powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\USER\Desktop\spark-researcher\scripts\claude_frontier_wrapper.ps1 {system_prompt_path} {user_prompt_path} {response_path} -Model opus'
+```
+
 This keeps provider execution outside the core logic while still letting Spark prepare the right request shape for each model family.

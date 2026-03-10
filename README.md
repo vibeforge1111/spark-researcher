@@ -176,7 +176,7 @@ Provider execution stays lightweight. Spark prepares request files and delegates
 Example environment variables:
 
 ```powershell
-$env:SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND='claude --system-file {system_prompt_path} --prompt-file {user_prompt_path} --output-file {response_path}'
+$env:SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND='powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\USER\Desktop\spark-researcher\scripts\claude_frontier_wrapper.ps1 {system_prompt_path} {user_prompt_path} {response_path} -Model opus'
 $env:SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND='codex exec --system-prompt-file {system_prompt_path} --prompt-file {user_prompt_path} --json-out {response_path}'
 $env:SPARK_RESEARCHER_ADAPTER_OPENCLAW_COMMAND='openclaw run --system {system_prompt_path} --prompt {user_prompt_path} --output {response_path}'
 ```

@@ -85,7 +85,7 @@ Suggestion hooks should keep expanding the frontier from evidence, and Spark can
 - run transfer checks on strong primitives
 - run contradiction probes on promoted doctrines
 
-Do this through the existing `suggest` hook rather than inventing a new orchestration surface.
+Do this through the existing `suggest` hook rather than inventing a new orchestration surface. If you want long-running exploration, use `autoloop --continuous`; it repeats bounded passes, not an unconstrained daemon.
 
 This keeps the kernel portable while letting domains evolve in separate repos.
 

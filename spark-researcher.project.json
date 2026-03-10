@@ -85,7 +85,12 @@
       "README.md",
       "pyproject.toml"
     ],
-    "prompt_preamble": "Keep the repo lightweight, transparent, and review-first."
+    "prompt_preamble": "Keep the repo lightweight, transparent, and review-first.",
+    "git_mode": "manual",
+    "auto_push": false,
+    "branch_prefix": "self-edit/",
+    "main_branch": "main",
+    "commit_message_template": "Apply self-edit proposal {proposal_id}"
   },
   "guardrails": {
     "max_loop_iterations": 8,

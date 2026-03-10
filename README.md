@@ -28,6 +28,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - self-edit never auto-applies
 - mutable targets must be declared
 - the system works in temp workspaces, not in-place
+- git promotion is explicit: `manual`, `branch`, or `main`
 
 ## Quick Start
 
@@ -84,6 +85,8 @@ spark-researcher self-edit profiles
 spark-researcher self-edit propose --prompt "simplify the trainer status output" --backend-profile codex-exec
 spark-researcher self-edit review --proposal-id <id> --decision approve --root-lesson "..." --lineage-failure "..." --lineage-failure "..." --lineage-failure "..." --counterfactual "..." --ghost-check "..." --rollback-condition "..."
 spark-researcher self-edit apply --proposal-id <id>
+spark-researcher self-edit apply --proposal-id <id> --git-mode branch --push
+spark-researcher self-edit apply --proposal-id <id> --git-mode main --push
 spark-researcher line-budget --limit 6000
 ```
 

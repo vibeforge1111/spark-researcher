@@ -51,6 +51,11 @@ class SelfEditSpec:
     command: list[str] = field(default_factory=list)
     mutable_targets: list[str] = field(default_factory=list)
     prompt_preamble: str = ""
+    git_mode: str = "manual"
+    auto_push: bool = False
+    branch_prefix: str = "self-edit/"
+    main_branch: str = "main"
+    commit_message_template: str = "Apply self-edit proposal {proposal_id}"
 
 
 @dataclass
@@ -140,6 +145,13 @@ def load_config(path: Path) -> ProjectConfig:
             command=[str(part) for part in self_edit_payload.get("command", [])],
             mutable_targets=[str(item) for item in self_edit_payload.get("mutable_targets", payload.get("mutable_targets", []))],
             prompt_preamble=str(self_edit_payload.get("prompt_preamble", "")),
+            git_mode=str(self_edit_payload.get("git_mode", "manual")),
+            auto_push=bool(self_edit_payload.get("auto_push", False)),
+            branch_prefix=str(self_edit_payload.get("branch_prefix", "self-edit/")),
+            main_branch=str(self_edit_payload.get("main_branch", "main")),
+            commit_message_template=str(
+                self_edit_payload.get("commit_message_template", "Apply self-edit proposal {proposal_id}")
+            ),
         ),
         guardrails=GuardrailSpec(
             max_loop_iterations=int(guardrail_payload.get("max_loop_iterations", 8)),

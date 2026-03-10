@@ -94,6 +94,55 @@ def run_git_status(repo_root: Path) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def _git_output(repo_root: Path, *args: str) -> str:
+    result = _git(repo_root, *args)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+    return result.stdout.strip()
+
+
+def _current_branch(repo_root: Path) -> str:
+    return _git_output(repo_root, "branch", "--show-current")
+
+
+def _remote_exists(repo_root: Path, remote_name: str = "origin") -> bool:
+    result = _git(repo_root, "remote", "get-url", remote_name)
+    return result.returncode == 0
+
+
+def _checkout_branch(repo_root: Path, branch_name: str, *, create: bool) -> None:
+    if create:
+        _git_output(repo_root, "checkout", "-b", branch_name)
+    else:
+        _git_output(repo_root, "checkout", branch_name)
+
+
+def _commit_paths(repo_root: Path, paths: list[str], message: str) -> str:
+    _git_output(repo_root, "add", *paths)
+    result = _git(repo_root, "commit", "-m", message)
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        detail = stderr or stdout
+        raise RuntimeError(detail or "git commit failed")
+    return _git_output(repo_root, "rev-parse", "HEAD")
+
+
+def _push_branch(repo_root: Path, branch_name: str, remote_name: str = "origin") -> None:
+    _git_output(repo_root, "push", "-u", remote_name, branch_name)
+
+
 def copy_repo(repo_root: Path, workspace_root: Path) -> None:
     shutil.copytree(
         repo_root,
@@ -362,7 +411,15 @@ def review_proposal(
     return {"proposal": _proposal_summary(proposal, review), "review": review}
 
 
-def apply_proposal(config_path: Path, proposal_id: str) -> dict[str, Any]:
+def apply_proposal(
+    config_path: Path,
+    proposal_id: str,
+    *,
+    git_mode_override: str | None = None,
+    push_override: bool | None = None,
+    branch_name_override: str | None = None,
+    commit_message_override: str | None = None,
+) -> dict[str, Any]:
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
@@ -383,7 +440,23 @@ def apply_proposal(config_path: Path, proposal_id: str) -> dict[str, Any]:
         raise RuntimeError("Proposal contains out-of-scope edits and cannot be applied.")
     if int(proposal.get("change_count", 0)) <= 0:
         raise RuntimeError("Proposal has no changes to apply.")
+    if run_git_status(repo_root):
+        raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
+    git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
+    if git_mode not in {"manual", "branch", "main"}:
+        raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")
+    branch_name = _current_branch(repo_root)
+    original_branch = branch_name
+    created_branch = False
+    if git_mode == "branch":
+        branch_name = str(branch_name_override or f"{config.self_edit.branch_prefix}{proposal_id}").replace("\\", "/")
+        _checkout_branch(repo_root, branch_name, create=True)
+        created_branch = True
+    elif git_mode == "main":
+        target_main = str(config.self_edit.main_branch or "main")
+        if branch_name != target_main:
+            raise RuntimeError(f"Direct main mode requires current branch '{target_main}', found '{branch_name}'.")
     applied = []
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
@@ -398,8 +471,38 @@ def apply_proposal(config_path: Path, proposal_id: str) -> dict[str, Any]:
         applied.append(rel)
     proposal["status"] = "applied"
     proposal["applied_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
+    commit_sha = None
+    pushed = False
+    commit_message = None
+    should_push = bool(config.self_edit.auto_push if push_override is None else push_override)
+    if git_mode in {"branch", "main"}:
+        commit_message = str(
+            commit_message_override
+            or config.self_edit.commit_message_template
+            or "Apply self-edit proposal {proposal_id}"
+        ).format(proposal_id=proposal_id)
+        commit_sha = _commit_paths(repo_root, applied, commit_message)
+        if should_push:
+            if not _remote_exists(repo_root):
+                raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
+            _push_branch(repo_root, _current_branch(repo_root))
+            pushed = True
+    proposal["git_mode"] = git_mode
+    proposal["git_branch"] = _current_branch(repo_root)
+    proposal["git_commit_sha"] = commit_sha
+    proposal["git_pushed"] = pushed
     _write_json(proposal_path, proposal)
-    return {"proposal_id": proposal_id, "applied_files": applied}
+    return {
+        "proposal_id": proposal_id,
+        "applied_files": applied,
+        "git_mode": git_mode,
+        "branch": _current_branch(repo_root),
+        "original_branch": original_branch,
+        "created_branch": created_branch,
+        "commit_message": commit_message,
+        "commit_sha": commit_sha,
+        "pushed": pushed,
+    }
 
 
 def proposal_status(config_path: Path) -> dict[str, Any]:

@@ -109,6 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_apply = self_edit_sub.add_parser("apply")
     add_config_argument(self_edit_apply)
     self_edit_apply.add_argument("--proposal-id", required=True)
+    self_edit_apply.add_argument("--git-mode", choices=["manual", "branch", "main"])
+    self_edit_apply.add_argument("--push", action="store_true")
+    self_edit_apply.add_argument("--no-push", action="store_true")
+    self_edit_apply.add_argument("--branch-name")
+    self_edit_apply.add_argument("--commit-message")
     self_edit_status = self_edit_sub.add_parser("status")
     add_config_argument(self_edit_status)
 
@@ -211,7 +216,23 @@ def main() -> None:
             )
             return
         if args.self_edit_command == "apply":
-            print_json(apply_proposal(config_path, args.proposal_id))
+            push_override = None
+            if args.push and args.no_push:
+                raise RuntimeError("Choose only one of --push or --no-push.")
+            if args.push:
+                push_override = True
+            elif args.no_push:
+                push_override = False
+            print_json(
+                apply_proposal(
+                    config_path,
+                    args.proposal_id,
+                    git_mode_override=args.git_mode,
+                    push_override=push_override,
+                    branch_name_override=args.branch_name,
+                    commit_message_override=args.commit_message,
+                )
+            )
             return
         print_json(proposal_status(config_path))
         return

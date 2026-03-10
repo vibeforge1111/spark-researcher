@@ -144,7 +144,7 @@ Local Markdown memory is still the source of truth. The optional `ruvector` back
 
 ## Autonomy Boundary
 
-`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds. `autoloop --continuous` simply repeats those bounded passes until interrupted. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values.
+`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds. `autoloop --continuous` simply repeats those bounded passes until interrupted. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values. Frontier runs that land close to the current best are marked `near_best` and do not trip the discard limit.
 
 ## Domain Chips
 

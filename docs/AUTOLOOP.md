@@ -34,6 +34,12 @@ Neighborhood exploration stays bounded:
 - only one step up or down is suggested at a time
 - existing or already-tested signatures are skipped
 
+Discard control is intentionally soft around the frontier:
+
+- `improved` resets the discard counter
+- `near_best` is recorded when a run stays within the configured tolerance of the current best
+- only true `regressed` runs count toward the consecutive discard limit
+
 ## Commands
 
 ```powershell

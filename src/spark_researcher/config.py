@@ -76,6 +76,7 @@ class ChipSpec:
 class GuardrailSpec:
     max_loop_iterations: int = 8
     consecutive_discard_limit: int = 3
+    near_best_tolerance: float = 0.03
     require_clean_git_for_self_edit: bool = True
     require_human_approval_for_self_edit: bool = True
     blocked_command_fragments: list[str] = field(default_factory=list)
@@ -167,6 +168,7 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
         "guardrails": {
             "max_loop_iterations": config.guardrails.max_loop_iterations,
             "consecutive_discard_limit": config.guardrails.consecutive_discard_limit,
+            "near_best_tolerance": config.guardrails.near_best_tolerance,
             "require_clean_git_for_self_edit": config.guardrails.require_clean_git_for_self_edit,
             "require_human_approval_for_self_edit": config.guardrails.require_human_approval_for_self_edit,
             "blocked_command_fragments": list(config.guardrails.blocked_command_fragments),
@@ -309,6 +311,7 @@ def load_config(path: Path) -> ProjectConfig:
         guardrails=GuardrailSpec(
             max_loop_iterations=int(guardrail_payload.get("max_loop_iterations", 8)),
             consecutive_discard_limit=int(guardrail_payload.get("consecutive_discard_limit", 3)),
+            near_best_tolerance=float(guardrail_payload.get("near_best_tolerance", 0.03)),
             require_clean_git_for_self_edit=bool(guardrail_payload.get("require_clean_git_for_self_edit", True)),
             require_human_approval_for_self_edit=bool(guardrail_payload.get("require_human_approval_for_self_edit", True)),
             blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],

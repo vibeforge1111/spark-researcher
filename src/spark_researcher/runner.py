@@ -176,7 +176,7 @@ def best_metric(runtime_root: Path, command_name: str, goal: str) -> float | Non
     return max(values) if goal == "maximize" else min(values)
 
 
-def metric_verdict(metric_value: float | None, baseline_value: float | None, goal: str) -> str:
+def metric_verdict(metric_value: float | None, baseline_value: float | None, goal: str, tolerance: float = 0.0) -> str:
     if metric_value is None:
         return "unknown"
     if baseline_value is None:
@@ -184,7 +184,13 @@ def metric_verdict(metric_value: float | None, baseline_value: float | None, goa
     if metric_value == baseline_value:
         return "flat"
     improved = metric_value > baseline_value if goal == "maximize" else metric_value < baseline_value
-    return "improved" if improved else "regressed"
+    if improved:
+        return "improved"
+    if tolerance > 0 and baseline_value != 0:
+        gap = abs(metric_value - baseline_value) / abs(baseline_value)
+        if gap <= tolerance:
+            return "near_best"
+    return "regressed"
 
 
 def build_record(
@@ -267,7 +273,7 @@ def run_once(
     baseline_value = best_metric(runtime_root, command_name, config.eval_goal)
     metric_value = metrics.get(config.eval_metric)
     numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
-    verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal)
+    verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
     record = build_record(
         config,
         command_name,
@@ -306,7 +312,7 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
         results.append(record)
         if record["verdict"] == "improved":
             consecutive_discards = 0
-        elif record["verdict"] in {"regressed", "flat"}:
+        elif record["verdict"] == "regressed":
             consecutive_discards += 1
         if consecutive_discards >= config.guardrails.consecutive_discard_limit:
             break

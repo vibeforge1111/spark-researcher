@@ -380,7 +380,7 @@ def run_autoloop(
             results.append(record)
             if record["verdict"] == "improved":
                 consecutive_discards = 0
-            elif record["verdict"] in {"regressed", "flat"}:
+            elif record["verdict"] == "regressed":
                 consecutive_discards += 1
             if consecutive_discards >= config.guardrails.consecutive_discard_limit:
                 break

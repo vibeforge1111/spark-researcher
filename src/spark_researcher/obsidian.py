@@ -4,6 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
+from .beliefs import build_beliefs
 from .memory import sync_memory
 from .paths import trainers_root, vault_root
 from .runner import ledger_summary
@@ -20,8 +21,9 @@ def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
     output_root.mkdir(parents=True, exist_ok=True)
     if not source.exists():
         return written
-    for path in sorted(source.glob("*.md")):
-        target = output_root / path.name
+    for path in sorted(source.rglob("*.md")):
+        target = output_root / path.relative_to(source)
+        target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
         written.append(str(target))
     return written
@@ -38,6 +40,7 @@ def render_home(summary: dict, trainer_rows: list[dict]) -> str:
             "- [[05-Runtime/Run Ledger]]",
             "- [[05-Runtime/Trainer State]]",
             "- [[05-Runtime/Self Edit Queue]]",
+            "- [[06-References/beliefs/INDEX]]",
             "",
             "## Snapshot",
             "",
@@ -48,6 +51,7 @@ def render_home(summary: dict, trainer_rows: list[dict]) -> str:
             "## References",
             "",
             "- [[06-References/ARCHITECTURE]]",
+            "- [[06-References/BELIEFS]]",
             "- [[06-References/RULES]]",
             "- [[06-References/SELF_EDITING]]",
             "- [[06-References/OBSIDIAN]]",
@@ -126,6 +130,7 @@ def render_self_edit_queue(runtime_root: Path) -> str:
 
 def build_vault(repo_root: Path, runtime_root: Path) -> dict[str, object]:
     sync_memory(runtime_root)
+    belief_manifest = build_beliefs(repo_root, runtime_root)
     output_root = vault_root(runtime_root)
     summary = ledger_summary(runtime_root)
     trainer_rows = []
@@ -139,5 +144,9 @@ def build_vault(repo_root: Path, runtime_root: Path) -> dict[str, object]:
     write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
     write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))
     write_text(output_root / "05-Runtime" / "Self Edit Queue.md", render_self_edit_queue(runtime_root))
-    return {"vault_root": str(output_root), "run_count": summary["run_count"], "trainer_entries": len(trainer_rows)}
-
+    return {
+        "vault_root": str(output_root),
+        "run_count": summary["run_count"],
+        "trainer_entries": len(trainer_rows),
+        "belief_count": belief_manifest["belief_count"],
+    }

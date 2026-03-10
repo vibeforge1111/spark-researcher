@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .beliefs import build_beliefs
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
 from .line_budget import build_line_budget
@@ -64,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
     memory_search.add_argument("--limit", type=int, default=5)
     memory_status_parser = memory_sub.add_parser("status")
     add_config_argument(memory_status_parser)
+
+    beliefs_parser = sub.add_parser("beliefs")
+    beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
+    beliefs_build = beliefs_sub.add_parser("build")
+    add_config_argument(beliefs_build)
 
     obsidian_parser = sub.add_parser("obsidian")
     obsidian_sub = obsidian_parser.add_subparsers(dest="obsidian_command")
@@ -156,6 +162,9 @@ def main() -> None:
             print_json(search_memory(runtime_root, args.query, limit=args.limit))
             return
         print_json(memory_status(runtime_root))
+        return
+    if args.action == "beliefs":
+        print_json(build_beliefs(repo_root, runtime_root))
         return
     if args.action == "obsidian":
         print_json(build_vault(repo_root, runtime_root))

@@ -18,6 +18,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - publishes capsule files that `autoresearch-collective` can ingest
 - proposes self-edits in a temporary workspace and requires explicit human apply
 - scaffolds coding, research, and content projects with one init command
+- builds compact belief packets from improved runs and approved self-edits
 
 ## Core Rules
 
@@ -38,6 +39,7 @@ spark-researcher loop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
 spark-researcher trainers run
 spark-researcher memory sync
+spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
 spark-researcher collective sync-local
@@ -73,6 +75,7 @@ spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher memory sync
 spark-researcher memory search "learning rate"
+spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
 spark-researcher collective status

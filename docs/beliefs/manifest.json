@@ -1,0 +1,15 @@
+{
+  "belief_count": 2,
+  "beliefs": [
+    {
+      "belief_id": "run-20260310-095338-673290-train-once",
+      "kind": "run",
+      "path": "C:\\Users\\USER\\Desktop\\spark-researcher\\docs\\beliefs\\run-20260310-095338-673290-train-once.md"
+    },
+    {
+      "belief_id": "self-edit-20260310-100316-669058-self-edit",
+      "kind": "self_edit",
+      "path": "C:\\Users\\USER\\Desktop\\spark-researcher\\docs\\beliefs\\self-edit-20260310-100316-669058-self-edit.md"
+    }
+  ]
+}

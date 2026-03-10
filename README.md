@@ -138,4 +138,6 @@ Domain chips keep domain intelligence out of the core repo. A chip is an externa
 
 Spark still owns the loop, ledger, memory index, self-edit policy, and collective export. The chip only supplies domain-specific logic. See `docs/CHIPS.md`.
 
+Use `docs/CHIP_VALIDATION.md` as the standard pass/fail protocol for validating any chip against the current core.
+
 New chips should usually start from `spark-researcher chips init`, then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.

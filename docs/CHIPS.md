@@ -29,6 +29,8 @@ spark-researcher chips validate
 
 The canonical schema lives at `schemas/spark-chip.schema.json`.
 
+The standard runtime validation flow for any chip is documented in `docs/CHIP_VALIDATION.md`.
+
 Create a new chip scaffold with:
 
 ```powershell

@@ -29,8 +29,6 @@ BUILTIN_BACKEND_PROFILES = {
             "--skip-git-repo-check",
             "--sandbox",
             "workspace-write",
-            "-a",
-            "never",
             "-o",
             "{last_message}",
             "Read the request file at {request}. Apply the requested edits in this workspace only. Do not edit files outside the declared mutable targets in the request.",

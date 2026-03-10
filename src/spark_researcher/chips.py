@@ -133,6 +133,26 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
                     errors.append(f"`frontier.allowed_mutations.{field_name}` must use a lowercase field slug.")
                 if not isinstance(values, list) or not values or not all(isinstance(item, str) and str(item).strip() for item in values):
                     errors.append(f"`frontier.allowed_mutations.{field_name}` must be a non-empty array of strings.")
+            open_fields = frontier.get("open_mutation_fields", [])
+            if not isinstance(open_fields, list) or not all(isinstance(item, str) for item in open_fields):
+                errors.append("`frontier.open_mutation_fields` must be an array of strings when present.")
+            elif any(str(item) not in allowed for item in open_fields):
+                errors.append("`frontier.open_mutation_fields` must refer only to keys in `frontier.allowed_mutations`.")
+            field_patterns = frontier.get("field_patterns", {})
+            if not isinstance(field_patterns, dict):
+                errors.append("`frontier.field_patterns` must be an object when present.")
+                field_patterns = {}
+            for field_name, pattern in field_patterns.items():
+                if str(field_name) not in allowed:
+                    errors.append("`frontier.field_patterns` must refer only to keys in `frontier.allowed_mutations`.")
+                    continue
+                try:
+                    re.compile(str(pattern))
+                except re.error as exc:
+                    errors.append(f"`frontier.field_patterns.{field_name}` is not a valid regex: {exc}.")
+            prompt_hints = frontier.get("prompt_hints", [])
+            if not isinstance(prompt_hints, list) or not all(isinstance(item, str) and str(item).strip() for item in prompt_hints):
+                errors.append("`frontier.prompt_hints` must be an array of non-empty strings when present.")
             required_fields = frontier.get("required_fields", [])
             if not isinstance(required_fields, list) or not all(isinstance(item, str) for item in required_fields):
                 errors.append("`frontier.required_fields` must be an array of strings when present.")

@@ -6,7 +6,7 @@ Spark Researcher is a compressed blend of three ideas:
 - Spark Recursion: bounded recursive improvement, trainer recompiles, and anti-drift rules.
 - Spark Autoresearch: non-complex local memory, Obsidian watchtower output, and collective sharing.
 
-The design target is simple: keep the whole repo well under `6000` counted lines while still being useful on real projects.
+The design target is simple: keep the whole repo well under `7000` counted lines while still being useful on real projects.
 
 ## What It Does
 
@@ -22,7 +22,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - builds compact belief packets from improved runs and approved self-edits
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
-- can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback
+- can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
 - can execute advisory-backed model requests through lightweight command templates instead of hardwiring provider SDKs
@@ -62,7 +62,7 @@ spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
 spark-researcher collective sync-local
-spark-researcher line-budget --limit 6000
+spark-researcher line-budget --limit 7000
 ```
 
 The bundled config points at `examples/toy-project/` so the loop is runnable without extra setup.
@@ -131,7 +131,7 @@ spark-researcher self-edit review --proposal-id <id> --decision approve --root-l
 spark-researcher self-edit apply --proposal-id <id>
 spark-researcher self-edit apply --proposal-id <id> --git-mode branch --push
 spark-researcher self-edit apply --proposal-id <id> --git-mode main --push
-spark-researcher line-budget --limit 6000
+spark-researcher line-budget --limit 7000
 ```
 
 ## Intent

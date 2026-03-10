@@ -80,6 +80,26 @@
         "enabled": {"type": "boolean"},
         "model": {"enum": ["claude", "codex", "openclaw", "generic"]},
         "web_search": {"type": "boolean"},
+        "open_mutation_fields": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "field_patterns": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-z0-9][a-z0-9._-]{1,63}$": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "prompt_hints": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
         "required_fields": {
           "type": "array",
           "items": {"type": "string"},

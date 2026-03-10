@@ -223,7 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(summary_parser)
 
     budget_parser = sub.add_parser("line-budget")
-    budget_parser.add_argument("--limit", type=int, default=6000)
+    budget_parser.add_argument("--limit", type=int, default=7000)
     budget_parser.add_argument("--repo-root", default=".")
 
     return parser

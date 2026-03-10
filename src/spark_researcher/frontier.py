@@ -13,11 +13,17 @@ from .advisory import build_advisory
 from .chips import load_chip_context
 from .config import load_config
 from .paths import resolve_runtime_root
+
+
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
+
+
 def _candidate_id(mutations: dict[str, str]) -> str:
     parts = [f"{name}-{value}".replace(":", "-").replace(".", "").replace(" ", "-") for name, value in sorted(mutations.items())]
     return "frontier-" + "-".join(parts)
+
+
 def _parse_json(text: str) -> dict[str, Any] | None:
     for candidate in (text.strip(), text[text.find("{") : text.rfind("}") + 1] if "{" in text and "}" in text else ""):
         if not candidate:
@@ -29,11 +35,28 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         if isinstance(payload, dict):
             return payload
     return None
-def _parse_text(text: str, allowed: dict[str, list[str]]) -> dict[str, Any]:
+
+
+def _match_open_field(block: str, field_name: str, pattern: str) -> str:
+    field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
+    if field_match and re.fullmatch(pattern, field_match.group(1)):
+        return field_match.group(1)
+    for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
+        if re.fullmatch(pattern, token):
+            return token
+    return ""
+
+
+def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str], field_patterns: dict[str, str]) -> dict[str, Any]:
     proposals = []
     for block in [item.strip() for item in re.split(r"\n\s*(?:#{2,}\s*|\d+\.\s+)", text) if item.strip()]:
-        mutations = {name: next((value for value in values if value in block), "") for name, values in allowed.items()}
-        mutations = {name: value for name, value in mutations.items() if value}
+        mutations: dict[str, str] = {}
+        for name, values in allowed.items():
+            value = next((item for item in values if item in block), "")
+            if not value and name in open_fields:
+                value = _match_open_field(block, name, field_patterns.get(name, r"^[a-z0-9:_-]+$"))
+            if value:
+                mutations[name] = value
         if not mutations:
             continue
         rationale = re.search(r"Rationale\s*:\s*(.*)", block)
@@ -61,6 +84,9 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     if not isinstance(spec, dict) or not spec.get("enabled", False):
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No frontier sidecar is enabled for this chip."]}
     allowed = {str(name): [str(item) for item in values] for name, values in spec.get("allowed_mutations", {}).items() if isinstance(values, list)}
+    open_fields = {str(item) for item in spec.get("open_mutation_fields", []) if isinstance(item, str)}
+    field_patterns = {str(name): str(pattern) for name, pattern in spec.get("field_patterns", {}).items() if isinstance(pattern, str)}
+    prompt_hints = [str(item) for item in spec.get("prompt_hints", []) if isinstance(item, str)]
     if not allowed:
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No allowed mutation grammar is defined for this chip frontier."]}
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
@@ -81,13 +107,16 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         [
             f"Propose at most {limit} new bounded research candidates for the `{context.manifest.get('domain', 'generic')}` chip.",
             f"Command: {command_name}. Metric: {config.eval_metric}. Goal: {config.eval_goal}.",
-            f"Allowed mutation grammar: {json.dumps(allowed, sort_keys=True)}",
+            f"Seed mutation grammar: {json.dumps(allowed, sort_keys=True)}",
+            f"Open mutation fields: {json.dumps(sorted(open_fields))}",
+            f"Field patterns for open fields: {json.dumps(field_patterns, sort_keys=True)}",
             f"Required fields: {json.dumps([str(item) for item in spec.get('required_fields', [])])}",
             f"Already tested or queued signatures: {json.dumps([[name, value] for sig in sorted(tested | existing) for name, value in sig][:24])}",
             f"Current strongest rows: {json.dumps(winner_text, sort_keys=True)}",
             f"Web notes: {json.dumps(web_notes)}",
+            f"Prompt hints: {json.dumps(prompt_hints)}",
             'Return JSON only in the shape {"proposals":[{"candidate_id":"","candidate_summary":"","hypothesis":"","mutations":{},"why_now":["",""]}]}',
-            "Rules: use only allowed fields and values, do not repeat tested signatures, and prefer transfer or contradiction probes near the strongest winner.",
+            "Rules: use only allowed field names, do not repeat tested signatures, prefer transfer or contradiction probes near the strongest winner, and only invent new values for fields listed in `open_mutation_fields`.",
         ]
     )
     advisory = build_advisory(config_path, task, model=str(spec.get("model", "generic")), limit=3, domain=str(context.manifest.get("domain", "generic")))
@@ -101,7 +130,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     else:
         parsed = _parse_json(str(payload.get("raw_response", ""))) if isinstance(payload, dict) else None
     if not isinstance(parsed, dict) or "proposals" not in parsed:
-        parsed = _parse_text(str(payload.get("raw_response", "")), allowed) if isinstance(payload, dict) else {"proposals": []}
+        parsed = _parse_text(str(payload.get("raw_response", "")), allowed, open_fields, field_patterns) if isinstance(payload, dict) else {"proposals": []}
     proposals = parsed.get("proposals", []) if isinstance(parsed, dict) else []
     required = {str(item) for item in spec.get("required_fields", [])}
     suggestions: list[dict[str, Any]] = []
@@ -110,7 +139,22 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         if not isinstance(item, dict):
             continue
         mutations = {str(key): str(value) for key, value in item.get("mutations", {}).items()}
-        if not required.issubset(mutations) or any(name not in allowed or value not in allowed[name] for name, value in mutations.items()):
+        if not required.issubset(mutations):
+            continue
+        valid = True
+        for name, value in mutations.items():
+            if name not in allowed:
+                valid = False
+                break
+            if value in allowed[name]:
+                continue
+            if name in open_fields:
+                pattern = field_patterns.get(name, r"^[a-z0-9:_-]+$")
+                if re.fullmatch(pattern, value):
+                    continue
+            valid = False
+            break
+        if not valid:
             continue
         sig = _signature(mutations)
         if sig in tested or sig in existing:

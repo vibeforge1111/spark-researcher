@@ -18,6 +18,27 @@ def now_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+BUILTIN_BACKEND_PROFILES = {
+    "codex-exec": {
+        "description": "Run Codex CLI non-interactively against the copied workspace.",
+        "command": [
+            "codex",
+            "exec",
+            "--cd",
+            "{workspace}",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "workspace-write",
+            "-a",
+            "never",
+            "-o",
+            "{last_message}",
+            "Read the request file at {request}. Apply the requested edits in this workspace only. Do not edit files outside the declared mutable targets in the request.",
+        ],
+    }
+}
+
+
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
@@ -41,6 +62,22 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def backend_profiles() -> list[dict[str, Any]]:
+    rows = []
+    for name, spec in BUILTIN_BACKEND_PROFILES.items():
+        executable = str(spec["command"][0])
+        rows.append(
+            {
+                "name": name,
+                "description": spec["description"],
+                "command": spec["command"],
+                "installed": shutil.which(executable) is not None,
+                "executable": executable,
+            }
+        )
+    return rows
 
 
 def run_git_status(repo_root: Path) -> str:
@@ -119,8 +156,13 @@ def collect_changes(repo_root: Path, workspace_root: Path, mutable_targets: list
     return allowed, blocked
 
 
-def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path) -> list[str]:
-    return [part.replace("{workspace}", str(workspace_root)).replace("{request}", str(request_path)) for part in parts]
+def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path, last_message_path: Path) -> list[str]:
+    return [
+        part.replace("{workspace}", str(workspace_root))
+        .replace("{request}", str(request_path))
+        .replace("{last_message}", str(last_message_path))
+        for part in parts
+    ]
 
 
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
@@ -166,6 +208,19 @@ def _resolve_command_override(command_override: list[str] | None) -> list[str]:
     return shlex.split(raw, posix=False)
 
 
+def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:
+    if not profile_name:
+        return None
+    key = profile_name.strip().lower()
+    if key not in BUILTIN_BACKEND_PROFILES:
+        raise RuntimeError(f"Unknown backend profile: {profile_name}")
+    spec = BUILTIN_BACKEND_PROFILES[key]
+    executable = str(spec["command"][0])
+    if shutil.which(executable) is None:
+        raise RuntimeError(f"Backend profile '{profile_name}' requires '{executable}' in PATH.")
+    return {"name": key, **spec}
+
+
 def _proposal_summary(proposal: dict[str, Any], review: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "proposal_id": proposal.get("proposal_id"),
@@ -180,7 +235,14 @@ def _proposal_summary(proposal: dict[str, Any], review: dict[str, Any] | None = 
     }
 
 
-def propose(config_path: Path, prompt: str, *, dry_run: bool = False, command_override: list[str] | None = None) -> dict[str, Any]:
+def propose(
+    config_path: Path,
+    prompt: str,
+    *,
+    dry_run: bool = False,
+    command_override: list[str] | None = None,
+    backend_profile: str | None = None,
+) -> dict[str, Any]:
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
@@ -194,9 +256,16 @@ def propose(config_path: Path, prompt: str, *, dry_run: bool = False, command_ov
     workspace_root = proposal_root / "workspace"
     copy_repo(repo_root, workspace_root)
     request_path = proposal_root / "request.md"
+    last_message_path = proposal_root / "agent-last-message.txt"
     write_text(request_path, render_request(prompt, config.self_edit.prompt_preamble, mutable_targets))
-    resolved_command = _resolve_command_override(command_override) or config.self_edit.command
-    command = expand_command(resolved_command, workspace_root=workspace_root, request_path=request_path)
+    profile = _resolve_backend_profile(backend_profile)
+    resolved_command = _resolve_command_override(command_override) or (profile["command"] if profile else []) or config.self_edit.command
+    command = expand_command(
+        resolved_command,
+        workspace_root=workspace_root,
+        request_path=request_path,
+        last_message_path=last_message_path,
+    )
     if command:
         guard_command(command, config.guardrails.blocked_command_fragments)
     stdout_path = proposal_root / "stdout.log"
@@ -222,6 +291,8 @@ def propose(config_path: Path, prompt: str, *, dry_run: bool = False, command_ov
         "workspace_root": str(workspace_root),
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
+        "last_message_path": str(last_message_path),
+        "backend_profile": profile["name"] if profile else None,
         "command": command,
         "mutable_targets": mutable_targets,
         "change_count": len(allowed_changes),

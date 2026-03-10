@@ -13,7 +13,7 @@ from .obsidian import build_vault
 from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
-from .self_edit import apply_proposal, proposal_status, propose, review_proposal
+from .self_edit import apply_proposal, backend_profiles, proposal_status, propose, review_proposal
 from .trainers import run_all_trainers, trainer_status
 
 
@@ -92,8 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_propose = self_edit_sub.add_parser("propose")
     add_config_argument(self_edit_propose)
     self_edit_propose.add_argument("--prompt", required=True)
+    self_edit_propose.add_argument("--backend-profile")
     self_edit_propose.add_argument("--backend-command", action="append")
     self_edit_propose.add_argument("--dry-run", action="store_true")
+    self_edit_profiles = self_edit_sub.add_parser("profiles")
     self_edit_review = self_edit_sub.add_parser("review")
     add_config_argument(self_edit_review)
     self_edit_review.add_argument("--proposal-id", required=True)
@@ -180,7 +182,18 @@ def main() -> None:
         return
     if args.action == "self-edit":
         if args.self_edit_command == "propose":
-            print_json(propose(config_path, args.prompt, dry_run=args.dry_run, command_override=args.backend_command))
+            print_json(
+                propose(
+                    config_path,
+                    args.prompt,
+                    dry_run=args.dry_run,
+                    command_override=args.backend_command,
+                    backend_profile=args.backend_profile,
+                )
+            )
+            return
+        if args.self_edit_command == "profiles":
+            print_json({"profiles": backend_profiles()})
             return
         if args.self_edit_command == "review":
             print_json(

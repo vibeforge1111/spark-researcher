@@ -1,21 +1,68 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
-from .paths import ledger_path, memory_root
+from .beliefs import build_beliefs
+from .paths import memory_root, self_edit_root
+from .runner import read_jsonl
+from .ruvector import run_search as run_ruvector_search
+from .ruvector import ruvector_status
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+MAX_QUERY_LENGTH = 500
+MAX_RESULTS_LIMIT = 20
 
 
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def _documents_root(runtime_root: Path) -> Path:
+    return memory_root(runtime_root) / "documents"
+
+
+def _manifest_path(runtime_root: Path) -> Path:
+    return memory_root(runtime_root) / "manifest.json"
+
+
+def _safe_slug(value: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
+    return slug.strip("-") or "item"
+
+
+def _normalize_query(query: str) -> str:
+    normalized = " ".join(query.split())
+    if not normalized:
+        raise RuntimeError("Search query must not be empty.")
+    if len(normalized) > MAX_QUERY_LENGTH:
+        raise RuntimeError(f"Search query is too long. Keep it under {MAX_QUERY_LENGTH} characters.")
+    return normalized
+
+
+def _normalize_limit(limit: int) -> int:
+    if limit < 1:
+        return 1
+    return min(limit, MAX_RESULTS_LIMIT)
+
+
+def _read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _build_snippet(text: str, query: str, *, width: int = 180) -> str:
+    lowered = text.lower()
+    query_lower = query.lower()
+    index = lowered.find(query_lower)
+    if index < 0:
+        return text[:width].replace("\n", " ").strip()
+    start = max(0, index - width // 3)
+    end = min(len(text), index + len(query) + width // 2)
+    return text[start:end].replace("\n", " ").strip()
 
 
 def build_run_doc(record: dict[str, Any]) -> str:
@@ -24,7 +71,7 @@ def build_run_doc(record: dict[str, Any]) -> str:
     mutation_lines = [f"- `{item['name']}` -> `{item['value']}`" for item in mutations] or ["- none"]
     return "\n".join(
         [
-            f"# {title}",
+            f"# Run Memory {title}",
             "",
             f"- run_id: `{record.get('run_id')}`",
             f"- project: `{record.get('project_name')}`",
@@ -53,47 +100,233 @@ def build_run_doc(record: dict[str, Any]) -> str:
     )
 
 
-def sync_memory(runtime_root: Path) -> dict[str, Any]:
-    rows = read_jsonl(ledger_path(runtime_root))
-    docs_root = memory_root(runtime_root) / "documents"
+def build_outcome_doc(outcome: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"# Outcome {outcome['title']}",
+            "",
+            f"- outcome_id: `{outcome['outcome_id']}`",
+            f"- command: `{outcome['command_name']}`",
+            f"- candidate: `{outcome['candidate_id']}`",
+            f"- run_count: `{outcome['run_count']}`",
+            f"- improved_runs: `{outcome['improved_runs']}`",
+            f"- latest_verdict: `{outcome['latest_verdict']}`",
+            f"- best_metric: `{outcome['best_metric']}`",
+            f"- latest_metric: `{outcome['latest_metric']}`",
+            "",
+            "## Runs",
+            "",
+            *[f"- `{run_id}`" for run_id in outcome["run_ids"]],
+        ]
+    )
+
+
+def build_self_edit_doc(proposal: dict[str, Any], review: dict[str, Any] | None) -> str:
+    lines = [
+        f"# Self Edit {proposal.get('proposal_id')}",
+        "",
+        f"- proposal_id: `{proposal.get('proposal_id')}`",
+        f"- status: `{proposal.get('status')}`",
+        f"- change_count: `{proposal.get('change_count')}`",
+        f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
+        "",
+        "## Prompt",
+        "",
+        str(proposal.get("prompt") or "n/a"),
+        "",
+    ]
+    if review:
+        lines.extend(
+            [
+                "## Review",
+                "",
+                f"- decision: `{review.get('decision')}`",
+                f"- root_lesson: {review.get('root_lesson') or 'n/a'}",
+                f"- counterfactual: {review.get('counterfactual') or 'n/a'}",
+                f"- rollback_condition: {review.get('rollback_condition') or 'n/a'}",
+                "",
+                "## Lineage Failures",
+                "",
+                *[f"- {item}" for item in review.get("lineage_failures", [])],
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _is_better(candidate: float, current: float | None, goal: str) -> bool:
+    if current is None:
+        return True
+    return candidate > current if goal == "maximize" else candidate < current
+
+
+def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        command_name = str(row.get("command_name") or "command")
+        candidate_id = str(row.get("candidate_id") or "baseline")
+        key = f"{command_name}|{candidate_id}"
+        group = grouped.setdefault(
+            key,
+            {
+                "outcome_id": f"outcome-{_safe_slug(command_name)}-{_safe_slug(candidate_id)}",
+                "title": f"{command_name} / {candidate_id}",
+                "command_name": command_name,
+                "candidate_id": candidate_id,
+                "run_count": 0,
+                "improved_runs": 0,
+                "latest_verdict": "unknown",
+                "latest_metric": None,
+                "best_metric": None,
+                "run_ids": [],
+            },
+        )
+        group["run_count"] += 1
+        if row.get("verdict") == "improved":
+            group["improved_runs"] += 1
+        group["latest_verdict"] = row.get("verdict")
+        group["latest_metric"] = row.get("metric_value")
+        group["run_ids"].append(str(row.get("run_id")))
+        metric_value = row.get("metric_value")
+        if isinstance(metric_value, (int, float)) and _is_better(float(metric_value), group["best_metric"], goal):
+            group["best_metric"] = float(metric_value)
+    return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
+
+
+def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") -> dict[str, Any]:
+    rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
+    docs_root = _documents_root(runtime_root)
     docs_root.mkdir(parents=True, exist_ok=True)
-    written = []
+    for path in docs_root.glob("*"):
+        if path.is_file():
+            path.unlink()
+    build_beliefs(repo_root, runtime_root)
+    written: list[dict[str, str]] = []
+    kind_counts = {"run": 0, "belief": 0, "self_edit": 0, "outcome": 0}
+
     for record in rows:
-        path = docs_root / f"{record.get('run_id', 'run')}.md"
+        path = docs_root / f"run-{record.get('run_id', 'run')}.md"
         write_text(path, build_run_doc(record))
-        written.append(str(path))
+        written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem)})
+        kind_counts["run"] += 1
+
+    beliefs_root = repo_root / "docs" / "beliefs"
+    if beliefs_root.exists():
+        for path in sorted(beliefs_root.glob("*.md")):
+            if path.name.upper() == "INDEX.MD":
+                continue
+            target = docs_root / f"belief-{path.name}"
+            shutil.copyfile(path, target)
+            written.append({"path": str(target), "kind": "belief", "title": path.stem})
+            kind_counts["belief"] += 1
+
+    self_edit_docs = []
+    proposals_root = self_edit_root(runtime_root)
+    if proposals_root.exists():
+        for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
+            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            review_path = proposal_path.parent / "review.json"
+            review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
+            target = docs_root / f"self-edit-{proposal.get('proposal_id')}.md"
+            write_text(target, build_self_edit_doc(proposal, review))
+            written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id"))})
+            kind_counts["self_edit"] += 1
+            self_edit_docs.append(str(target))
+
+    outcomes = _build_outcomes(rows, goal=goal)
+    for outcome in outcomes:
+        path = docs_root / f"{outcome['outcome_id']}.md"
+        write_text(path, build_outcome_doc(outcome))
+        written.append({"path": str(path), "kind": "outcome", "title": outcome["title"]})
+        kind_counts["outcome"] += 1
+
+    index_lines = [
+        "# Memory Index",
+        "",
+        f"- documents_root: `{docs_root}`",
+        f"- total_documents: `{len(written)}`",
+        "",
+        "## Kinds",
+        "",
+        *[f"- {kind}: `{count}`" for kind, count in kind_counts.items()],
+        "",
+        "## Outcomes",
+        "",
+    ]
+    index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
+    write_text(docs_root / "INDEX.md", "\n".join(index_lines))
     manifest = {
+        "backend": "local",
         "document_count": len(written),
         "documents_root": str(docs_root),
         "source_runs": len(rows),
+        "kinds": kind_counts,
+        "outcomes": outcomes,
+        "self_edit_documents": self_edit_docs,
     }
-    write_text(memory_root(runtime_root) / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True))
+    write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
     return manifest
 
 
-def search_memory(runtime_root: Path, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
-    sync_memory(runtime_root)
-    docs_root = memory_root(runtime_root) / "documents"
-    terms = [term for term in query.lower().split() if term]
+def search_memory(
+    repo_root: Path,
+    runtime_root: Path,
+    query: str,
+    *,
+    limit: int = 5,
+    backend: str = "local",
+    goal: str = "minimize",
+) -> list[dict[str, Any]] | dict[str, Any]:
+    if backend == "ruvector":
+        return run_ruvector_search(query)
+    sync_memory(repo_root, runtime_root, goal=goal)
+    docs_root = _documents_root(runtime_root)
+    normalized_query = _normalize_query(query)
+    terms = [term for term in normalized_query.lower().split() if term]
     results = []
     for path in sorted(docs_root.glob("*.md")):
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = _read_text(path)
         lowered = text.lower()
         score = sum(lowered.count(term) for term in terms)
         if score <= 0:
             continue
         first_line = text.splitlines()[0].lstrip("# ").strip() if text else path.stem
-        results.append({"path": str(path), "title": first_line, "score": score, "snippet": text[:180].replace("\n", " ")})
+        results.append(
+            {
+                "backend": "local",
+                "path": str(path),
+                "title": first_line,
+                "score": score,
+                "snippet": _build_snippet(text, normalized_query),
+            }
+        )
     results.sort(key=lambda item: (-int(item["score"]), str(item["path"])))
-    return results[:limit]
+    return results[: _normalize_limit(limit)]
 
 
-def memory_status(runtime_root: Path) -> dict[str, Any]:
-    docs_root = memory_root(runtime_root) / "documents"
-    manifest_path = memory_root(runtime_root) / "manifest.json"
+def memory_status(
+    repo_root: Path,
+    runtime_root: Path,
+    *,
+    backend: str = "local",
+    configured_backend: str = "local",
+    goal: str = "minimize",
+) -> dict[str, Any]:
+    if backend == "ruvector":
+        status = ruvector_status()
+        status["configured_backend"] = configured_backend
+        return status
+    manifest_path = _manifest_path(runtime_root)
+    manifest = sync_memory(repo_root, runtime_root, goal=goal) if not manifest_path.exists() else json.loads(manifest_path.read_text(encoding="utf-8"))
     return {
-        "backend": "markdown-local",
-        "documents_root": str(docs_root),
-        "document_count": len(list(docs_root.glob("*.md"))) if docs_root.exists() else 0,
+        "backend": "local",
+        "configured_backend": configured_backend,
+        "documents_root": manifest["documents_root"],
+        "document_count": manifest["document_count"],
+        "kinds": manifest.get("kinds", {}),
         "manifest_present": manifest_path.exists(),
+        "notes": [
+            "Local memory is the zero-setup default.",
+            "Search runs over exported Markdown memory documents.",
+        ],
     }

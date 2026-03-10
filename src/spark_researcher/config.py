@@ -60,6 +60,11 @@ class SelfEditSpec:
 
 
 @dataclass
+class MemorySpec:
+    backend: str = "local"
+
+
+@dataclass
 class GuardrailSpec:
     max_loop_iterations: int = 8
     consecutive_discard_limit: int = 3
@@ -80,6 +85,7 @@ class ProjectConfig:
     candidate_trials: list[CandidateTrial] = field(default_factory=list)
     trainers: list[TrainerSpec] = field(default_factory=list)
     mutable_targets: list[str] = field(default_factory=list)
+    memory: MemorySpec = field(default_factory=MemorySpec)
     self_edit: SelfEditSpec = field(default_factory=SelfEditSpec)
     guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
 
@@ -132,6 +138,9 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
         "candidate_trials": [_candidate_to_payload(item) for item in config.candidate_trials],
         "trainers": [_trainer_to_payload(item) for item in config.trainers],
         "mutable_targets": list(config.mutable_targets),
+        "memory": {
+            "backend": config.memory.backend,
+        },
         "self_edit": {
             "command": list(config.self_edit.command),
             "mutable_targets": list(config.self_edit.mutable_targets),
@@ -167,6 +176,18 @@ def self_edit_policy(config: ProjectConfig) -> dict[str, object]:
         "mutable_targets": list(config.self_edit.mutable_targets),
         "backend_command": list(config.self_edit.command),
     }
+
+
+def memory_policy(config: ProjectConfig) -> dict[str, object]:
+    return {
+        "backend": config.memory.backend,
+    }
+
+
+def update_memory_policy(config: ProjectConfig, *, backend: str | None = None) -> ProjectConfig:
+    if backend is not None:
+        config.memory.backend = str(backend)
+    return config
 
 
 def update_self_edit_policy(
@@ -237,6 +258,7 @@ def load_config(path: Path) -> ProjectConfig:
         for item in payload.get("trainers", [])
     ]
     self_edit_payload = payload.get("self_edit", {})
+    memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})
     return ProjectConfig(
         project_name=str(payload["project_name"]),
@@ -249,6 +271,9 @@ def load_config(path: Path) -> ProjectConfig:
         candidate_trials=candidate_trials,
         trainers=trainers,
         mutable_targets=[str(item) for item in payload.get("mutable_targets", [])],
+        memory=MemorySpec(
+            backend=str(memory_payload.get("backend", "local")),
+        ),
         self_edit=SelfEditSpec(
             command=[str(part) for part in self_edit_payload.get("command", [])],
             mutable_targets=[str(item) for item in self_edit_payload.get("mutable_targets", payload.get("mutable_targets", []))],

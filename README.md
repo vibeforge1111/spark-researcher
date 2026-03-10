@@ -13,12 +13,14 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - runs arbitrary project commands from one small JSON config
 - evaluates candidates against a fixed metric and writes an immutable JSONL ledger
 - exports searchable Markdown memory documents instead of building a heavy memory stack
+- keeps local memory as the default backend and supports optional delegated RuVector search
 - watches trainer example files and triggers bounded recompiles like a lightweight DSPy loop
 - generates an Obsidian vault as the operator watchtower
 - publishes capsule files that `autoresearch-collective` can ingest
 - proposes self-edits in a temporary workspace and requires explicit human apply
 - scaffolds coding, research, and content projects with one init command
 - builds compact belief packets from improved runs and approved self-edits
+- supports external coding agents through a shared repo contract in `AGENTS.md`
 
 ## Core Rules
 
@@ -40,6 +42,7 @@ spark-researcher loop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
 spark-researcher trainers run
 spark-researcher memory sync
+spark-researcher memory backend-policy
 spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
@@ -58,6 +61,10 @@ Self-editing is intentionally two-step:
 
 The propose step runs only in a copied workspace and writes a full packet with prompt, stdout, stderr, diff summary, and changed files. Nothing is applied to the repo until the second command is called by the owner.
 
+External agents should follow the repo contract in `AGENTS.md`. Backend integration details are documented in `docs/AGENT_BACKENDS.md`.
+
+Only `codex-exec` is built in by default. Other agents should usually be wired through explicit backend commands instead of growing the built-in profile list.
+
 ## Layout
 
 - `src/spark_researcher/`: the whole runtime
@@ -74,8 +81,11 @@ spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher trainers run
 spark-researcher trainers status
+spark-researcher memory backend-policy
+spark-researcher memory backend-policy --backend ruvector
 spark-researcher memory sync
 spark-researcher memory search "learning rate"
+spark-researcher memory search "anchor variance" --backend ruvector
 spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
@@ -95,3 +105,7 @@ spark-researcher line-budget --limit 6000
 ## Intent
 
 This repo is allowed to become more capable, but not more theatrical. If a feature needs a framework before it needs evidence, it probably does not belong here.
+
+## Memory Rule
+
+Local Markdown memory is still the source of truth. The optional `ruvector` backend is only an external delegated search surface, not Spark's internal database.

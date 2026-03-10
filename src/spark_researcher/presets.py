@@ -51,6 +51,9 @@ def _base_payload(project_name: str, project_root: str, eval_metric: str, eval_g
             "README.md",
             "pyproject.toml",
         ],
+        "memory": {
+            "backend": "local",
+        },
         "self_edit": {
             "command": [],
             "mutable_targets": [
@@ -148,4 +151,3 @@ def init_project(target_dir: Path, *, preset: str, project_name: str) -> Path:
         encoding="utf-8",
     )
     return config_path
-

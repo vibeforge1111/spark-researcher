@@ -50,6 +50,9 @@
     "require_clean_git_for_self_edit": true,
     "require_human_approval_for_self_edit": true
   },
+  "memory": {
+    "backend": "local"
+  },
   "metrics": {
     "training_seconds": {
       "kind": "float",

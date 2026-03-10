@@ -20,4 +20,6 @@
 - Apply requires an explicit owner command.
 - Mutable targets must be declared in config.
 - Blocked command fragments are rejected before self-edit execution.
-
+- External coding agents must follow the repo-level contract in `AGENTS.md`.
+- Backend agents propose changes only; Spark owns apply, commit, and push.
+- Keep built-in backend profiles sparse; prefer explicit command overrides for uncommon agents.

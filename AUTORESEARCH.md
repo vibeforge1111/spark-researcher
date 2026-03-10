@@ -25,6 +25,7 @@ safety_boundaries:
   - do not write outside declared mutable targets
   - keep the counted codebase below the explicit line budget
   - keep the ledger and generated packets visible to the owner
+  - external coding agents must follow the repo contract in AGENTS.md
 ---
 
 # AUTORESEARCH

@@ -7,7 +7,7 @@ from pathlib import Path
 from .beliefs import build_beliefs
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
-from .config import load_config, save_config, self_edit_policy, update_self_edit_policy
+from .config import load_config, memory_policy, save_config, self_edit_policy, update_memory_policy, update_self_edit_policy
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
 from .obsidian import build_vault
@@ -64,8 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(memory_search)
     memory_search.add_argument("query")
     memory_search.add_argument("--limit", type=int, default=5)
+    memory_search.add_argument("--backend", choices=["local", "ruvector"])
     memory_status_parser = memory_sub.add_parser("status")
     add_config_argument(memory_status_parser)
+    memory_status_parser.add_argument("--backend", choices=["local", "ruvector"])
+    memory_policy_parser = memory_sub.add_parser("backend-policy")
+    add_config_argument(memory_policy_parser)
+    memory_policy_parser.add_argument("--backend", choices=["local", "ruvector"])
 
     beliefs_parser = sub.add_parser("beliefs")
     beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
@@ -169,19 +174,28 @@ def main() -> None:
         print_json(trainer_status(config_path))
         return
     if args.action == "memory":
+        config = load_config(config_path)
+        selected_backend = getattr(args, "backend", None) or config.memory.backend
+        if args.memory_command == "backend-policy":
+            updated = args.backend is not None
+            if updated:
+                update_memory_policy(config, backend=args.backend)
+                save_config(config_path, config)
+            print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
+            return
         if args.memory_command == "sync":
-            print_json(sync_memory(runtime_root))
+            print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal))
             return
         if args.memory_command == "search":
-            print_json(search_memory(runtime_root, args.query, limit=args.limit))
+            print_json(search_memory(repo_root, runtime_root, args.query, limit=args.limit, backend=selected_backend, goal=config.eval_goal))
             return
-        print_json(memory_status(runtime_root))
+        print_json(memory_status(repo_root, runtime_root, backend=selected_backend, configured_backend=config.memory.backend, goal=config.eval_goal))
         return
     if args.action == "beliefs":
         print_json(build_beliefs(repo_root, runtime_root))
         return
     if args.action == "obsidian":
-        print_json(build_vault(repo_root, runtime_root))
+        print_json(build_vault(repo_root, runtime_root, load_config(config_path)))
         return
     if args.action == "collective":
         if args.collective_command == "publish":

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, suggest_trials
+from .chips import chip_status
 from .collective import collective_status, publish_latest
 from .collective import sync_local_collective
 from .config import load_config, memory_policy, save_config, self_edit_policy, update_memory_policy, update_self_edit_policy
@@ -67,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(candidates_apply)
     candidates_apply.add_argument("--command", dest="project_command", required=True)
     candidates_apply.add_argument("--limit", type=int, default=3)
+
+    chips_parser = sub.add_parser("chips")
+    chips_sub = chips_parser.add_subparsers(dest="chips_command")
+    chips_status_parser = chips_sub.add_parser("status")
+    add_config_argument(chips_status_parser)
 
     trainer_parser = sub.add_parser("trainers")
     trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
@@ -206,6 +212,9 @@ def main() -> None:
             return
         print_json(suggest_trials(config_path, args.project_command, limit=args.limit))
         return
+    if args.action == "chips":
+        print_json(chip_status(config_path))
+        return
     if args.action == "trainers":
         if args.trainers_command == "run":
             print_json(run_all_trainers(config_path, dry_run=args.dry_run))
@@ -223,18 +232,18 @@ def main() -> None:
             print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
             return
         if args.memory_command == "sync":
-            print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal))
+            print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=config_path))
             return
         if args.memory_command == "search":
-            print_json(search_memory(repo_root, runtime_root, args.query, limit=args.limit, backend=selected_backend, goal=config.eval_goal))
+            print_json(search_memory(repo_root, runtime_root, args.query, limit=args.limit, backend=selected_backend, goal=config.eval_goal, config_path=config_path))
             return
-        print_json(memory_status(repo_root, runtime_root, backend=selected_backend, configured_backend=config.memory.backend, goal=config.eval_goal))
+        print_json(memory_status(repo_root, runtime_root, backend=selected_backend, configured_backend=config.memory.backend, goal=config.eval_goal, config_path=config_path))
         return
     if args.action == "beliefs":
         print_json(build_beliefs(repo_root, runtime_root))
         return
     if args.action == "obsidian":
-        print_json(build_vault(repo_root, runtime_root, load_config(config_path)))
+        print_json(build_vault(repo_root, runtime_root, load_config(config_path), config_path=config_path))
         return
     if args.action == "collective":
         if args.collective_command == "publish":
@@ -328,7 +337,7 @@ def main() -> None:
         print_json(proposal_status(config_path))
         return
     if args.action == "summary":
-        print_json(ledger_summary(runtime_root))
+        print_json(ledger_summary(runtime_root, goal=load_config(config_path).eval_goal))
         return
 
 

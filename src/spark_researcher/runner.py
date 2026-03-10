@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .chips import invoke_chip_hook
 from .config import CandidateTrial, ProjectConfig, load_config, mutation_lookup, resolve_project_root
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 
@@ -109,6 +110,61 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
     return applied
 
 
+def _virtual_mutations(mutations: dict[str, str]) -> list[dict[str, str]]:
+    return [{"name": name, "value": value, "file": "<chip>"} for name, value in sorted(mutations.items())]
+
+
+def run_chip_evaluate(
+    config_path: Path,
+    command_name: str,
+    config: ProjectConfig,
+    command_spec: Any,
+    workspace_root: Path,
+    log_path: Path,
+    trial: CandidateTrial | None,
+    *,
+    dry_run: bool = False,
+) -> tuple[CommandResult, dict[str, Any], list[dict[str, str]]]:
+    ensure_parent(log_path)
+    mutations = dict(trial.mutations if trial else {})
+    applied_mutations = _virtual_mutations(mutations)
+    payload = {
+        "project_name": config.project_name,
+        "command_name": command_name,
+        "command_kind": command_spec.kind,
+        "command_args": list(command_spec.args),
+        "workspace_root": str(workspace_root),
+        "candidate": {
+            "candidate_id": trial.candidate_id if trial else "baseline",
+            "candidate_summary": trial.candidate_summary if trial else "",
+            "hypothesis": trial.hypothesis if trial else "",
+            "mutations": mutations,
+        },
+        "metrics": {name: {"kind": spec.kind, "pattern": spec.pattern} for name, spec in config.metrics.items()},
+        "eval_metric": config.eval_metric,
+        "eval_goal": config.eval_goal,
+    }
+    response = invoke_chip_hook(config_path, "evaluate", payload, config=config, dry_run=dry_run)
+    stdout = str(response.get("stdout", ""))
+    stderr = str(response.get("stderr", ""))
+    log_lines = [stdout]
+    if stderr:
+        log_lines.extend(["[stderr]", stderr])
+    if response.get("metrics"):
+        log_lines.extend(["[metrics]", json.dumps(response["metrics"], indent=2, sort_keys=True)])
+    log_path.write_text("\n".join(item for item in log_lines if item).rstrip() + "\n", encoding="utf-8")
+    command_result = CommandResult(
+        returncode=int(response.get("returncode", 0)),
+        stdout=stdout,
+        stderr=stderr,
+        command=["<chip:evaluate>"],
+        cwd=str(workspace_root),
+    )
+    metrics = response.get("metrics", {})
+    metrics = metrics if isinstance(metrics, dict) else {}
+    return command_result, {str(key): value for key, value in metrics.items()}, applied_mutations
+
+
 def best_metric(runtime_root: Path, command_name: str, goal: str) -> float | None:
     values = [
         row.get("metric_value")
@@ -185,13 +241,29 @@ def run_once(
     run_dir = runs_root(runtime_root) / run_id
     workspace_root = run_dir / "workspace"
     copy_project_tree(project_root, workspace_root)
-    mutations = dict(trial.mutations if trial else {})
-    mutations.update(overrides or {})
-    applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
     log_path = run_dir / command_spec.log_name
-    cwd = (workspace_root / command_spec.cwd).resolve()
-    command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
-    metrics = parse_metrics(log_path, config.metrics)
+    if command_spec.kind == "chip-evaluate":
+        if overrides:
+            raise RuntimeError("Direct overrides are not supported for chip-evaluate commands.")
+        command_result, hook_metrics, applied_mutations = run_chip_evaluate(
+            config_path,
+            command_name,
+            config,
+            command_spec,
+            workspace_root,
+            log_path,
+            trial,
+            dry_run=dry_run,
+        )
+        metrics = parse_metrics(log_path, config.metrics)
+        metrics.update(hook_metrics)
+    else:
+        mutations = dict(trial.mutations if trial else {})
+        mutations.update(overrides or {})
+        applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
+        cwd = (workspace_root / command_spec.cwd).resolve()
+        command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
+        metrics = parse_metrics(log_path, config.metrics)
     baseline_value = best_metric(runtime_root, command_name, config.eval_goal)
     metric_value = metrics.get(config.eval_metric)
     numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
@@ -247,7 +319,7 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
     }
 
 
-def ledger_summary(runtime_root: Path, *, limit: int = 10) -> dict[str, Any]:
+def ledger_summary(runtime_root: Path, *, limit: int = 10, goal: str = "minimize") -> dict[str, Any]:
     rows = read_jsonl(ledger_path(runtime_root))
     recent = list(reversed(rows[-limit:]))
     best_by_metric: dict[str, float] = {}
@@ -257,5 +329,8 @@ def ledger_summary(runtime_root: Path, *, limit: int = 10) -> dict[str, Any]:
         if not metric_name or not isinstance(value, (int, float)):
             continue
         current = best_by_metric.get(metric_name)
-        best_by_metric[metric_name] = value if current is None else min(current, value)
+        if current is None:
+            best_by_metric[metric_name] = float(value)
+            continue
+        best_by_metric[metric_name] = max(float(current), float(value)) if goal == "maximize" else min(float(current), float(value))
     return {"run_count": len(rows), "recent": recent, "best_by_metric": best_by_metric}

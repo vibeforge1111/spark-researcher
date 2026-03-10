@@ -21,6 +21,7 @@ Spark Researcher is intentionally small.
 - `collective.py`: portable capsule export
 - `self_edit.py`: workspace-only self-edit proposals with explicit apply
 - `presets.py`: multi-domain scaffolding without adding framework weight
+- `chips.py`: external domain-chip bridge over a tiny manifest contract
 
 ## Non-Goals
 
@@ -28,3 +29,4 @@ Spark Researcher is intentionally small.
 - no database requirement
 - no framework-heavy plugin system
 - no auto-merge of self edits
+- no domain logic hardcoded into the core when a chip can hold it

@@ -22,6 +22,7 @@ The design target is simple: keep the whole repo well under `6000` counted lines
 - builds compact belief packets from improved runs and approved self-edits
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
+- can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips
 
 ## Core Rules
 
@@ -42,6 +43,7 @@ spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
+spark-researcher chips status
 spark-researcher trainers run
 spark-researcher memory sync
 spark-researcher memory backend-policy
@@ -72,6 +74,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 - `src/spark_researcher/`: the whole runtime
 - `docs/`: short operator docs
 - `examples/toy-project/`: runnable demo target
+- external domain chips: optional sibling or separate repos loaded through a small manifest bridge
 - `artifacts/`: generated ledger, memory, trainer state, and self-edit packets
 - `obsidian-vault/`: generated watchtower view
 - `.autoresearch/capsules/`: collective-ready insight packets
@@ -82,6 +85,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
+spark-researcher chips status
 spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher candidates suggest --command train
@@ -118,3 +122,14 @@ Local Markdown memory is still the source of truth. The optional `ruvector` back
 ## Autonomy Boundary
 
 `loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds.
+
+## Domain Chips
+
+Domain chips keep domain intelligence out of the core repo. A chip is an external repo with a `spark-chip.json` manifest and up to four hooks:
+
+- `evaluate`
+- `suggest`
+- `packets`
+- `watchtower`
+
+Spark still owns the loop, ledger, memory index, self-edit policy, and collective export. The chip only supplies domain-specific logic. See `docs/CHIPS.md`.

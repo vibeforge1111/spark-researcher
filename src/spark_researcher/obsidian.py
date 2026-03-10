@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .beliefs import build_beliefs
+from .chips import chip_has_hook, invoke_chip_hook
 from .memory import sync_memory
 from .paths import trainers_root, vault_root
 from .runner import ledger_summary
@@ -30,7 +31,8 @@ def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
     return written
 
 
-def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict) -> str:
+def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict, domain_pages: list[str]) -> str:
+    domain_lines = [f"- [[{page}]]" for page in domain_pages]
     return "\n".join(
         [
             "# Spark Researcher Vault",
@@ -44,6 +46,7 @@ def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict) 
             "- [[05-Runtime/Outcome State]]",
             "- [[05-Runtime/Self Edit Queue]]",
             "- [[06-References/beliefs/INDEX]]",
+            *domain_lines,
             "",
             "## Snapshot",
             "",
@@ -51,6 +54,7 @@ def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict) 
             f"- tracked metrics: `{len(summary['best_by_metric'])}`",
             f"- trainer entries: `{len(trainer_rows)}`",
             f"- memory docs: `{memory_manifest.get('document_count', 0)}`",
+            f"- domain pages: `{len(domain_pages)}`",
             "",
             "## References",
             "",
@@ -113,22 +117,18 @@ def render_trainer_state(rows: list[dict]) -> str:
 
 def render_memory_index(memory_manifest: dict) -> str:
     kinds = memory_manifest.get("kinds", {})
-    return "\n".join(
-        [
-            "# Memory Index",
-            "",
-            f"- backend: `{memory_manifest.get('backend', 'local')}`",
-            f"- document_count: `{memory_manifest.get('document_count', 0)}`",
-            f"- documents_root: `{memory_manifest.get('documents_root')}`",
-            "",
-            "## Kinds",
-            "",
-            f"- run: `{kinds.get('run', 0)}`",
-            f"- belief: `{kinds.get('belief', 0)}`",
-            f"- self_edit: `{kinds.get('self_edit', 0)}`",
-            f"- outcome: `{kinds.get('outcome', 0)}`",
-        ]
-    )
+    lines = [
+        "# Memory Index",
+        "",
+        f"- backend: `{memory_manifest.get('backend', 'local')}`",
+        f"- document_count: `{memory_manifest.get('document_count', 0)}`",
+        f"- documents_root: `{memory_manifest.get('documents_root')}`",
+        "",
+        "## Kinds",
+        "",
+    ]
+    lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
+    return "\n".join(lines)
 
 
 def render_outcome_state(memory_manifest: dict) -> str:
@@ -175,18 +175,39 @@ def render_self_edit_queue(runtime_root: Path) -> str:
     return "\n".join(lines)
 
 
-def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig) -> dict[str, object]:
-    memory_manifest = sync_memory(repo_root, runtime_root, goal=config.eval_goal)
+def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, config_path: Path | None = None) -> dict[str, object]:
+    effective_config_path = config_path or (repo_root / "spark-researcher.project.json")
+    memory_manifest = sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=effective_config_path)
     belief_manifest = build_beliefs(repo_root, runtime_root)
     output_root = vault_root(runtime_root)
-    summary = ledger_summary(runtime_root)
+    summary = ledger_summary(runtime_root, goal=config.eval_goal)
     trainer_rows = []
     trainer_dir = trainers_root(runtime_root)
     if trainer_dir.exists():
         for path in sorted(trainer_dir.glob("*.json")):
             trainer_rows.append(json.loads(path.read_text(encoding="utf-8")))
+    domain_pages: list[str] = []
+    if chip_has_hook(effective_config_path, "watchtower", config):
+        packet = invoke_chip_hook(
+            effective_config_path,
+            "watchtower",
+            {
+                "project_name": config.project_name,
+                "summary": summary,
+                "memory_manifest": memory_manifest,
+                "belief_manifest": belief_manifest,
+                "vault_root": str(output_root),
+            },
+            config=config,
+        )
+        for item in packet.get("pages", []):
+            page_path = str(item.get("path") or "").strip().replace("\\", "/")
+            if not page_path:
+                continue
+            write_text(output_root / page_path, str(item.get("content") or ""))
+            domain_pages.append(page_path.removesuffix(".md"))
     copy_docs(repo_root, output_root / "06-References")
-    write_text(output_root / "Home.md", render_home(summary, trainer_rows, memory_manifest))
+    write_text(output_root / "Home.md", render_home(summary, trainer_rows, memory_manifest, domain_pages))
     write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
     write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
     write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))
@@ -199,4 +220,5 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig) -> d
         "trainer_entries": len(trainer_rows),
         "memory_document_count": memory_manifest["document_count"],
         "belief_count": belief_manifest["belief_count"],
+        "domain_page_count": len(domain_pages),
     }

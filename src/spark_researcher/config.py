@@ -65,6 +65,12 @@ class MemorySpec:
 
 
 @dataclass
+class ChipSpec:
+    path: str = ""
+    manifest: str = "spark-chip.json"
+
+
+@dataclass
 class GuardrailSpec:
     max_loop_iterations: int = 8
     consecutive_discard_limit: int = 3
@@ -86,6 +92,7 @@ class ProjectConfig:
     trainers: list[TrainerSpec] = field(default_factory=list)
     mutable_targets: list[str] = field(default_factory=list)
     memory: MemorySpec = field(default_factory=MemorySpec)
+    chip: ChipSpec = field(default_factory=ChipSpec)
     self_edit: SelfEditSpec = field(default_factory=SelfEditSpec)
     guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
 
@@ -140,6 +147,10 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
         "mutable_targets": list(config.mutable_targets),
         "memory": {
             "backend": config.memory.backend,
+        },
+        "chip": {
+            "path": config.chip.path,
+            "manifest": config.chip.manifest,
         },
         "self_edit": {
             "command": list(config.self_edit.command),
@@ -260,6 +271,7 @@ def load_config(path: Path) -> ProjectConfig:
     self_edit_payload = payload.get("self_edit", {})
     memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})
+    chip_payload = payload.get("chip", {})
     return ProjectConfig(
         project_name=str(payload["project_name"]),
         project_root=str(payload.get("project_root", ".")),
@@ -273,6 +285,10 @@ def load_config(path: Path) -> ProjectConfig:
         mutable_targets=[str(item) for item in payload.get("mutable_targets", [])],
         memory=MemorySpec(
             backend=str(memory_payload.get("backend", "local")),
+        ),
+        chip=ChipSpec(
+            path=str(chip_payload.get("path", "")),
+            manifest=str(chip_payload.get("manifest", "spark-chip.json")),
         ),
         self_edit=SelfEditSpec(
             command=[str(part) for part in self_edit_payload.get("command", [])],

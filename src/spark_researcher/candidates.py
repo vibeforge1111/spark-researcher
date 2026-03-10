@@ -4,6 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from .chips import chip_has_hook, invoke_chip_hook
 from .config import CandidateTrial, load_config, save_config
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
@@ -89,6 +90,41 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
     config = load_config(config_path)
     runtime_root = resolve_runtime_root(config_path)
     rows = read_jsonl(ledger_path(runtime_root))
+    if chip_has_hook(config_path, "suggest", config):
+        packet = invoke_chip_hook(
+            config_path,
+            "suggest",
+            {
+                "project_name": config.project_name,
+                "command_name": command_name,
+                "limit": limit,
+                "eval_metric": config.eval_metric,
+                "eval_goal": config.eval_goal,
+                "ledger_rows": rows,
+                "candidate_trials": [asdict(item) for item in config.candidate_trials],
+            },
+            config=config,
+        )
+        suggestions = []
+        for item in packet.get("suggestions", []):
+            suggestions.append(
+                CandidateTrial(
+                    candidate_id=str(item["candidate_id"]),
+                    candidate_summary=str(item.get("candidate_summary", "")),
+                    hypothesis=str(item.get("hypothesis", "")),
+                    mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+                )
+            )
+        return {
+            "command_name": command_name,
+            "baseline_metric": packet.get("baseline_metric"),
+            "beneficial_primitives": packet.get("beneficial_primitives", []),
+            "suggestion_count": len(suggestions[:limit]),
+            "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
+            "suggestions": [asdict(item) for item in suggestions[:limit]],
+            "source": "chip",
+            "chip_name": packet.get("chip_name"),
+        }
     baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
     tested = _tested_signatures(rows, command_name)
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
@@ -137,6 +173,7 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
         "suggestion_count": len(trimmed),
         "reasons": reasons[: len(trimmed)],
         "suggestions": [asdict(item) for item in trimmed],
+        "source": "core",
     }
 
 

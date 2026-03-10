@@ -4,3 +4,4 @@ obsidian-vault/
 __pycache__/
 .venv/
 compiled.json
+*.egg-info/

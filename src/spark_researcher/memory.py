@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from .beliefs import build_beliefs
+from .chips import chip_has_hook, invoke_chip_hook
 from .paths import memory_root, self_edit_root
 from .runner import read_jsonl
 from .ruvector import run_search as run_ruvector_search
@@ -193,7 +195,7 @@ def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, 
     return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
 
 
-def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") -> dict[str, Any]:
+def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", config_path: Path | None = None) -> dict[str, Any]:
     rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
     docs_root = _documents_root(runtime_root)
     docs_root.mkdir(parents=True, exist_ok=True)
@@ -202,7 +204,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") 
             path.unlink()
     build_beliefs(repo_root, runtime_root)
     written: list[dict[str, str]] = []
-    kind_counts = {"run": 0, "belief": 0, "self_edit": 0, "outcome": 0}
+    kind_counts: dict[str, int] = defaultdict(int)
 
     for record in rows:
         path = docs_root / f"run-{record.get('run_id', 'run')}.md"
@@ -240,6 +242,29 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") 
         written.append({"path": str(path), "kind": "outcome", "title": outcome["title"]})
         kind_counts["outcome"] += 1
 
+    chip_documents: list[dict[str, str]] = []
+    if config_path is not None and chip_has_hook(config_path, "packets"):
+        packet = invoke_chip_hook(
+            config_path,
+            "packets",
+            {
+                "project_name": repo_root.name,
+                "ledger_rows": rows,
+                "outcomes": outcomes,
+                "documents_root": str(docs_root),
+            },
+        )
+        for item in packet.get("documents", []):
+            title = str(item.get("title") or "Chip Document")
+            kind = str(item.get("kind") or "chip")
+            slug = _safe_slug(str(item.get("slug") or title))
+            path = docs_root / f"{kind}-{slug}.md"
+            write_text(path, str(item.get("content") or ""))
+            record = {"path": str(path), "kind": kind, "title": title}
+            written.append(record)
+            chip_documents.append(record)
+            kind_counts[kind] += 1
+
     index_lines = [
         "# Memory Index",
         "",
@@ -248,7 +273,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") 
         "",
         "## Kinds",
         "",
-        *[f"- {kind}: `{count}`" for kind, count in kind_counts.items()],
+        *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
         "",
         "## Outcomes",
         "",
@@ -260,9 +285,10 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize") 
         "document_count": len(written),
         "documents_root": str(docs_root),
         "source_runs": len(rows),
-        "kinds": kind_counts,
+        "kinds": dict(kind_counts),
         "outcomes": outcomes,
         "self_edit_documents": self_edit_docs,
+        "chip_documents": chip_documents,
     }
     write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
     return manifest
@@ -276,10 +302,11 @@ def search_memory(
     limit: int = 5,
     backend: str = "local",
     goal: str = "minimize",
+    config_path: Path | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any]:
     if backend == "ruvector":
         return run_ruvector_search(query)
-    sync_memory(repo_root, runtime_root, goal=goal)
+    sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
     docs_root = _documents_root(runtime_root)
     normalized_query = _normalize_query(query)
     terms = [term for term in normalized_query.lower().split() if term]
@@ -311,13 +338,14 @@ def memory_status(
     backend: str = "local",
     configured_backend: str = "local",
     goal: str = "minimize",
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     if backend == "ruvector":
         status = ruvector_status()
         status["configured_backend"] = configured_backend
         return status
     manifest_path = _manifest_path(runtime_root)
-    manifest = sync_memory(repo_root, runtime_root, goal=goal) if not manifest_path.exists() else json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path) if not manifest_path.exists() else json.loads(manifest_path.read_text(encoding="utf-8"))
     return {
         "backend": "local",
         "configured_backend": configured_backend,

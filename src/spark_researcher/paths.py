@@ -57,10 +57,13 @@ def self_edit_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "self-edit"
 
 
+def chips_root(runtime_root: Path) -> Path:
+    return artifacts_root(runtime_root) / "chips"
+
+
 def vault_root(runtime_root: Path) -> Path:
     return runtime_root / "obsidian-vault"
 
 
 def capsule_root(repo_root: Path) -> Path:
     return repo_root / ".autoresearch" / "capsules"
-

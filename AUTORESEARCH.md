@@ -15,6 +15,7 @@ mutable_targets:
   - pyproject.toml
 capsule_dir: .autoresearch/capsules
 adoption_policy: review
+absorb_merge_policy: human_review
 run_command: spark-researcher loop --command train
 publish_command: spark-researcher collective publish
 platforms:

@@ -10,8 +10,7 @@ from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, run_continuous_autoloop, suggest_trials
 from .chip_starter import init_chip
 from .chips import chip_status, chip_validation
-from .collective import collective_status, publish_latest
-from .collective import sync_local_collective
+from .collective import absorb, collective_status, publish_latest, sync_local_collective
 from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
 from .intent import build_intent_brief
 from .line_budget import build_line_budget
@@ -197,6 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(collective_sync_parser)
     collective_sync_parser.add_argument("--label")
     collective_sync_parser.add_argument("--skip-rebuild", action="store_true")
+    collective_absorb_parser = collective_sub.add_parser("absorb")
+    add_config_argument(collective_absorb_parser)
+    collective_absorb_parser.add_argument("--repo", required=True)
+    collective_absorb_parser.add_argument("--limit", type=int, default=5)
+    collective_absorb_parser.add_argument("--dry-run", action="store_true")
+    collective_absorb_parser.add_argument("--bundle-only", action="store_true")
+    collective_absorb_parser.add_argument("--merge-policy", choices=["human_review", "agent_review", "automerge"])
 
     self_edit_parser = sub.add_parser("self-edit")
     self_edit_sub = self_edit_parser.add_subparsers(dest="self_edit_command")
@@ -427,6 +433,19 @@ def main() -> None:
             return
         if args.collective_command == "sync-local":
             print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
+            return
+        if args.collective_command == "absorb":
+            print_json(
+                absorb(
+                    repo_root,
+                    runtime_root,
+                    source_repo=args.repo,
+                    limit=args.limit,
+                    dry_run=args.dry_run,
+                    bundle_only=args.bundle_only,
+                    merge_policy=args.merge_policy,
+                )
+            )
             return
         print_json(collective_status(repo_root, runtime_root))
         return

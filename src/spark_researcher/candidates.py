@@ -345,6 +345,7 @@ def run_autoloop(
     apply_suggestions: bool = True,
 ) -> dict[str, Any]:
     history: list[dict[str, Any]] = []
+    queued_packet: dict[str, Any] | None = None
     for round_index in range(1, rounds + 1):
         config = load_config(config_path)
         runtime_root = resolve_runtime_root(config_path)
@@ -353,7 +354,8 @@ def run_autoloop(
         pending = [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
 
         if not pending:
-            suggestion_packet = suggest_trials(config_path, command_name, limit=suggest_limit)
+            suggestion_packet = queued_packet or suggest_trials(config_path, command_name, limit=suggest_limit)
+            queued_packet = None
             append_packet = append_suggestions(config_path, suggestion_packet["suggestions"]) if apply_suggestions else {"appended_count": 0, "appended": []}
             if int(append_packet["appended_count"]) <= 0:
                 history.append(
@@ -385,19 +387,20 @@ def run_autoloop(
             if consecutive_discards >= config.guardrails.consecutive_discard_limit:
                 break
 
-        post_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
-        post_append = append_suggestions(config_path, post_suggestions["suggestions"]) if apply_suggestions else {"appended_count": 0, "appended": []}
+        next_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
+        queued_packet = next_suggestions if next_suggestions.get("suggestion_count", 0) else None
         history.append(
             {
                 "round": round_index,
                 "run_count": len(results),
                 "results": results,
-                "suggestions": post_suggestions,
-                "appended": post_append,
+                "suggestions": suggestion_packet,
+                "appended": append_packet,
+                "next_suggestions": next_suggestions,
                 "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
             }
         )
-        if len(results) == 0 and int(post_append["appended_count"]) <= 0:
+        if len(results) == 0 and queued_packet is None:
             break
 
     return {

@@ -33,6 +33,7 @@ Neighborhood exploration stays bounded:
 - only values near already beneficial runs are explored
 - only one step up or down is suggested at a time
 - existing or already-tested signatures are skipped
+- each round evaluates the exact suggestion packet it started with; Spark only asks for the next frontier packet after that round finishes
 
 Discard control is intentionally soft around the frontier:
 

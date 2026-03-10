@@ -166,3 +166,21 @@ Spark now has one lightweight intelligence path for LLM use:
 `task -> advisory -> packets -> adapter -> model -> outcome`
 
 Packets are loaded from local memory exports. Advisory selects only the few packets that matter for the current task. Adapters format that advice for Claude, Codex, OpenClaw, or a generic fallback. See `docs/ADVISORY.md`.
+
+## Provider Commands
+
+Provider execution stays lightweight. Spark prepares request files and delegates the actual model call to a command template you control.
+
+Example environment variables:
+
+```powershell
+$env:SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND='claude --system-file {system_prompt_path} --prompt-file {user_prompt_path} --output-file {response_path}'
+$env:SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND='codex exec --system-prompt-file {system_prompt_path} --prompt-file {user_prompt_path} --json-out {response_path}'
+$env:SPARK_RESEARCHER_ADAPTER_OPENCLAW_COMMAND='openclaw run --system {system_prompt_path} --prompt {user_prompt_path} --output {response_path}'
+```
+
+Use `spark-researcher advisory providers` to check whether a provider command is configured and whether its executable is present.
+
+## Checkloop
+
+Use `docs/CHECKLOOP.md` as the standard local proving-ground flow for validating the current core repo on this machine before trusting a new change.

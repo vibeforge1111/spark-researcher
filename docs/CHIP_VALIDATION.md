@@ -56,14 +56,17 @@ python -m spark_researcher.cli summary
 Validation on March 10, 2026:
 
 - `startup-yc`
-  - best `startup_score = 0.66`
-  - winner: `theme:distribution_velocity + retention`
+  - first frontier best `startup_score = 0.66`
+  - reopened frontier best `startup_score = 0.68`
+  - current strongest winner: `theme:distribution_velocity + retention + founder_velocity`
 - `trading`
-  - best `risk_adjusted_edge = 0.64`
-  - winner: `wallet:momentum_base + slippage_discipline`
+  - first frontier best `risk_adjusted_edge = 0.64`
+  - current strongest winner remains `wallet:momentum_base + slippage_discipline`
+  - reopened frontier should now suggest transfer checks and stress tests from that winner
 - `content`
-  - best `useful_reach_score = 0.69`
-  - winner: `hook:proof_founder + proof_quality`
+  - first frontier best `useful_reach_score = 0.69`
+  - current strongest winner remains `hook:proof_founder + proof_quality`
+  - reopened frontier should now suggest audience-fit checks and counterexample probes from that winner
 
 ## Rule
 

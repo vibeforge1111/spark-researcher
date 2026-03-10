@@ -1,0 +1,104 @@
+{
+  "project_name": "spark-researcher-demo",
+  "project_root": "examples/toy-project",
+  "eval_metric": "val_loss",
+  "eval_goal": "minimize",
+  "commands": {
+    "train": {
+      "args": ["python", "train.py"],
+      "cwd": ".",
+      "kind": "train-once",
+      "log_name": "train.log"
+    }
+  },
+  "metrics": {
+    "val_loss": {
+      "pattern": "^val_loss:\\s+([0-9.]+)$",
+      "kind": "float"
+    },
+    "training_seconds": {
+      "pattern": "^training_seconds:\\s+([0-9.]+)$",
+      "kind": "float"
+    }
+  },
+  "mutable_parameters": [
+    {
+      "name": "learning_rate",
+      "file": "config.json",
+      "pattern": "\"learning_rate\":\\s*[0-9.]+",
+      "template": "\"learning_rate\": {value}",
+      "description": "Local file-based learning-rate mutation."
+    },
+    {
+      "name": "weight_decay",
+      "file": "config.json",
+      "pattern": "\"weight_decay\":\\s*[0-9.]+",
+      "template": "\"weight_decay\": {value}",
+      "description": "Local file-based weight-decay mutation."
+    }
+  ],
+  "candidate_trials": [
+    {
+      "candidate_id": "baseline",
+      "candidate_summary": "Run the current config without mutation.",
+      "hypothesis": "The baseline defines the current local floor.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "lr-0003",
+      "candidate_summary": "Move learning rate toward the known optimum.",
+      "hypothesis": "A lower learning rate should improve val_loss.",
+      "mutations": {
+        "learning_rate": "0.0003"
+      }
+    },
+    {
+      "candidate_id": "wd-002",
+      "candidate_summary": "Move weight decay toward the known optimum.",
+      "hypothesis": "A slightly higher weight decay should improve val_loss.",
+      "mutations": {
+        "weight_decay": "0.02"
+      }
+    }
+  ],
+  "trainers": [
+    {
+      "name": "toy-compiler",
+      "examples_path": "training_examples.jsonl",
+      "compile_command": ["python", "trainer.py"],
+      "min_examples": 3,
+      "recompile_every": 2,
+      "max_examples": 200
+    }
+  ],
+  "mutable_targets": [
+    "src/spark_researcher",
+    "docs",
+    "README.md",
+    "pyproject.toml"
+  ],
+  "self_edit": {
+    "command": [],
+    "mutable_targets": [
+      "src/spark_researcher",
+      "docs",
+      "README.md",
+      "pyproject.toml"
+    ],
+    "prompt_preamble": "Keep the repo lightweight, transparent, and review-first."
+  },
+  "guardrails": {
+    "max_loop_iterations": 8,
+    "consecutive_discard_limit": 3,
+    "require_clean_git_for_self_edit": true,
+    "require_human_approval_for_self_edit": true,
+    "blocked_command_fragments": [
+      "shutdown",
+      "format",
+      "reg delete",
+      "Remove-Item",
+      "del /f",
+      "rm -rf"
+    ]
+  }
+}

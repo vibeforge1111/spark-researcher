@@ -1,0 +1,6 @@
+artifacts/
+obsidian-vault/
+.pytest_cache/
+__pycache__/
+.venv/
+compiled.json

@@ -1,0 +1,3 @@
+{"inputs": {"x": 1}, "outputs": {"y": 2}, "outcome": {"score": 1}}
+{"inputs": {"x": 2}, "outputs": {"y": 4}, "outcome": {"score": 1}}
+{"inputs": {"x": 3}, "outputs": {"y": 6}, "outcome": {"score": 1}}

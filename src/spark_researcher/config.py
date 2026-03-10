@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+@dataclass
+class MetricSpec:
+    pattern: str
+    kind: str = "float"
+
+
+@dataclass
+class CommandSpec:
+    args: list[str]
+    cwd: str = "."
+    kind: str = "train-once"
+    log_name: str = "command.log"
+
+
+@dataclass
+class MutationSpec:
+    name: str
+    file: str
+    pattern: str
+    template: str
+    description: str = ""
+
+
+@dataclass
+class CandidateTrial:
+    candidate_id: str
+    candidate_summary: str = ""
+    hypothesis: str = ""
+    mutations: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class TrainerSpec:
+    name: str
+    examples_path: str
+    compile_command: list[str]
+    min_examples: int = 20
+    recompile_every: int = 10
+    max_examples: int = 96
+
+
+@dataclass
+class SelfEditSpec:
+    command: list[str] = field(default_factory=list)
+    mutable_targets: list[str] = field(default_factory=list)
+    prompt_preamble: str = ""
+
+
+@dataclass
+class GuardrailSpec:
+    max_loop_iterations: int = 8
+    consecutive_discard_limit: int = 3
+    require_clean_git_for_self_edit: bool = True
+    require_human_approval_for_self_edit: bool = True
+    blocked_command_fragments: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ProjectConfig:
+    project_name: str
+    project_root: str
+    eval_metric: str
+    eval_goal: str
+    commands: dict[str, CommandSpec]
+    metrics: dict[str, MetricSpec]
+    mutable_parameters: list[MutationSpec] = field(default_factory=list)
+    candidate_trials: list[CandidateTrial] = field(default_factory=list)
+    trainers: list[TrainerSpec] = field(default_factory=list)
+    mutable_targets: list[str] = field(default_factory=list)
+    self_edit: SelfEditSpec = field(default_factory=SelfEditSpec)
+    guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
+
+
+def load_config(path: Path) -> ProjectConfig:
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    commands = {
+        name: CommandSpec(
+            args=list(spec["args"]),
+            cwd=str(spec.get("cwd", ".")),
+            kind=str(spec.get("kind", "train-once")),
+            log_name=str(spec.get("log_name", f"{name}.log")),
+        )
+        for name, spec in payload["commands"].items()
+    }
+    metrics = {
+        name: MetricSpec(pattern=str(spec["pattern"]), kind=str(spec.get("kind", "float")))
+        for name, spec in payload["metrics"].items()
+    }
+    mutable_parameters = [
+        MutationSpec(
+            name=str(item["name"]),
+            file=str(item["file"]),
+            pattern=str(item["pattern"]),
+            template=str(item["template"]),
+            description=str(item.get("description", "")),
+        )
+        for item in payload.get("mutable_parameters", [])
+    ]
+    candidate_trials = [
+        CandidateTrial(
+            candidate_id=str(item["candidate_id"]),
+            candidate_summary=str(item.get("candidate_summary", "")),
+            hypothesis=str(item.get("hypothesis", "")),
+            mutations={key: str(value) for key, value in item.get("mutations", {}).items()},
+        )
+        for item in payload.get("candidate_trials", [])
+    ]
+    trainers = [
+        TrainerSpec(
+            name=str(item["name"]),
+            examples_path=str(item["examples_path"]),
+            compile_command=[str(part) for part in item.get("compile_command", [])],
+            min_examples=int(item.get("min_examples", 20)),
+            recompile_every=int(item.get("recompile_every", 10)),
+            max_examples=int(item.get("max_examples", 96)),
+        )
+        for item in payload.get("trainers", [])
+    ]
+    self_edit_payload = payload.get("self_edit", {})
+    guardrail_payload = payload.get("guardrails", {})
+    return ProjectConfig(
+        project_name=str(payload["project_name"]),
+        project_root=str(payload.get("project_root", ".")),
+        eval_metric=str(payload["eval_metric"]),
+        eval_goal=str(payload.get("eval_goal", "minimize")),
+        commands=commands,
+        metrics=metrics,
+        mutable_parameters=mutable_parameters,
+        candidate_trials=candidate_trials,
+        trainers=trainers,
+        mutable_targets=[str(item) for item in payload.get("mutable_targets", [])],
+        self_edit=SelfEditSpec(
+            command=[str(part) for part in self_edit_payload.get("command", [])],
+            mutable_targets=[str(item) for item in self_edit_payload.get("mutable_targets", payload.get("mutable_targets", []))],
+            prompt_preamble=str(self_edit_payload.get("prompt_preamble", "")),
+        ),
+        guardrails=GuardrailSpec(
+            max_loop_iterations=int(guardrail_payload.get("max_loop_iterations", 8)),
+            consecutive_discard_limit=int(guardrail_payload.get("consecutive_discard_limit", 3)),
+            require_clean_git_for_self_edit=bool(guardrail_payload.get("require_clean_git_for_self_edit", True)),
+            require_human_approval_for_self_edit=bool(guardrail_payload.get("require_human_approval_for_self_edit", True)),
+            blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],
+        ),
+    )
+
+
+def resolve_project_root(config_path: Path, config: ProjectConfig) -> Path:
+    project_root = Path(config.project_root)
+    if not project_root.is_absolute():
+        project_root = (config_path.parent / project_root).resolve()
+    return project_root
+
+
+def mutation_lookup(config: ProjectConfig) -> dict[str, MutationSpec]:
+    return {item.name: item for item in config.mutable_parameters}

@@ -222,6 +222,16 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
                 "provisional_belief_count": packet_stability.get("provisional_belief_count", 0),
             },
         )
+        trace.event(
+            "packet_selection",
+            attributes={
+                "selected_packet_ids": [str(item["packet_id"]) for item in packet_rows[:4]],
+                "packet_stability": packet_stability.get("status"),
+                "durable_belief_count": packet_stability.get("durable_belief_count", 0),
+                "provisional_belief_count": packet_stability.get("provisional_belief_count", 0),
+                "contradiction_count": packet_stability.get("contradiction_count", 0),
+            },
+        )
         trace.finish(status="ok", attributes={"status": epistemic["status"]})
         return advisory
     except Exception as exc:

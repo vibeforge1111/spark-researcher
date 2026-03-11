@@ -162,7 +162,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     root = traces_root(runtime_root)
     index_path = _index_path(runtime_root)
     if not index_path.exists():
-        return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "verifier_selection_count": 0, "recent": []}}
+        return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "verifier_selection_count": 0, "packet_selection_count": 0, "recent": []}}
     rows = [
         json.loads(line)
         for line in index_path.read_text(encoding="utf-8").splitlines()
@@ -173,6 +173,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     citation_check_count = 0
     citation_mismatch_count = 0
     verifier_selection_count = 0
+    packet_selection_count = 0
     recent_signals: list[dict[str, Any]] = []
     for row in rows:
         trace_kind = str(row.get("trace_kind") or "")
@@ -262,6 +263,20 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
                         "implicated_failure_surface": str(attributes.get("implicated_failure_surface") or "").strip(),
                     }
                 )
+            if event_name == "packet_selection":
+                packet_selection_count += 1
+                recent_signals.append(
+                    {
+                        "created_at": event.get("created_at"),
+                        "trace_id": event.get("trace_id"),
+                        "signal": "packet_selection",
+                        "selected_packet_ids": [str(item) for item in attributes.get("selected_packet_ids", []) if str(item).strip()],
+                        "packet_stability": str(attributes.get("packet_stability") or "").strip(),
+                        "durable_belief_count": attributes.get("durable_belief_count", 0),
+                        "provisional_belief_count": attributes.get("provisional_belief_count", 0),
+                        "contradiction_count": attributes.get("contradiction_count", 0),
+                    }
+                )
     return {
         "trace_count": len(rows),
         "traces_root": str(root),
@@ -272,6 +287,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
             "citation_check_count": citation_check_count,
             "citation_mismatch_count": citation_mismatch_count,
             "verifier_selection_count": verifier_selection_count,
+            "packet_selection_count": packet_selection_count,
             "recent": list(reversed(recent_signals[-10:])),
         },
     }

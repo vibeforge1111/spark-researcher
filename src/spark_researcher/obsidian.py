@@ -247,6 +247,7 @@ def render_research_signals(packet: dict) -> str:
         f"- citation_checks: `{packet.get('citation_check_count', 0)}`",
         f"- citation_mismatches: `{packet.get('citation_mismatch_count', 0)}`",
         f"- verifier_selections: `{packet.get('verifier_selection_count', 0)}`",
+        f"- packet_selections: `{packet.get('packet_selection_count', 0)}`",
         "",
     ]
     recent = packet.get("recent", [])
@@ -263,6 +264,9 @@ def render_research_signals(packet: dict) -> str:
                 f"- research_query: `{item.get('research_query', 'n/a')}`" if item.get("research_query") else "",
                 f"- selected: `{item.get('selected', 'n/a')}`" if item.get("selected") else "",
                 f"- decision: `{item.get('decision', 'n/a')}`" if item.get("decision") else "",
+                f"- selected_packet_ids: `{', '.join(item.get('selected_packet_ids', [])) or 'none'}`" if "selected_packet_ids" in item else "",
+                f"- packet_stability: `{item.get('packet_stability', 'n/a')}`" if item.get("packet_stability") else "",
+                f"- belief_mix: durable={item.get('durable_belief_count', 0)}, provisional={item.get('provisional_belief_count', 0)}, contradictions={item.get('contradiction_count', 0)}" if "durable_belief_count" in item else "",
                 f"- issue_count: `{item.get('issue_count', 'n/a')}`" if "issue_count" in item else "",
                 f"- top_issue: {item.get('top_issue')}" if item.get("top_issue") else "",
                 f"- best_next_question: {item.get('best_next_question')}" if item.get("best_next_question") else "",

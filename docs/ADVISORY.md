@@ -54,10 +54,11 @@ spark-researcher advisory providers
 
 `advisory execute` now uses a bounded verifier loop by default:
 
-1. draft an answer
-2. critique it against packets, boundaries, evidence status, failure surfaces, and any available research-note ids
-3. approve, revise once, return `needs_verification`, or escalate to `research_needed` for time-sensitive web-backed tasks
-4. if `research_needed` is returned, run one bounded web-notes pass and retry once with dated notes
+1. draft candidate A
+2. draft candidate B with a deliberately different shape
+3. select the stronger candidate against packets, boundaries, evidence status, failure surfaces, and any available research-note ids
+4. approve, revise once, return `needs_verification`, or escalate to `research_needed` for time-sensitive web-backed tasks
+5. if `research_needed` is returned, run one bounded web-notes pass and retry once with dated notes
 
 That research retry is deliberately bounded:
 

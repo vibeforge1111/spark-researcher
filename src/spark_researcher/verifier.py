@@ -167,23 +167,40 @@ def _relevant_note_ids(advisory: dict[str, Any], draft_text: str, *, limit: int 
     return [note_id for score, note_id in ranked[:limit] if score >= 2]
 
 
-def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
+def _alternative_draft_task(task: str) -> str:
+    return "\n".join(
+        [
+            "Produce an alternative candidate answer to the task below.",
+            "Use a different structure from the most obvious first pass while staying within the same evidence.",
+            "Keep uncertainty explicit and avoid padding.",
+            "",
+            "Original Task",
+            task,
+        ]
+    )
+
+
+def _critique_task(advisory: dict[str, Any], draft_a_text: str, draft_b_text: str) -> str:
     epistemic = advisory.get("epistemic_status", {})
     lines = [
-        "Review the draft answer below.",
-        "Judge it against the guidance, boundaries, evidence status, and recent failure surfaces in the advisory request.",
-        "If the evidence is too weak, prefer `needs_verification` over bluffing.",
+        "Compare the two candidate answers below.",
+        "Select the stronger candidate using the guidance, boundaries, evidence status, and recent failure surfaces in the advisory request.",
+        "If both candidates are too weak, prefer `needs_verification` over bluffing.",
         "",
         "Return JSON only in this exact shape:",
-        '{"decision":"approve|revise|needs_verification","issues":[""],"missing_evidence":[""],"rewrite_instructions":[""],"best_next_question":"","implicated_failure_surface":""}',
+        '{"decision":"approve|revise|needs_verification","selected":"a|b","issues":[""],"missing_evidence":[""],"rewrite_instructions":[""],"best_next_question":"","implicated_failure_surface":""}',
         "",
-        "Draft Answer",
-        draft_text or "(empty)",
+        "Candidate A",
+        draft_a_text or "(empty)",
+        "",
+        "Candidate B",
+        draft_b_text or "(empty)",
         "",
         f"Evidence Status: {epistemic.get('status', 'unknown')}",
     ]
     note_ids = _expected_note_ids(advisory)
-    relevant_note_ids = _relevant_note_ids(advisory, draft_text)
+    relevant_a = _relevant_note_ids(advisory, draft_a_text)
+    relevant_b = _relevant_note_ids(advisory, draft_b_text)
     if note_ids:
         lines.extend(
             [
@@ -194,8 +211,10 @@ def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
                 "- If the answer ignores the available research notes or cites none of them, prefer `revise` unless the answer should instead stop at `needs_verification`.",
             ]
         )
-        if relevant_note_ids:
-            lines.append(f"- Best-matching note ids for this draft: {', '.join(relevant_note_ids)}.")
+        if relevant_a:
+            lines.append(f"- Best-matching note ids for candidate A: {', '.join(relevant_a)}.")
+        if relevant_b:
+            lines.append(f"- Best-matching note ids for candidate B: {', '.join(relevant_b)}.")
     checks = _failure_priority_checks(advisory)
     if checks:
         lines.extend(["", "High-Surprise Failure Checks"])
@@ -380,36 +399,45 @@ def execute_with_verifier(
         return packet
     if dry_run:
         draft = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=True)
-        trace.finish(status="ok", attributes={"mode": "dry_run", "steps": ["draft", "critique", "optional_revise"]})
+        trace.finish(status="ok", attributes={"mode": "dry_run", "steps": ["draft_a", "draft_b", "select", "optional_revise"]})
         return {
             "status": "dry_run",
             "decision": "planned",
-            "steps": ["draft", "critique", "optional_revise"],
+            "steps": ["draft_a", "draft_b", "select", "optional_revise"],
             "draft": draft,
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
-    with trace.span("draft"):
-        draft = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=False)
-    draft_text = _response_text(draft.get("response", {}))
-    critique_task = _critique_task(advisory, draft_text)
+    with trace.span("draft_a"):
+        draft_a = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=False)
+    draft_a_text = _response_text(draft_a.get("response", {}))
+    draft_b_advisory = _advisory_clone(advisory, task=_alternative_draft_task(str(advisory.get("task") or "")), model=model)
+    with trace.span("draft_b"):
+        draft_b = execute_advisory(runtime_root, advisory=draft_b_advisory, model=model, command_override=command_override, dry_run=False)
+    draft_b_text = _response_text(draft_b.get("response", {}))
+    critique_task = _critique_task(advisory, draft_a_text, draft_b_text)
     critique_advisory = _advisory_clone(advisory, task=critique_task, model=model)
-    with trace.span("critique"):
+    with trace.span("select"):
         critique_result = execute_advisory(runtime_root, advisory=critique_advisory, model=model, command_override=command_override, dry_run=False)
     critique_text = _response_text(critique_result.get("response", {}))
     critique = _parse_json(critique_text) or {
         "decision": "needs_verification",
+        "selected": "a",
         "issues": ["Verifier did not return parseable JSON."],
         "missing_evidence": [],
         "rewrite_instructions": [],
         "best_next_question": "",
         "implicated_failure_surface": "",
     }
+    selected = "b" if str(critique.get("selected") or "").strip().lower() == "b" else "a"
+    draft = draft_b if selected == "b" else draft_a
+    draft_text = draft_b_text if selected == "b" else draft_a_text
     critique = _enforce_citation_usage(advisory, draft_text, critique)
     decision = str(critique.get("decision") or "needs_verification").strip().lower()
     implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
     used_note_ids = [str(item) for item in critique.get("used_note_ids", []) if str(item).strip()]
     relevant_note_ids = [str(item) for item in critique.get("relevant_note_ids", []) if str(item).strip()]
+    trace.event("selected_candidate", attributes={"selected": selected})
     if implicated_surface:
         trace.event("implicated_failure_surface", attributes={"surface": implicated_surface})
     if _expected_note_ids(advisory):
@@ -428,6 +456,7 @@ def execute_with_verifier(
                 "decision": decision,
                 "implicated_failure_surface": implicated_surface,
                 "used_note_ids": used_note_ids,
+                "selected": selected,
             },
         )
         return {
@@ -435,6 +464,7 @@ def execute_with_verifier(
             "decision": decision,
             "response": draft.get("response"),
             "draft": draft,
+            "drafts": {"a": draft_a, "b": draft_b, "selected": selected},
             "critique": critique,
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
@@ -450,6 +480,7 @@ def execute_with_verifier(
                 "decision": "revise",
                 "implicated_failure_surface": implicated_surface,
                 "used_note_ids": used_note_ids,
+                "selected": selected,
             },
         )
         return {
@@ -457,6 +488,7 @@ def execute_with_verifier(
             "decision": "revise",
             "response": revised.get("response"),
             "draft": draft,
+            "drafts": {"a": draft_a, "b": draft_b, "selected": selected},
             "critique": critique,
             "revised": revised,
             "trace_id": trace.trace_id,
@@ -512,6 +544,7 @@ def execute_with_verifier(
         "decision": "needs_verification",
         "response": None,
         "draft": draft,
+        "drafts": {"a": draft_a, "b": draft_b, "selected": selected},
         "critique": critique,
         "clarifying_questions": [item for item in [str(critique.get("best_next_question") or "").strip(), *list(epistemic.get("clarifying_questions", []))] if item],
         "trace_id": trace.trace_id,

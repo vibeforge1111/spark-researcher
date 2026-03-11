@@ -21,6 +21,18 @@ def _brief(advisory: dict[str, Any], max_chars: int) -> str:
         status = str(epistemic.get("status") or "").strip()
         if status:
             lines.append(f"Evidence Status: {status}")
+        packet_stability = epistemic.get("packet_stability", {})
+        if isinstance(packet_stability, dict):
+            stability_status = str(packet_stability.get("status") or "").strip()
+            if stability_status:
+                lines.append(f"Packet Stability: {stability_status}")
+            durable = int(packet_stability.get("durable_belief_count") or 0)
+            provisional = int(packet_stability.get("provisional_belief_count") or 0)
+            contradictions = int(packet_stability.get("contradiction_count") or 0)
+            if durable or provisional or contradictions:
+                lines.append(
+                    f"- belief mix: durable={durable}, provisional={provisional}, contradictions={contradictions}"
+                )
         for item in epistemic.get("missing_evidence", [])[:2]:
             lines.append(f"- Missing: {item}")
         next_questions = epistemic.get("clarifying_questions", [])

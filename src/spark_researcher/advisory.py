@@ -55,6 +55,26 @@ def _guidance_from_packets(packet_rows: list[dict[str, Any]]) -> tuple[list[str]
     return deduped_guidance, deduped_boundaries
 
 
+def _packet_stability(packet_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    belief_rows = [row for row in packet_rows if str(row.get("kind") or "") == "belief"]
+    durable = sum(1 for row in belief_rows if str(row.get("memory_status") or "") == "durable")
+    provisional = sum(1 for row in belief_rows if str(row.get("memory_status") or "") == "provisional")
+    contradictions = sum(int(row.get("contradiction_count") or 0) for row in belief_rows)
+    if durable > 0:
+        status = "durable_supported"
+    elif provisional > 0:
+        status = "provisional_only"
+    else:
+        status = "no_belief_packets"
+    return {
+        "status": status,
+        "belief_packet_count": len(belief_rows),
+        "durable_belief_count": durable,
+        "provisional_belief_count": provisional,
+        "contradiction_count": contradictions,
+    }
+
+
 def _result_count(payload: Any) -> int:
     if isinstance(payload, list):
         return len(payload)
@@ -73,6 +93,7 @@ def _epistemic_packet(
     guidance: list[str],
     boundaries: list[str],
     intent: dict[str, Any],
+    packet_stability: dict[str, Any],
 ) -> dict[str, Any]:
     memory_context = intent.get("memory_context", {}) if isinstance(intent, dict) else {}
     memory_hits = _result_count(memory_context.get("memory_hits", []))
@@ -84,6 +105,8 @@ def _epistemic_packet(
         status = "partial"
     else:
         status = "under_supported"
+    if status == "grounded" and str(packet_stability.get("status") or "") == "provisional_only":
+        status = "partial"
     missing = []
     if packet_count == 0:
         missing.append("No directly relevant packets were selected.")
@@ -91,6 +114,10 @@ def _epistemic_packet(
         missing.append("No supporting memory hits were found for this task.")
     if not boundaries:
         missing.append("No explicit boundary guidance was available, so claims should stay narrow.")
+    if str(packet_stability.get("status") or "") == "provisional_only":
+        missing.append("Selected belief packets are provisional, so competing or lightly replicated lessons may still exist.")
+    if int(packet_stability.get("contradiction_count") or 0) > 0:
+        missing.append("Some selected belief packets still carry active contradictions.")
     recommended = {
         "grounded": [
             "Use the selected packets, but keep claims bounded by the listed boundaries.",
@@ -106,6 +133,8 @@ def _epistemic_packet(
             "Avoid confident recommendations until evidence improves.",
         ],
     }[status]
+    if str(packet_stability.get("status") or "") == "provisional_only":
+        recommended.insert(0, "Treat the memory guidance as provisional and surface uncertainty before making a hard recommendation.")
     questions = []
     if status != "grounded":
         questions = [
@@ -121,6 +150,7 @@ def _epistemic_packet(
         "missing_evidence": missing,
         "recommended_actions": recommended,
         "clarifying_questions": questions,
+        "packet_stability": packet_stability,
         "task": task,
     }
 
@@ -140,16 +170,25 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
             packet_search = search_packets(config_path, task, limit=limit, domain=None if selected_domain == "generic" else selected_domain)
             packet_rows = packet_search["packets"]
         guidance, boundaries = _guidance_from_packets(packet_rows)
+        packet_stability = _packet_stability(packet_rows)
         with trace.span("intent_brief", attributes={"domain": selected_domain}):
             intent = build_intent_brief(config_path, domain=selected_domain, query=task)
         failure_priorities = surprise_status(runtime_root, limit=5)
-        epistemic = _epistemic_packet(task=task, packet_rows=packet_rows, guidance=guidance, boundaries=boundaries, intent=intent)
+        epistemic = _epistemic_packet(
+            task=task,
+            packet_rows=packet_rows,
+            guidance=guidance,
+            boundaries=boundaries,
+            intent=intent,
+            packet_stability=packet_stability,
+        )
         advisory = {
             "project_name": config.project_name,
             "task": task,
             "task_type": _task_type(task, selected_domain),
             "domain": selected_domain,
             "selected_packet_ids": [str(item["packet_id"]) for item in packet_rows],
+            "packet_stability": packet_stability,
             "guidance": guidance,
             "boundaries": boundaries,
             "packets": packet_rows,
@@ -178,6 +217,9 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
                 "memory_hit_count": epistemic["memory_hit_count"],
                 "ruvector_hit_count": epistemic["ruvector_hit_count"],
                 "priority_count": len(failure_priorities.get("priorities", [])),
+                "packet_stability": packet_stability.get("status"),
+                "durable_belief_count": packet_stability.get("durable_belief_count", 0),
+                "provisional_belief_count": packet_stability.get("provisional_belief_count", 0),
             },
         )
         trace.finish(status="ok", attributes={"status": epistemic["status"]})

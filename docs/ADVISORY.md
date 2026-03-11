@@ -28,6 +28,12 @@ Advisory now includes a small epistemic layer:
 
 This is meant to reduce confident overreach without growing a heavy agent runtime.
 
+Advisory now also tracks packet stability:
+
+- if matching beliefs are mostly `durable`, advisory can stay more confident within the listed boundaries
+- if matching beliefs are only `provisional`, advisory is downgraded toward `partial` and told to surface uncertainty
+- active contradiction counts are carried forward as missing-evidence pressure instead of being hidden
+
 ## Failure Priorities
 
 Advisory also carries the current surprise-priority view from the failure registry.

@@ -28,6 +28,7 @@ The design target is simple: keep the whole repo well under `11000` counted line
 - can use failure-aware two-draft verification, bounded research retries, and citation checks with lightweight source provenance to keep advisory answers grounded without adding a heavy agent layer
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
+- advisory now carries packet-stability hints so verifier decisions can distinguish durable memory from provisional memory
 - packet retrieval now prefers durable beliefs over provisional ones so advisory pulls the steadier local lessons first
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
 - can execute advisory-backed model requests through lightweight command templates instead of hardwiring provider SDKs

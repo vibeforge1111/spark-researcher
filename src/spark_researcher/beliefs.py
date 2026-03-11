@@ -18,6 +18,8 @@ def _write_text(path: Path, content: str) -> None:
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
+    except FileNotFoundError:
+        pass
     except PermissionError:
         pass
 

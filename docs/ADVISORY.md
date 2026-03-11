@@ -43,17 +43,11 @@ Use `spark-researcher failures --limit 10` to inspect the current ranked failure
 ## Commands
 
 ```powershell
-spark-researcher packets status
-spark-researcher packets search "proof quality"
 spark-researcher advisory adapters
-spark-researcher advisory providers
 spark-researcher advisory build --task "draft a content belief packet" --model claude
-spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
 spark-researcher advisory execute --task "draft a content belief packet" --model claude
-spark-researcher advisory log --task "draft a content belief packet" --model claude --status ok --packet-id belief-run-...
-spark-researcher advisory review
-spark-researcher optimizer status
-spark-researcher optimizer export-advisory-dataset
+spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
+spark-researcher advisory providers
 ```
 
 ## Verifier Loop
@@ -61,15 +55,9 @@ spark-researcher optimizer export-advisory-dataset
 `advisory execute` now uses a bounded verifier loop by default:
 
 1. draft an answer
-2. critique that draft against the current packets, boundaries, evidence status, and top surprise-priority failure surfaces
-3. either approve, revise once, return `needs_verification`, or escalate to `research_needed` when the task is time-sensitive and the mission allows fresh web research
-4. if `research_needed` is returned, Spark now runs one bounded web-notes pass, saves the dated notes as an artifact, and feeds those notes back through the same verifier loop once
-
-If the advisory is already marked `under_supported`, Spark returns `needs_verification` before making a model call.
-
-When the verifier spots one of the active failure surfaces in a draft, it now names that implicated surface in the critique and trace so the operator can see which failure class the answer was trying to avoid.
-
-If the verifier concludes that the missing support is likely fresh or time-sensitive and the current intent includes the `web` resource, Spark now returns a `research_needed` packet with a suggested query and research targets instead of a generic `needs_verification` stop.
+2. critique it against packets, boundaries, evidence status, failure surfaces, and any available research-note ids
+3. approve, revise once, return `needs_verification`, or escalate to `research_needed` for time-sensitive web-backed tasks
+4. if `research_needed` is returned, run one bounded web-notes pass and retry once with dated notes
 
 That research retry is deliberately bounded:
 
@@ -79,11 +67,7 @@ That research retry is deliberately bounded:
 
 If the follow-up still lacks support, Spark stops and returns the remaining uncertainty instead of looping.
 
-When that retry succeeds, Spark now returns a small `citations` list derived from the bounded research artifact so the operator can see which dated notes were in play.
-
-The verifier also checks whether a research-backed answer actually used those available note ids. If the answer ignores the notes and cites none of them, Spark now downgrades approval and asks for a revision instead of silently passing it through.
-
-Spark also prefers the note ids that best match the answer's concrete claims. If the answer cites a weaker or unrelated note while a closer note is available in the same bounded research batch, approval is downgraded and the answer is asked to cite the better-matching note instead.
+Research-backed follow-ups return compact `citations`. The verifier expects those note ids to be used and prefers the ids that best match the answer's concrete claims. Missing citations or clearly weaker note choices are downgraded to `revise`.
 
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 

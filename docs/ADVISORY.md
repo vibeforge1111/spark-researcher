@@ -83,6 +83,8 @@ When that retry succeeds, Spark now returns a small `citations` list derived fro
 
 The verifier also checks whether a research-backed answer actually used those available note ids. If the answer ignores the notes and cites none of them, Spark now downgrades approval and asks for a revision instead of silently passing it through.
 
+Spark also prefers the note ids that best match the answer's concrete claims. If the answer cites a weaker or unrelated note while a closer note is available in the same bounded research batch, approval is downgraded and the answer is asked to cite the better-matching note instead.
+
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 
 ## Adapter Policy

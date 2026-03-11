@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,28 @@ _TIME_SENSITIVE_MARKERS = (
     "trending",
     "people saying",
 )
+
+_OVERLAP_STOPWORDS = {
+    "about",
+    "after",
+    "before",
+    "from",
+    "have",
+    "into",
+    "latest",
+    "more",
+    "note",
+    "notes",
+    "that",
+    "their",
+    "there",
+    "these",
+    "this",
+    "those",
+    "using",
+    "with",
+    "would",
+}
 
 
 def _response_text(payload: Any) -> str:
@@ -112,6 +135,38 @@ def _used_note_ids(text: str, note_ids: list[str]) -> list[str]:
     return list(dict.fromkeys(used))
 
 
+def _overlap_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        if len(token) >= 4 and token not in _OVERLAP_STOPWORDS
+    }
+
+
+def _relevant_note_ids(advisory: dict[str, Any], draft_text: str, *, limit: int = 2) -> list[str]:
+    research_context = advisory.get("research_context", {})
+    if not isinstance(research_context, dict):
+        return []
+    draft_tokens = _overlap_tokens(draft_text)
+    if not draft_tokens:
+        return []
+    ranked: list[tuple[int, str]] = []
+    for item in research_context.get("citations", [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        note_id = str(item.get("note_id") or "").strip()
+        title = str(item.get("title") or "").strip()
+        snippet = str(item.get("snippet") or "").strip()
+        if not note_id:
+            continue
+        note_tokens = _overlap_tokens(f"{title} {snippet}")
+        score = len(draft_tokens & note_tokens)
+        if score > 0:
+            ranked.append((score, note_id))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [note_id for score, note_id in ranked[:limit] if score >= 2]
+
+
 def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
     epistemic = advisory.get("epistemic_status", {})
     lines = [
@@ -128,6 +183,7 @@ def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
         f"Evidence Status: {epistemic.get('status', 'unknown')}",
     ]
     note_ids = _expected_note_ids(advisory)
+    relevant_note_ids = _relevant_note_ids(advisory, draft_text)
     if note_ids:
         lines.extend(
             [
@@ -138,6 +194,8 @@ def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
                 "- If the answer ignores the available research notes or cites none of them, prefer `revise` unless the answer should instead stop at `needs_verification`.",
             ]
         )
+        if relevant_note_ids:
+            lines.append(f"- Best-matching note ids for this draft: {', '.join(relevant_note_ids)}.")
     checks = _failure_priority_checks(advisory)
     if checks:
         lines.extend(["", "High-Surprise Failure Checks"])
@@ -182,8 +240,25 @@ def _enforce_citation_usage(advisory: dict[str, Any], draft_text: str, critique:
     if not note_ids:
         return critique
     used_note_ids = _used_note_ids(draft_text, note_ids)
+    relevant_note_ids = _relevant_note_ids(advisory, draft_text)
     if used_note_ids:
         critique["used_note_ids"] = used_note_ids
+        critique["relevant_note_ids"] = relevant_note_ids
+        if not relevant_note_ids or any(note_id in relevant_note_ids for note_id in used_note_ids):
+            return critique
+        issues = [str(item) for item in critique.get("issues", []) if str(item).strip()]
+        instructions = [str(item) for item in critique.get("rewrite_instructions", []) if str(item).strip()]
+        issue = f"Research-backed answer cited note ids {', '.join(used_note_ids)} but the closest matching notes were {', '.join(relevant_note_ids)}."
+        instruction = f"Prefer citing the note ids that best match the concrete claims in the answer: {', '.join(relevant_note_ids)}."
+        if issue not in issues:
+            issues.append(issue)
+        if instruction not in instructions:
+            instructions.append(instruction)
+        critique["issues"] = issues
+        critique["rewrite_instructions"] = instructions
+        decision = str(critique.get("decision") or "needs_verification").strip().lower()
+        if decision == "approve":
+            critique["decision"] = "revise"
         return critique
     issues = [str(item) for item in critique.get("issues", []) if str(item).strip()]
     instructions = [str(item) for item in critique.get("rewrite_instructions", []) if str(item).strip()]
@@ -195,6 +270,7 @@ def _enforce_citation_usage(advisory: dict[str, Any], draft_text: str, critique:
     critique["issues"] = issues
     critique["rewrite_instructions"] = instructions
     critique["used_note_ids"] = []
+    critique["relevant_note_ids"] = relevant_note_ids
     decision = str(critique.get("decision") or "needs_verification").strip().lower()
     if decision == "approve":
         critique["decision"] = "revise"
@@ -333,6 +409,7 @@ def execute_with_verifier(
     decision = str(critique.get("decision") or "needs_verification").strip().lower()
     implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
     used_note_ids = [str(item) for item in critique.get("used_note_ids", []) if str(item).strip()]
+    relevant_note_ids = [str(item) for item in critique.get("relevant_note_ids", []) if str(item).strip()]
     if implicated_surface:
         trace.event("implicated_failure_surface", attributes={"surface": implicated_surface})
     if _expected_note_ids(advisory):
@@ -341,6 +418,7 @@ def execute_with_verifier(
             attributes={
                 "expected_note_ids": _expected_note_ids(advisory),
                 "used_note_ids": used_note_ids,
+                "relevant_note_ids": relevant_note_ids,
             },
         )
     if decision == "approve":

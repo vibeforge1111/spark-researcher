@@ -30,6 +30,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - can run one bounded research retry from those `research_needed` packets, save dated web notes, and feed them back through the same verifier loop once
 - can surface compact citations from that bounded research artifact so follow-up answers remain auditable
 - can require research-backed answers to actually use those note ids, downgrading approval when the fetched evidence is ignored
+- can prefer the note ids that best match an answer's claims instead of accepting any citation as equally grounded
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime

@@ -8,6 +8,7 @@ from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
 from .config import CandidateTrial, MutationSpec, intent_policy, load_config, save_config
+from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
@@ -222,6 +223,95 @@ def _pending_trials(config: Any, tested: set[tuple[tuple[str, str], ...]]) -> li
     return [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
 
 
+def _recent_runner_failures(runtime_root: Path, command_name: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    selected = []
+    for row in reversed(load_failures(runtime_root)):
+        if str(row.get("surface") or "") != "runner":
+            continue
+        metadata = row.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        if str(metadata.get("command_name") or "") != command_name:
+            continue
+        selected.append(row)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _failure_guided_suggestions(
+    runtime_root: Path,
+    command_name: str,
+    *,
+    tested: set[tuple[tuple[str, str], ...]],
+    existing: set[tuple[tuple[str, str], ...]],
+    primitives: dict[str, dict[str, Any]],
+    limit: int,
+) -> tuple[list[CandidateTrial], list[str], list[dict[str, Any]]]:
+    suggestions: list[CandidateTrial] = []
+    reasons: list[str] = []
+    focus = _recent_runner_failures(runtime_root, command_name, limit=5)
+    queued = set(tested | existing)
+    for failure in focus:
+        if len(suggestions) >= limit:
+            break
+        metadata = failure.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        mutations = {
+            str(item.get("name")): str(item.get("value"))
+            for item in metadata.get("mutations", [])
+            if isinstance(item, dict) and item.get("name") is not None and item.get("value") is not None
+        }
+        if len(mutations) > 1:
+            for name, value in sorted(mutations.items()):
+                if len(suggestions) >= limit:
+                    break
+                isolate = {name: value}
+                sig = _signature(isolate)
+                if sig in queued:
+                    continue
+                queued.add(sig)
+                suggestions.append(
+                    CandidateTrial(
+                        candidate_id=f"isolate-{name}-{_format_value(value)}",
+                        candidate_summary=f"Isolate `{name}={value}` from a recent failing combo to locate the failure source.",
+                        hypothesis="Breaking a surprising failed combo into single-axis tests can reveal which mutation is causing the miss.",
+                        mutations=isolate,
+                    )
+                )
+                reasons.append(f"Recent surprising failure suggests isolating `{name}` from a failed combo before more comfort-zone optimization.")
+        elif len(mutations) == 1:
+            name, value = next(iter(mutations.items()))
+            primitive = primitives.get(name)
+            if primitive is None:
+                continue
+            recover = {name: str(primitive["value"])}
+            sig = _signature(recover)
+            if sig in queued or str(primitive["value"]) == value:
+                continue
+            queued.add(sig)
+            suggestions.append(
+                CandidateTrial(
+                    candidate_id=f"recover-{name}-{_format_value(str(primitive['value']))}",
+                    candidate_summary=f"Recover `{name}` from the failing value {value} back toward the best observed value {primitive['value']}.",
+                    hypothesis="A recent single-axis failure suggests moving back toward the strongest known primitive before exploring further.",
+                    mutations=recover,
+                )
+            )
+            reasons.append(f"Recent surprising failure suggests recovering `{name}` toward its strongest observed primitive.")
+    focus_packet = [
+        {
+            "failure_type": item.get("failure_type"),
+            "summary": item.get("summary"),
+            "created_at": item.get("created_at"),
+            "metadata": item.get("metadata"),
+        }
+        for item in focus
+    ]
+    return suggestions, reasons, focus_packet
+
+
 def _chip_suggestion_packet(
     config_path: Path,
     config: Any,
@@ -230,6 +320,8 @@ def _chip_suggestion_packet(
     *,
     limit: int,
 ) -> dict[str, Any]:
+    runtime_root = resolve_runtime_root(config_path)
+    failure_priorities = surprise_status(runtime_root, limit=5)
     packet = invoke_chip_hook(
         config_path,
         "suggest",
@@ -240,6 +332,7 @@ def _chip_suggestion_packet(
             "eval_metric": config.eval_metric,
             "eval_goal": config.eval_goal,
             "intent": intent_policy(config),
+            "failure_priorities": failure_priorities,
             "ledger_rows": rows,
             "candidate_trials": [asdict(item) for item in config.candidate_trials],
         },
@@ -251,6 +344,7 @@ def _chip_suggestion_packet(
             "command_name": command_name,
             "baseline_metric": packet.get("baseline_metric"),
             "beneficial_primitives": packet.get("beneficial_primitives", []),
+            "failure_priorities": failure_priorities,
             "suggestion_count": len(suggestions[:limit]),
             "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
             "suggestions": _serialize_trials(suggestions, limit=limit),
@@ -264,6 +358,7 @@ def _chip_suggestion_packet(
         "command_name": command_name,
         "baseline_metric": packet.get("baseline_metric"),
         "beneficial_primitives": packet.get("beneficial_primitives", []),
+        "failure_priorities": failure_priorities,
         "suggestion_count": 0,
         "reasons": [*packet.get("reasons", []), *frontier_packet.get("reasons", [])][:limit],
         "suggestions": [],
@@ -272,18 +367,29 @@ def _chip_suggestion_packet(
     }
 
 
-def _core_suggestion_packet(config: Any, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
+def _core_suggestion_packet(config: Any, runtime_root: Path, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
     baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
     tested = _tested_signatures(rows, command_name)
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
     primitives = _best_single_primitives(rows, command_name, config.eval_goal, baseline_metric)
     numeric_specs = _numeric_specs(config)
     anchors = _beneficial_numeric_anchors(rows, command_name, config.eval_goal, baseline_metric, numeric_specs)
+    failure_priorities = surprise_status(runtime_root, limit=5)
 
     suggestions: list[CandidateTrial] = []
     reasons: list[str] = []
+    failure_trials, failure_reasons, failure_focus = _failure_guided_suggestions(
+        runtime_root,
+        command_name,
+        tested=tested,
+        existing=existing,
+        primitives=primitives,
+        limit=limit,
+    )
+    suggestions.extend(failure_trials)
+    reasons.extend(failure_reasons)
 
-    if len(primitives) > 1:
+    if len(suggestions) < limit and len(primitives) > 1:
         combined_mutations = {name: str(item["value"]) for name, item in sorted(primitives.items())}
         combined_signature = _signature(combined_mutations)
         if combined_signature not in tested and combined_signature not in existing:
@@ -298,17 +404,20 @@ def _core_suggestion_packet(config: Any, command_name: str, rows: list[dict[str,
             )
             reasons.append("Combine beneficial single-parameter mutations that each beat the baseline.")
 
-    neighborhood_trials, neighborhood_reasons = _neighborhood_suggestions(
-        anchors,
-        numeric_specs,
-        tested=tested,
-        existing=existing,
-        limit=max(limit - len(suggestions), 0),
-    )
-    suggestions.extend(neighborhood_trials)
-    reasons.extend(neighborhood_reasons)
+    if len(suggestions) < limit:
+        neighborhood_trials, neighborhood_reasons = _neighborhood_suggestions(
+            anchors,
+            numeric_specs,
+            tested=tested,
+            existing=existing,
+            limit=max(limit - len(suggestions), 0),
+        )
+        suggestions.extend(neighborhood_trials)
+        reasons.extend(neighborhood_reasons)
 
     for name, item in sorted(primitives.items()):
+        if len(suggestions) >= limit:
+            break
         single_mutation = {name: str(item["value"])}
         sig = _signature(single_mutation)
         if sig in tested or sig in existing:
@@ -329,6 +438,8 @@ def _core_suggestion_packet(config: Any, command_name: str, rows: list[dict[str,
         "command_name": command_name,
         "baseline_metric": baseline_metric,
         "beneficial_primitives": list(primitives.values()),
+        "failure_focus": failure_focus,
+        "failure_priorities": failure_priorities,
         "suggestion_count": len(suggestions[:limit]),
         "reasons": reasons[: len(suggestions[:limit])],
         "suggestions": _serialize_trials(suggestions, limit=limit),
@@ -342,7 +453,7 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
     rows = read_jsonl(ledger_path(runtime_root))
     if chip_has_hook(config_path, "suggest", config):
         return _chip_suggestion_packet(config_path, config, command_name, rows, limit=limit)
-    return _core_suggestion_packet(config, command_name, rows, limit=limit)
+    return _core_suggestion_packet(config, runtime_root, command_name, rows, limit=limit)
 
 
 def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> dict[str, Any]:

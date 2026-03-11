@@ -20,6 +20,7 @@ Spark Researcher is intentionally small.
 - `tracing.py`: JSONL trace recorder for run, advisory, frontier, and self-edit flows
 - `verifier.py`: bounded draft-critique-revise loop for advisory execution
 - `trainers.py`: generic example-count watchers with bounded recompiles
+- `candidates.py`: now uses recent surprising failures to bias repair-oriented suggestion ordering
 - `memory.py`: Markdown memory export and lexical search
 - `obsidian.py`: watchtower generation
 - `collective.py`: portable capsule export

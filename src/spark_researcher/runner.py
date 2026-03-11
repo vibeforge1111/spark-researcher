@@ -338,7 +338,13 @@ def run_once(
                 novelty_key=f"{command_name}:{verdict}",
                 evidence=evidence,
                 trace_id=trace.trace_id,
-                metadata={"run_id": record["run_id"], "candidate_id": record.get("candidate_id"), "verdict": verdict},
+                metadata={
+                    "run_id": record["run_id"],
+                    "candidate_id": record.get("candidate_id"),
+                    "command_name": command_name,
+                    "verdict": verdict,
+                    "mutations": list(record.get("applied_mutations", [])),
+                },
             )
         trace.finish(status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
         return record

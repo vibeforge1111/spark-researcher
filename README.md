@@ -24,6 +24,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - promotes durable run beliefs more selectively instead of turning every improved run into long-lived memory
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
+- can prioritize recent surprising failures so autoloop learns from misses before comfort-zone retuning
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime

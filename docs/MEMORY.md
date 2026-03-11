@@ -19,6 +19,8 @@ The local backend exports compact Markdown documents for:
 - beliefs
 - self-edit packets
 - outcomes grouped from the ledger
+- working memory for the current focus
+- episode memory for recent bounded lessons such as research retries
 
 ## Promotion Gate
 

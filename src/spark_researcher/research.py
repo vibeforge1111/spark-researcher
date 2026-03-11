@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .adapters import adapter_request
+from .memory import record_episode, write_working_memory
 from .paths import advisory_root
 from .tracing import start_trace
 from .verifier import execute_with_verifier
@@ -159,6 +160,15 @@ def execute_with_research(
         trace.finish(status="ok", attributes={"decision": initial.get("decision", initial.get("status", "unknown"))})
         return initial
     query = str(initial.get("research_query") or advisory.get("task") or "").strip()
+    write_working_memory(
+        runtime_root,
+        kind="research",
+        focus=query,
+        status="research_needed",
+        trace_id=trace.trace_id,
+        notes=[str(item) for item in initial.get("research_targets", [])[:2]],
+        questions=list(initial.get("clarifying_questions", []))[:2],
+    )
     with trace.span("bounded_research", attributes={"query": query}):
         results = _bounded_web_results(query)
     research = {
@@ -172,6 +182,14 @@ def execute_with_research(
     artifact_path = _write_research_artifact(runtime_root, research)
     research["artifact_path"] = str(artifact_path)
     if not results:
+        record_episode(
+            runtime_root,
+            kind="research",
+            title="Research retry found no usable notes",
+            summary=f"Query `{query}` returned no bounded web notes.",
+            status="empty",
+            trace_id=trace.trace_id,
+        )
         packet = dict(initial)
         packet["research_attempted"] = True
         packet["research_result_count"] = 0
@@ -203,6 +221,23 @@ def execute_with_research(
         ]
         followup["research_trace_id"] = trace.trace_id
         followup["research_trace_path"] = str(trace.path)
+    record_episode(
+        runtime_root,
+        kind="research",
+        title="Bounded research retry completed",
+        summary=f"Query `{query}` collected {len(results)} notes and ended with `{followup.get('decision', followup.get('status', 'unknown'))}`.",
+        status=str(followup.get("decision", followup.get("status", "unknown"))),
+        trace_id=trace.trace_id,
+    )
+    write_working_memory(
+        runtime_root,
+        kind="research",
+        focus=str(advisory.get("task") or query),
+        status=str(followup.get("decision", followup.get("status", "unknown"))),
+        trace_id=trace.trace_id,
+        notes=[f"research query: {query}", f"result count: {len(results)}"],
+        questions=[],
+    )
     trace.finish(
         status="ok",
         attributes={

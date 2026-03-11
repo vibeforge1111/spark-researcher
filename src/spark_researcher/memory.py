@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,14 @@ def _documents_root(runtime_root: Path) -> Path:
 
 def _manifest_path(runtime_root: Path) -> Path:
     return memory_root(runtime_root) / "manifest.json"
+
+
+def _working_path(runtime_root: Path) -> Path:
+    return memory_root(runtime_root) / "working.json"
+
+
+def _episodes_path(runtime_root: Path) -> Path:
+    return memory_root(runtime_root) / "episodes.jsonl"
 
 
 def _safe_unlink(path: Path) -> None:
@@ -63,6 +72,16 @@ def _normalize_limit(limit: int) -> int:
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
@@ -200,6 +219,116 @@ def build_self_edit_doc(proposal: dict[str, Any], review: dict[str, Any] | None)
     return "\n".join(lines)
 
 
+def build_working_memory_doc(payload: dict[str, Any]) -> str:
+    lines = [
+        "# Working Memory",
+        "",
+        f"- updated_at: `{payload.get('updated_at', 'n/a')}`",
+        f"- kind: `{payload.get('kind', 'n/a')}`",
+        f"- status: `{payload.get('status', 'n/a')}`",
+        f"- trace_id: `{payload.get('trace_id', 'n/a')}`",
+        "",
+        "## Focus",
+        "",
+        str(payload.get("focus") or "No active focus recorded."),
+        "",
+    ]
+    notes = [str(item) for item in payload.get("notes", []) if str(item).strip()]
+    if notes:
+        lines.extend(["## Notes", "", *[f"- {item}" for item in notes], ""])
+    questions = [str(item) for item in payload.get("questions", []) if str(item).strip()]
+    if questions:
+        lines.extend(["## Open Questions", "", *[f"- {item}" for item in questions], ""])
+    return "\n".join(lines)
+
+
+def build_episode_memory_doc(rows: list[dict[str, Any]]) -> str:
+    lines = ["# Episode Memory", ""]
+    if not rows:
+        lines.append("No episodes yet.")
+        return "\n".join(lines)
+    for row in rows:
+        lines.extend(
+            [
+                f"## {row.get('title', row.get('kind', 'episode'))}",
+                "",
+                f"- created_at: `{row.get('created_at', 'n/a')}`",
+                f"- kind: `{row.get('kind', 'n/a')}`",
+                f"- status: `{row.get('status', 'n/a')}`",
+                f"- trace_id: `{row.get('trace_id', 'n/a')}`",
+                "",
+                str(row.get("summary") or "n/a"),
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def write_working_memory(
+    runtime_root: Path,
+    *,
+    kind: str,
+    focus: str,
+    status: str,
+    trace_id: str | None = None,
+    notes: list[str] | None = None,
+    questions: list[str] | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "updated_at": _now_iso(),
+        "kind": kind,
+        "focus": focus.strip(),
+        "status": status.strip(),
+        "trace_id": trace_id,
+        "notes": [str(item).strip() for item in list(notes or []) if str(item).strip()],
+        "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
+    }
+    path = _working_path(runtime_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+def load_working_memory(runtime_root: Path) -> dict[str, Any]:
+    path = _working_path(runtime_root)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def record_episode(
+    runtime_root: Path,
+    *,
+    kind: str,
+    title: str,
+    summary: str,
+    status: str,
+    trace_id: str | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "created_at": _now_iso(),
+        "kind": kind,
+        "title": title.strip(),
+        "summary": summary.strip(),
+        "status": status.strip(),
+        "trace_id": trace_id,
+    }
+    _append_jsonl(_episodes_path(runtime_root), payload)
+    return payload
+
+
+def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+    path = _episodes_path(runtime_root)
+    if not path.exists():
+        return []
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    return list(reversed(rows[-limit:]))
+
+
 def _is_better(candidate: float, current: float | None, goal: str) -> bool:
     if current is None:
         return True
@@ -279,6 +408,20 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             kind_counts["self_edit"] += 1
             self_edit_docs.append(str(target))
 
+    working = load_working_memory(runtime_root)
+    if working:
+        target = docs_root / "working-memory.md"
+        write_text(target, build_working_memory_doc(working))
+        written.append({"path": str(target), "kind": "working", "title": "Working Memory"})
+        kind_counts["working"] += 1
+
+    episodes = load_episode_memory(runtime_root)
+    if episodes:
+        target = docs_root / "episode-memory.md"
+        write_text(target, build_episode_memory_doc(episodes))
+        written.append({"path": str(target), "kind": "episode", "title": "Episode Memory"})
+        kind_counts["episode"] += 1
+
     outcomes = _build_outcomes(rows, goal=goal)
     for outcome in outcomes:
         path = docs_root / f"{outcome['outcome_id']}.md"
@@ -333,6 +476,8 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         "outcomes": outcomes,
         "self_edit_documents": self_edit_docs,
         "chip_documents": chip_documents,
+        "working_memory": working,
+        "episode_count": len(episodes),
     }
     write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
     return manifest

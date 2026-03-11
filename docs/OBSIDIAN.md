@@ -9,7 +9,10 @@ The Obsidian vault is the watchtower, not the source of truth.
 - `05-Runtime/Run Ledger.md`
 - `05-Runtime/Trainer State.md`
 - `05-Runtime/Memory Index.md`
+- `05-Runtime/Working Memory.md`
+- `05-Runtime/Episode Memory.md`
 - `05-Runtime/Outcome State.md`
+- `05-Runtime/Research Signals.md`
 - `05-Runtime/Self Edit Queue.md`
 - `06-References/*.md`
 

@@ -44,23 +44,59 @@ def _advisory_clone(advisory: dict[str, Any], *, task: str, model: str) -> dict[
     return clone
 
 
+def _failure_priority_checks(advisory: dict[str, Any], *, limit: int = 3) -> list[dict[str, Any]]:
+    failure_priorities = advisory.get("failure_priorities", {})
+    if not isinstance(failure_priorities, dict):
+        return []
+    checks: list[dict[str, Any]] = []
+    for item in failure_priorities.get("priorities", [])[:limit]:
+        if not isinstance(item, dict):
+            continue
+        domain = str(item.get("domain") or "generic").strip() or "generic"
+        surface = str(item.get("surface") or "unknown").strip() or "unknown"
+        examples = []
+        for example in item.get("top_examples", [])[:2]:
+            if not isinstance(example, dict):
+                continue
+            summary = str(example.get("summary") or "").strip()
+            if summary:
+                examples.append(summary)
+        checks.append(
+            {
+                "label": f"{domain}/{surface}",
+                "score": item.get("surprise_score"),
+                "examples": examples,
+            }
+        )
+    return checks
+
+
 def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
     epistemic = advisory.get("epistemic_status", {})
-    return "\n".join(
-        [
-            "Review the draft answer below.",
-            "Judge it against the guidance, boundaries, and evidence status in the advisory request.",
-            "If the evidence is too weak, prefer `needs_verification` over bluffing.",
-            "",
-            "Return JSON only in this exact shape:",
-            '{"decision":"approve|revise|needs_verification","issues":[""],"missing_evidence":[""],"rewrite_instructions":[""],"best_next_question":""}',
-            "",
-            "Draft Answer",
-            draft_text or "(empty)",
-            "",
-            f"Evidence Status: {epistemic.get('status', 'unknown')}",
-        ]
-    )
+    lines = [
+        "Review the draft answer below.",
+        "Judge it against the guidance, boundaries, evidence status, and recent failure surfaces in the advisory request.",
+        "If the evidence is too weak, prefer `needs_verification` over bluffing.",
+        "",
+        "Return JSON only in this exact shape:",
+        '{"decision":"approve|revise|needs_verification","issues":[""],"missing_evidence":[""],"rewrite_instructions":[""],"best_next_question":"","implicated_failure_surface":""}',
+        "",
+        "Draft Answer",
+        draft_text or "(empty)",
+        "",
+        f"Evidence Status: {epistemic.get('status', 'unknown')}",
+    ]
+    checks = _failure_priority_checks(advisory)
+    if checks:
+        lines.extend(["", "High-Surprise Failure Checks"])
+        for item in checks:
+            label = str(item.get("label") or "generic/unknown")
+            score = item.get("score")
+            lines.append(f"- Guard against {label} (surprise={score}).")
+            for example in item.get("examples", []):
+                lines.append(f"  Example: {example}")
+        lines.append("If one of these failure surfaces is implicated, set `implicated_failure_surface` to the matching `domain/surface` label.")
+    return "\n".join(lines)
 
 
 def _revision_task(draft_text: str, critique: dict[str, Any]) -> str:
@@ -68,6 +104,7 @@ def _revision_task(draft_text: str, critique: dict[str, Any]) -> str:
     missing = [str(item) for item in critique.get("missing_evidence", []) if str(item).strip()]
     instructions = [str(item) for item in critique.get("rewrite_instructions", []) if str(item).strip()]
     next_question = str(critique.get("best_next_question") or "").strip()
+    implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
     lines = [
         "Revise the answer below using the critique.",
         "Stay within the evidence you actually have.",
@@ -81,6 +118,8 @@ def _revision_task(draft_text: str, critique: dict[str, Any]) -> str:
     lines.extend(f"- Issue: {item}" for item in issues[:4])
     lines.extend(f"- Missing Evidence: {item}" for item in missing[:3])
     lines.extend(f"- Rewrite Instruction: {item}" for item in instructions[:4])
+    if implicated_surface:
+        lines.append(f"- Guardrail: do not repeat the high-surprise failure surface {implicated_surface}.")
     if next_question:
         lines.append(f"- If still under-supported, ask: {next_question}")
     return "\n".join(lines)
@@ -152,10 +191,14 @@ def execute_with_verifier(
         "missing_evidence": [],
         "rewrite_instructions": [],
         "best_next_question": "",
+        "implicated_failure_surface": "",
     }
     decision = str(critique.get("decision") or "needs_verification").strip().lower()
+    implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
+    if implicated_surface:
+        trace.event("implicated_failure_surface", attributes={"surface": implicated_surface})
     if decision == "approve":
-        trace.finish(status="ok", attributes={"decision": decision})
+        trace.finish(status="ok", attributes={"decision": decision, "implicated_failure_surface": implicated_surface})
         return {
             "status": "ok",
             "decision": decision,
@@ -170,7 +213,7 @@ def execute_with_verifier(
         revision_advisory = _advisory_clone(advisory, task=revision_task, model=model)
         with trace.span("revise"):
             revised = execute_advisory(runtime_root, advisory=revision_advisory, model=model, command_override=command_override, dry_run=False)
-        trace.finish(status="ok", attributes={"decision": "revise"})
+        trace.finish(status="ok", attributes={"decision": "revise", "implicated_failure_surface": implicated_surface})
         return {
             "status": "ok",
             "decision": "revise",
@@ -191,9 +234,13 @@ def execute_with_verifier(
         novelty_key=f"{advisory.get('domain', 'generic')}:needs_verification",
         evidence=[str(item) for item in critique.get("issues", [])[:3]],
         trace_id=trace.trace_id,
-        metadata={"task": advisory.get("task"), "decision": decision},
+        metadata={
+            "task": advisory.get("task"),
+            "decision": decision,
+            "implicated_failure_surface": implicated_surface,
+        },
     )
-    trace.finish(status="ok", attributes={"decision": "needs_verification"})
+    trace.finish(status="ok", attributes={"decision": "needs_verification", "implicated_failure_surface": implicated_surface})
     return {
         "status": "needs_verification",
         "decision": "needs_verification",

@@ -61,10 +61,12 @@ spark-researcher optimizer export-advisory-dataset
 `advisory execute` now uses a bounded verifier loop by default:
 
 1. draft an answer
-2. critique that draft against the current packets, boundaries, and evidence status
+2. critique that draft against the current packets, boundaries, evidence status, and top surprise-priority failure surfaces
 3. either approve, revise once, or return `needs_verification`
 
 If the advisory is already marked `under_supported`, Spark returns `needs_verification` before making a model call.
+
+When the verifier spots one of the active failure surfaces in a draft, it now names that implicated surface in the critique and trace so the operator can see which failure class the answer was trying to avoid.
 
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 

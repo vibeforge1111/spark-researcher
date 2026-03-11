@@ -92,6 +92,26 @@ def _failure_priority_checks(advisory: dict[str, Any], *, limit: int = 3) -> lis
     return checks
 
 
+def _expected_note_ids(advisory: dict[str, Any]) -> list[str]:
+    research_context = advisory.get("research_context", {})
+    if not isinstance(research_context, dict):
+        return []
+    note_ids: list[str] = []
+    for item in research_context.get("citations", [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        note_id = str(item.get("note_id") or "").strip()
+        if note_id:
+            note_ids.append(note_id)
+    return note_ids
+
+
+def _used_note_ids(text: str, note_ids: list[str]) -> list[str]:
+    lowered = str(text or "").lower()
+    used = [note_id for note_id in note_ids if note_id.lower() in lowered]
+    return list(dict.fromkeys(used))
+
+
 def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
     epistemic = advisory.get("epistemic_status", {})
     lines = [
@@ -107,6 +127,17 @@ def _critique_task(advisory: dict[str, Any], draft_text: str) -> str:
         "",
         f"Evidence Status: {epistemic.get('status', 'unknown')}",
     ]
+    note_ids = _expected_note_ids(advisory)
+    if note_ids:
+        lines.extend(
+            [
+                "",
+                "Citation Requirement",
+                f"- Available research notes: {', '.join(note_ids)}",
+                "- If the answer relies on research notes, it should cite the note ids it used, for example `(note-1)`.",
+                "- If the answer ignores the available research notes or cites none of them, prefer `revise` unless the answer should instead stop at `needs_verification`.",
+            ]
+        )
     checks = _failure_priority_checks(advisory)
     if checks:
         lines.extend(["", "High-Surprise Failure Checks"])
@@ -144,6 +175,30 @@ def _revision_task(draft_text: str, critique: dict[str, Any]) -> str:
     if next_question:
         lines.append(f"- If still under-supported, ask: {next_question}")
     return "\n".join(lines)
+
+
+def _enforce_citation_usage(advisory: dict[str, Any], draft_text: str, critique: dict[str, Any]) -> dict[str, Any]:
+    note_ids = _expected_note_ids(advisory)
+    if not note_ids:
+        return critique
+    used_note_ids = _used_note_ids(draft_text, note_ids)
+    if used_note_ids:
+        critique["used_note_ids"] = used_note_ids
+        return critique
+    issues = [str(item) for item in critique.get("issues", []) if str(item).strip()]
+    instructions = [str(item) for item in critique.get("rewrite_instructions", []) if str(item).strip()]
+    if "Research-backed answer did not cite any available note ids." not in issues:
+        issues.append("Research-backed answer did not cite any available note ids.")
+    citation_instruction = "Cite the specific research notes you rely on using note ids like `(note-1)`."
+    if citation_instruction not in instructions:
+        instructions.append(citation_instruction)
+    critique["issues"] = issues
+    critique["rewrite_instructions"] = instructions
+    critique["used_note_ids"] = []
+    decision = str(critique.get("decision") or "needs_verification").strip().lower()
+    if decision == "approve":
+        critique["decision"] = "revise"
+    return critique
 
 
 def _task_needs_fresh_research(advisory: dict[str, Any], critique: dict[str, Any]) -> bool:
@@ -274,12 +329,29 @@ def execute_with_verifier(
         "best_next_question": "",
         "implicated_failure_surface": "",
     }
+    critique = _enforce_citation_usage(advisory, draft_text, critique)
     decision = str(critique.get("decision") or "needs_verification").strip().lower()
     implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
+    used_note_ids = [str(item) for item in critique.get("used_note_ids", []) if str(item).strip()]
     if implicated_surface:
         trace.event("implicated_failure_surface", attributes={"surface": implicated_surface})
+    if _expected_note_ids(advisory):
+        trace.event(
+            "citation_check",
+            attributes={
+                "expected_note_ids": _expected_note_ids(advisory),
+                "used_note_ids": used_note_ids,
+            },
+        )
     if decision == "approve":
-        trace.finish(status="ok", attributes={"decision": decision, "implicated_failure_surface": implicated_surface})
+        trace.finish(
+            status="ok",
+            attributes={
+                "decision": decision,
+                "implicated_failure_surface": implicated_surface,
+                "used_note_ids": used_note_ids,
+            },
+        )
         return {
             "status": "ok",
             "decision": decision,
@@ -294,7 +366,14 @@ def execute_with_verifier(
         revision_advisory = _advisory_clone(advisory, task=revision_task, model=model)
         with trace.span("revise"):
             revised = execute_advisory(runtime_root, advisory=revision_advisory, model=model, command_override=command_override, dry_run=False)
-        trace.finish(status="ok", attributes={"decision": "revise", "implicated_failure_surface": implicated_surface})
+        trace.finish(
+            status="ok",
+            attributes={
+                "decision": "revise",
+                "implicated_failure_surface": implicated_surface,
+                "used_note_ids": used_note_ids,
+            },
+        )
         return {
             "status": "ok",
             "decision": "revise",

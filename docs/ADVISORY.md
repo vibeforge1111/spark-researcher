@@ -81,6 +81,8 @@ If the follow-up still lacks support, Spark stops and returns the remaining unce
 
 When that retry succeeds, Spark now returns a small `citations` list derived from the bounded research artifact so the operator can see which dated notes were in play.
 
+The verifier also checks whether a research-backed answer actually used those available note ids. If the answer ignores the notes and cites none of them, Spark now downgrades approval and asks for a revision instead of silently passing it through.
+
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 
 ## Adapter Policy

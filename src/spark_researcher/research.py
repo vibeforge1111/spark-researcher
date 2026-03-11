@@ -110,6 +110,7 @@ def _followup_advisory(
         "collected_at": research.get("collected_at"),
         "result_count": research.get("result_count"),
         "artifact_path": research.get("artifact_path"),
+        "citations": list(research.get("citations", [])),
     }
     epistemic = dict(clone.get("epistemic_status", {}))
     if int(research.get("result_count", 0) or 0) > 0 and str(epistemic.get("status") or "") == "under_supported":

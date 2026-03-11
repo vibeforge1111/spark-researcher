@@ -23,3 +23,5 @@ Canonical docs stay in `docs/`. The vault is rebuilt from those docs and runtime
 `05-Runtime/Research Signals.md` now includes bounded research provenance when available, including note ids, source domains, and URLs surfaced from the retry path. It also shows verifier draft-selection events and advisory packet-selection events so you can see which packet ids were active, which candidate won, and what issue pushed revision or caution.
 
 `Home.md` also summarizes belief quality with durable/provisional counts and active contradiction count so memory health is visible at a glance.
+
+`Home.md` now also shows the current queued frontier count, derived from `artifacts/frontier/queue.json`, so operators can distinguish the stable project spec from pending generated exploration.

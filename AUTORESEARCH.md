@@ -36,6 +36,7 @@ Spark Researcher is a lightweight, review-first research system.
 It keeps the core loop small:
 
 - config declares commands, metrics, candidates, trainers, and mutable targets
+- generated autoloop suggestions live in `artifacts/frontier/queue.json` instead of mutating the base config
 - runs execute in copied workspaces
 - results append to an immutable ledger
 - memory exports derive from existing artifacts

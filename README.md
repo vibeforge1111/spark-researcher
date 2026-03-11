@@ -94,6 +94,7 @@ External agents should follow `AGENTS.md`; backend details live in `docs/AGENT_B
 - `examples/toy-project/`: runnable demo target
 - external domain chips: optional sibling or separate repos loaded through a small manifest bridge
 - `artifacts/`: generated ledger, memory, trainer state, self-edit packets, failures, and traces
+- `artifacts/frontier/queue.json`: generated runtime frontier queue
 - `obsidian-vault/`: generated watchtower view
 - `.autoresearch/capsules/`: collective-ready insight packets
 
@@ -154,7 +155,14 @@ Local Markdown memory is still the source of truth. `ruvector` remains the recom
 
 ## Autonomy Boundary
 
-`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, appends only new in-scope candidates to config, and continues for a limited number of rounds. `autoloop --continuous` simply repeats those bounded passes until interrupted. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values. Frontier runs that land close to the current best are marked `near_best` and do not trip the discard limit.
+`loop` runs the current fixed candidate set. `autoloop` is the bounded autonomous layer: it runs pending trials, suggests new candidates from ledger evidence, writes only new generated candidates to `artifacts/frontier/queue.json`, and continues for a limited number of rounds. `autoloop --continuous` simply repeats those bounded passes until interrupted. If a mutable parameter declares `value_range` and `value_step`, autoloop can also probe one-step numeric neighbors around already beneficial values. Frontier runs that land close to the current best are marked `near_best` and do not trip the discard limit.
+
+The config split is intentional:
+
+- `spark-researcher.project.json` is the stable project spec
+- `artifacts/frontier/queue.json` is the generated runtime queue
+
+Promote candidates back into the main config only when you want them to become stable seed trials rather than runtime residue.
 
 ## Domain Chips
 

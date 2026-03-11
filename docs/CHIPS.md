@@ -67,6 +67,7 @@ Spark owns:
 
 - loop execution
 - ledger
+- generated frontier queue
 - memory index
 - vault root
 - self-edit policy
@@ -93,6 +94,8 @@ The manifest can now keep field names fixed while relaxing values:
 - `prompt_hints` lets the chip steer LLM exploration without hardcoding new frontiers every time
 
 Do this through the existing `suggest` hook rather than inventing a new orchestration surface. If you want long-running exploration, use `autoloop --continuous`; it repeats bounded passes, not an unconstrained daemon.
+
+Generated chip suggestions now land in `artifacts/frontier/queue.json`. Keep `spark-researcher.project.json` for stable seed candidates and promote queue items back into the main config only when you want them to become part of the standing project spec.
 
 This keeps the kernel portable while letting domains evolve in separate repos.
 

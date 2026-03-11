@@ -8,7 +8,7 @@ from .config import ProjectConfig
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .memory import load_episode_memory, load_working_memory, sync_memory
-from .paths import trainers_root, vault_root
+from .paths import frontier_queue_path, trainers_root, vault_root
 from .runner import ledger_summary, read_jsonl
 from .tracing import trace_status
 
@@ -32,6 +32,18 @@ def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
     return written
 
 
+def load_frontier_queue_count(runtime_root: Path) -> int:
+    path = frontier_queue_path(runtime_root)
+    if not path.exists():
+        return 0
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError:
+        return 0
+    items = payload.get("candidate_trials", [])
+    return len(items) if isinstance(items, list) else 0
+
+
 def render_home(
     summary: dict,
     trainer_rows: list[dict],
@@ -39,6 +51,7 @@ def render_home(
     belief_manifest: dict,
     domain_pages: list[str],
     research_signals: dict,
+    frontier_queue_count: int,
 ) -> str:
     domain_lines = [f"- [[{page}]]" for page in domain_pages]
     return "\n".join(
@@ -71,6 +84,7 @@ def render_home(
             f"- active belief contradictions: `{belief_manifest.get('contradiction_count', 0)}`",
             f"- research retries: `{research_signals.get('research_retry_count', 0)}`",
             f"- citation mismatches: `{research_signals.get('citation_mismatch_count', 0)}`",
+            f"- queued frontier candidates: `{frontier_queue_count}`",
             f"- domain pages: `{len(domain_pages)}`",
             "",
             "## References",
@@ -305,6 +319,7 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     output_root = vault_root(runtime_root)
     summary = ledger_summary(runtime_root, goal=config.eval_goal)
     traces = trace_status(runtime_root)
+    frontier_queue_count = load_frontier_queue_count(runtime_root)
     working_memory = load_working_memory(runtime_root)
     episode_rows = load_episode_memory(runtime_root)
     trainer_rows = []
@@ -336,7 +351,7 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     copy_docs(repo_root, output_root / "06-References")
     write_text(
         output_root / "Home.md",
-        render_home(summary, trainer_rows, memory_manifest, belief_manifest, domain_pages, traces.get("research_signals", {})),
+        render_home(summary, trainer_rows, memory_manifest, belief_manifest, domain_pages, traces.get("research_signals", {}), frontier_queue_count),
     )
     write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
     write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))

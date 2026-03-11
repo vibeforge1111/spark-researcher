@@ -8,9 +8,10 @@ from .config import ProjectConfig
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .memory import load_episode_memory, load_working_memory, sync_memory
-from .paths import frontier_queue_path, trainers_root, vault_root
+from .paths import trainers_root, vault_root
 from .runner import ledger_summary, read_jsonl
 from .tracing import trace_status
+from .trial_queue import pending_queue_count
 
 
 def write_text(path: Path, content: str) -> None:
@@ -30,18 +31,6 @@ def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
         shutil.copyfile(path, target)
         written.append(str(target))
     return written
-
-
-def load_frontier_queue_count(runtime_root: Path) -> int:
-    path = frontier_queue_path(runtime_root)
-    if not path.exists():
-        return 0
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError:
-        return 0
-    items = payload.get("candidate_trials", [])
-    return len(items) if isinstance(items, list) else 0
 
 
 def render_home(
@@ -319,7 +308,7 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     output_root = vault_root(runtime_root)
     summary = ledger_summary(runtime_root, goal=config.eval_goal)
     traces = trace_status(runtime_root)
-    frontier_queue_count = load_frontier_queue_count(runtime_root)
+    frontier_queue_count = pending_queue_count(effective_config_path, rows)
     working_memory = load_working_memory(runtime_root)
     episode_rows = load_episode_memory(runtime_root)
     trainer_rows = []
@@ -339,6 +328,8 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
                 "memory_manifest": memory_manifest,
                 "belief_manifest": belief_manifest,
                 "vault_root": str(output_root),
+                "runtime_root": str(runtime_root),
+                "config_path": str(effective_config_path),
             },
             config=config,
         )

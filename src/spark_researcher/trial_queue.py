@@ -12,6 +12,10 @@ def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
 
 
+def _signature_from_row(row: dict[str, object]) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
+
+
 def queue_path_for_config(config_path: Path) -> Path:
     return frontier_queue_path(resolve_runtime_root(config_path))
 
@@ -77,3 +81,12 @@ def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, conf
             encoding="utf-8",
         )
     return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}
+
+
+def pending_queue_trials(config_path: Path, rows: list[dict[str, object]]) -> list[CandidateTrial]:
+    tested = {_signature_from_row(row) for row in rows}
+    return [trial for trial in load_queue_trials(config_path) if _signature(trial.mutations) not in tested]
+
+
+def pending_queue_count(config_path: Path, rows: list[dict[str, object]]) -> int:
+    return len(pending_queue_trials(config_path, rows))

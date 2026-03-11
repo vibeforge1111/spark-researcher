@@ -58,7 +58,7 @@ spark-researcher advisory providers
 2. draft candidate B with a deliberately different shape
 3. select the stronger candidate against packets, boundaries, evidence status, failure surfaces, and any available research-note ids
 4. approve, revise once, return `needs_verification`, or escalate to `research_needed` for time-sensitive web-backed tasks
-5. if `research_needed` is returned, run one bounded web-notes pass and retry once with dated notes
+5. if `research_needed` is returned, run one bounded web-notes pass and retry once with dated notes plus source provenance
 
 That research retry is deliberately bounded:
 
@@ -68,7 +68,7 @@ That research retry is deliberately bounded:
 
 If the follow-up still lacks support, Spark stops and returns the remaining uncertainty instead of looping.
 
-Research-backed follow-ups return compact `citations`. The verifier expects those note ids to be used and prefers the ids that best match the answer's concrete claims. Missing citations or clearly weaker note choices are downgraded to `revise`.
+Research-backed follow-ups return compact `citations` with note id, collection time, domain, and source URL when available. The verifier expects those note ids to be used and prefers the ids that best match the answer's concrete claims. Missing citations or clearly weaker note choices are downgraded to `revise`.
 
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 

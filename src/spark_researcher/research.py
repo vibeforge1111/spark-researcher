@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .adapters import adapter_request
@@ -31,16 +31,25 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
         page = urlopen(request, timeout=6).read().decode("utf-8", errors="replace")
     except Exception:
         return []
-    titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
+    links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)
     results: list[dict[str, str]] = []
-    for index, title in enumerate(titles[:limit]):
+    for index, link in enumerate(links[:limit]):
+        href, title = link
         clean_title = re.sub(r"<.*?>", "", unescape(title)).strip()
         clean_snippet = ""
         if index < len(snippets):
             clean_snippet = re.sub(r"<.*?>", "", unescape(snippets[index])).strip()
         if clean_title:
-            results.append({"title": clean_title, "snippet": clean_snippet})
+            clean_url = _clean_result_url(href)
+            results.append(
+                {
+                    "title": clean_title,
+                    "snippet": clean_snippet,
+                    "url": clean_url,
+                    "domain": _domain_from_url(clean_url),
+                }
+            )
     return results
 
 
@@ -56,9 +65,30 @@ def _citation_rows(results: list[dict[str, str]]) -> list[dict[str, str]]:
                 "note_id": f"note-{index}",
                 "title": title,
                 "snippet": snippet,
+                "url": str(item.get("url") or "").strip(),
+                "domain": str(item.get("domain") or "").strip(),
             }
         )
     return rows
+
+
+def _clean_result_url(url: str) -> str:
+    raw = unescape(str(url or "").strip())
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    query_url = parse_qs(parsed.query).get("uddg", [""])[0].strip()
+    if query_url:
+        return unescape(query_url)
+    return raw
+
+
+def _domain_from_url(url: str) -> str:
+    parsed = urlparse(str(url or "").strip())
+    netloc = parsed.netloc.lower()
+    if netloc.startswith("www."):
+        return netloc[4:]
+    return netloc
 
 
 def _write_research_artifact(runtime_root: Path, payload: dict[str, Any]) -> Path:
@@ -87,10 +117,15 @@ def _research_task(original_task: str, research: dict[str, Any]) -> str:
         note_id = str(item.get("note_id") or "").strip()
         title = str(item.get("title") or "").strip()
         snippet = str(item.get("snippet") or "").strip()
+        domain = str(item.get("domain") or "").strip()
+        url = str(item.get("url") or "").strip()
         if title:
-            lines.append(f"- {note_id}: {title}")
+            source = f" [{domain}]" if domain else ""
+            lines.append(f"- {note_id}: {title}{source}")
         if snippet:
             lines.append(f"  Note: {snippet}")
+        if url:
+            lines.append(f"  Source: {url}")
     return "\n".join(lines)
 
 
@@ -111,6 +146,7 @@ def _followup_advisory(
         "collected_at": research.get("collected_at"),
         "result_count": research.get("result_count"),
         "artifact_path": research.get("artifact_path"),
+        "results": list(research.get("results", [])),
         "citations": list(research.get("citations", [])),
     }
     epistemic = dict(clone.get("epistemic_status", {}))
@@ -214,6 +250,8 @@ def execute_with_research(
             {
                 "note_id": str(item.get("note_id") or ""),
                 "title": str(item.get("title") or ""),
+                "domain": str(item.get("domain") or ""),
+                "url": str(item.get("url") or ""),
                 "collected_at": research.get("collected_at"),
                 "artifact_path": research.get("artifact_path"),
             }

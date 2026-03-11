@@ -26,6 +26,7 @@ from .research import execute_with_research
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
 from .self_edit import apply_proposal, backend_profiles, proposal_status, propose, review_proposal
 from .tracing import trace_status
+from .trial_queue import merged_candidate_trials
 from .trainers import run_all_trainers, trainer_status
 
 
@@ -497,7 +498,8 @@ def main() -> None:
     runtime_root = resolve_runtime_root(config_path)
     if args.action == "run":
         config = load_config(config_path)
-        trial = next((item for item in config.candidate_trials if item.candidate_id == args.candidate_id), None)
+        trials = merged_candidate_trials(config_path, config=config)
+        trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
         return
     if args.action == "loop":

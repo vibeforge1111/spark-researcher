@@ -77,6 +77,14 @@ def chips_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "chips"
 
 
+def frontier_root(runtime_root: Path) -> Path:
+    return artifacts_root(runtime_root) / "frontier"
+
+
+def frontier_queue_path(runtime_root: Path) -> Path:
+    return frontier_root(runtime_root) / "queue.json"
+
+
 def vault_root(runtime_root: Path) -> Path:
     return runtime_root / "obsidian-vault"
 

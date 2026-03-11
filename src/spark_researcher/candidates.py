@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
-from .config import CandidateTrial, MutationSpec, intent_policy, load_config, save_config
+from .config import CandidateTrial, MutationSpec, intent_policy, load_config
 from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
+from .trial_queue import append_queue_trials, merged_candidate_trials
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -334,7 +335,7 @@ def _chip_suggestion_packet(
             "intent": intent_policy(config),
             "failure_priorities": failure_priorities,
             "ledger_rows": rows,
-            "candidate_trials": [asdict(item) for item in config.candidate_trials],
+            "candidate_trials": [asdict(item) for item in merged_candidate_trials(config_path, config=config)],
         },
         config=config,
     )
@@ -449,6 +450,7 @@ def _core_suggestion_packet(config: Any, runtime_root: Path, command_name: str, 
 
 def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> dict[str, Any]:
     config = load_config(config_path)
+    config.candidate_trials = merged_candidate_trials(config_path, config=config)
     runtime_root = resolve_runtime_root(config_path)
     rows = read_jsonl(ledger_path(runtime_root))
     if chip_has_hook(config_path, "suggest", config):
@@ -458,19 +460,8 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
 
 def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> dict[str, Any]:
     config = load_config(config_path)
-    existing = {_signature(trial.mutations) for trial in config.candidate_trials}
-    appended: list[dict[str, Any]] = []
-    for item in suggestions:
-        trial = _trial_from_packet(item)
-        sig = _signature(trial.mutations)
-        if sig in existing:
-            continue
-        config.candidate_trials.append(trial)
-        existing.add(sig)
-        appended.append(asdict(trial))
-    if appended:
-        save_config(config_path, config)
-    return {"appended_count": len(appended), "appended": appended, "config_path": str(config_path)}
+    trials = [_trial_from_packet(item) for item in suggestions]
+    return append_queue_trials(config_path, trials, config=config)
 
 
 def _run_pending_trials(
@@ -509,6 +500,7 @@ def run_autoloop(
     queued_packet: dict[str, Any] | None = None
     for round_index in range(1, rounds + 1):
         config = load_config(config_path)
+        config.candidate_trials = merged_candidate_trials(config_path, config=config)
         runtime_root = resolve_runtime_root(config_path)
         rows = read_jsonl(ledger_path(runtime_root))
         tested = _tested_signatures(rows, command_name)
@@ -531,6 +523,7 @@ def run_autoloop(
                 )
                 break
             config = load_config(config_path)
+            config.candidate_trials = merged_candidate_trials(config_path, config=config)
             pending = _pending_trials(config, tested)
         else:
             suggestion_packet = {"suggestion_count": 0, "suggestions": [], "reasons": []}

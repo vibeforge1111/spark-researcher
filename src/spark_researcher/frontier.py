@@ -16,6 +16,7 @@ from .failures import surprise_status
 from .intent import build_intent_brief
 from .paths import resolve_runtime_root
 from .tracing import start_trace
+from .trial_queue import merged_candidate_trials
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -96,7 +97,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     if not allowed:
         trace.finish(status="ok", attributes={"suggestion_count": 0, "reason": "missing_allowed_mutations"})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No allowed mutation grammar is defined for this chip frontier."]}
-    existing = {_signature(trial.mutations) for trial in config.candidate_trials}
+    existing = {_signature(trial.mutations) for trial in merged_candidate_trials(config_path, config=config)}
     tested = {
         _signature({str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])})
         for row in rows

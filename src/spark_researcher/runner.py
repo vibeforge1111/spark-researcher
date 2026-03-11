@@ -14,6 +14,7 @@ from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, m
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
+from .trial_queue import merged_candidate_trials
 
 
 @dataclass
@@ -365,6 +366,7 @@ def parse_overrides(items: list[str] | None) -> dict[str, str]:
 
 def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, limit: int | None = None) -> dict[str, Any]:
     config = load_config(config_path)
+    config.candidate_trials = merged_candidate_trials(config_path, config=config)
     max_iterations = min(limit or config.guardrails.max_loop_iterations, config.guardrails.max_loop_iterations)
     consecutive_discards = 0
     results: list[dict[str, Any]] = []

@@ -50,6 +50,14 @@ def _brief(advisory: dict[str, Any], max_chars: int) -> str:
         lines.extend(["", "Boundaries"])
         for item in boundaries[:3]:
             lines.append(f"- {item}")
+    failure_priorities = advisory.get("failure_priorities", {})
+    if isinstance(failure_priorities, dict) and failure_priorities.get("priorities"):
+        lines.extend(["", "Current Surprise Priorities"])
+        for item in failure_priorities.get("priorities", [])[:2]:
+            domain = str(item.get("domain") or "generic")
+            surface = str(item.get("surface") or "unknown")
+            score = item.get("surprise_score")
+            lines.append(f"- {domain} / {surface} surprise={score}")
     text = "\n".join(lines).strip()
     return text[:max_chars].rstrip()
 

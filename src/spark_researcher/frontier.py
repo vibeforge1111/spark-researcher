@@ -12,6 +12,7 @@ from .adapters import execute_advisory
 from .advisory import build_advisory
 from .chips import load_chip_context
 from .config import load_config
+from .failures import surprise_status
 from .intent import build_intent_brief
 from .paths import resolve_runtime_root
 from .tracing import start_trace
@@ -112,6 +113,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         web_notes = _web_notes(query) if spec.get("web_search", False) and query.strip() else []
     with trace.span("intent_brief", attributes={"domain": str(context.manifest.get("domain", "generic"))}):
         intent = build_intent_brief(config_path, domain=str(context.manifest.get("domain", "generic")), query=query)
+    failure_priorities = surprise_status(runtime_root, limit=5)
     frontier_mode = str(intent.get("frontier_mode") or "relaxed")
     effective_open_fields = set() if frontier_mode == "bounded" else open_fields
     task = "\n".join(
@@ -135,6 +137,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
             f"RuVector status: {json.dumps(intent.get('memory_context', {}).get('ruvector_status', {}), sort_keys=True)}",
             f"RuVector hits: {json.dumps(intent.get('memory_context', {}).get('ruvector_hits', []), sort_keys=True)}",
             f"DSPy optimizer status: {json.dumps(intent.get('optimizer', {}), sort_keys=True)}",
+            f"Current failure priorities: {json.dumps(failure_priorities, sort_keys=True)}",
             f"Prompt hints: {json.dumps(prompt_hints)}",
             'Return JSON only in the shape {"proposals":[{"candidate_id":"","candidate_summary":"","hypothesis":"","mutations":{},"why_now":["",""]}]}',
             "Rules: use only allowed field names, do not repeat tested signatures, prefer proposals that serve the active mission, and only invent new values for fields listed in `open_mutation_fields`.",

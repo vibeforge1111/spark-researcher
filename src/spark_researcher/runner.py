@@ -11,6 +11,7 @@ from typing import Any
 
 from .chips import invoke_chip_hook
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root
+from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
 
@@ -319,6 +320,26 @@ def run_once(
             ensure_parent(run_dir / "result.json")
             (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             append_jsonl(ledger_path(runtime_root), record)
+        if record["status"] != "ok" or verdict in {"regressed", "unknown"}:
+            failure_type = "run_failed" if record["status"] != "ok" else f"run_{verdict}"
+            evidence = [
+                f"command={command_name}",
+                f"candidate_id={trial.candidate_id if trial else 'baseline'}",
+                f"metric_name={config.eval_metric}",
+                f"metric_value={record.get('metric_value')}",
+            ]
+            record_failure(
+                runtime_root,
+                failure_type=failure_type,
+                summary=str(trial.candidate_summary if trial else f"{command_name} {verdict}").strip(),
+                surface="runner",
+                domain=config.project_name,
+                severity="critical" if record["status"] != "ok" else "warn",
+                novelty_key=f"{command_name}:{verdict}",
+                evidence=evidence,
+                trace_id=trace.trace_id,
+                metadata={"run_id": record["run_id"], "candidate_id": record.get("candidate_id"), "verdict": verdict},
+            )
         trace.finish(status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
         return record
     except Exception as exc:

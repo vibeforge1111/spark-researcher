@@ -92,6 +92,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 - `examples/toy-project/`: runnable demo target
 - external domain chips: optional sibling or separate repos loaded through a small manifest bridge
 - `artifacts/`: generated ledger, memory, trainer state, and self-edit packets
+- `artifacts/failures/`: concrete failure registry with surprise-priority ranking
 - `artifacts/traces/`: JSONL trace files for the main runtime decisions
 - `obsidian-vault/`: generated watchtower view
 - `.autoresearch/capsules/`: collective-ready insight packets
@@ -121,6 +122,7 @@ spark-researcher trainers run
 spark-researcher trainers status
 spark-researcher candidates suggest --command train
 spark-researcher candidates apply --command train
+spark-researcher failures --limit 10
 spark-researcher memory backend-policy
 spark-researcher memory backend-policy --backend ruvector
 spark-researcher memory sync

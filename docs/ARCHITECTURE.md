@@ -16,6 +16,7 @@ Spark Researcher is intentionally small.
 ## Layers
 
 - `runner.py`: command execution, mutations, verdicts, ledger writes
+- `failures.py`: concrete failure registry and surprise-priority scoring
 - `tracing.py`: JSONL trace recorder for run, advisory, frontier, and self-edit flows
 - `verifier.py`: bounded draft-critique-revise loop for advisory execution
 - `trainers.py`: generic example-count watchers with bounded recompiles

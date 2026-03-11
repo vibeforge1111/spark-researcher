@@ -28,6 +28,18 @@ Advisory now includes a small epistemic layer:
 
 This is meant to reduce confident overreach without growing a heavy agent runtime.
 
+## Failure Priorities
+
+Advisory also carries the current surprise-priority view from the failure registry.
+
+This is a lightweight way to bias attention toward:
+
+- recent failures
+- repeated failures
+- failures that show up across more than one novelty key
+
+Use `spark-researcher failures --limit 10` to inspect the current ranked failure surfaces directly.
+
 ## Commands
 
 ```powershell

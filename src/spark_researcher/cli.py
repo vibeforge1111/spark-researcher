@@ -12,6 +12,7 @@ from .chip_starter import init_chip
 from .chips import chip_status, chip_validation
 from .collective import absorb, collective_status, publish_latest, sync_local_collective
 from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
+from .failures import surprise_status
 from .intent import build_intent_brief
 from .line_budget import build_line_budget
 from .memory import memory_status, search_memory, sync_memory
@@ -178,6 +179,10 @@ def build_parser() -> argparse.ArgumentParser:
     memory_policy_parser = memory_sub.add_parser("backend-policy")
     add_config_argument(memory_policy_parser)
     memory_policy_parser.add_argument("--backend", choices=["local", "ruvector"])
+
+    failures_parser = sub.add_parser("failures")
+    add_config_argument(failures_parser)
+    failures_parser.add_argument("--limit", type=int, default=10)
 
     beliefs_parser = sub.add_parser("beliefs")
     beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
@@ -561,6 +566,9 @@ def main() -> None:
         return
     if args.action == "memory":
         _handle_memory(args, config_path=config_path, repo_root=repo_root, runtime_root=runtime_root)
+        return
+    if args.action == "failures":
+        print_json(surprise_status(runtime_root, limit=args.limit))
         return
     if args.action == "beliefs":
         print_json(build_beliefs(repo_root, runtime_root))

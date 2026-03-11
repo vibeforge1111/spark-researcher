@@ -6,6 +6,7 @@ from typing import Any
 from .adapters import adapter_request
 from .chips import load_chip_context
 from .config import load_config
+from .failures import surprise_status
 from .intent import build_intent_brief
 from .optimizer import optimizer_status
 from .packets import search_packets
@@ -140,6 +141,7 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
         guidance, boundaries = _guidance_from_packets(packet_rows)
         with trace.span("intent_brief", attributes={"domain": selected_domain}):
             intent = build_intent_brief(config_path, domain=selected_domain, query=task)
+        failure_priorities = surprise_status(runtime_root, limit=5)
         epistemic = _epistemic_packet(task=task, packet_rows=packet_rows, guidance=guidance, boundaries=boundaries, intent=intent)
         advisory = {
             "project_name": config.project_name,
@@ -152,6 +154,7 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
             "packets": packet_rows,
             "optimizer": optimizer_status(),
             "intent": intent,
+            "failure_priorities": failure_priorities,
             "epistemic_status": epistemic,
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
@@ -164,6 +167,7 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
                 "packet_count": epistemic["packet_count"],
                 "memory_hit_count": epistemic["memory_hit_count"],
                 "ruvector_hit_count": epistemic["ruvector_hit_count"],
+                "priority_count": len(failure_priorities.get("priorities", [])),
             },
         )
         trace.finish(status="ok", attributes={"status": epistemic["status"]})

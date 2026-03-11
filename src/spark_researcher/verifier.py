@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters import adapter_request, execute_advisory
+from .failures import record_failure
 from .tracing import start_trace
 
 
@@ -103,6 +104,18 @@ def execute_with_verifier(
     epistemic = advisory.get("epistemic_status", {})
     status = str(epistemic.get("status") or "unknown")
     if status == "under_supported":
+        record_failure(
+            runtime_root,
+            failure_type="advisory_under_supported",
+            summary=str(advisory.get("task") or "Task lacked enough evidence."),
+            surface="advisory",
+            domain=str(advisory.get("domain") or "generic"),
+            severity="warn",
+            novelty_key=f"{advisory.get('domain', 'generic')}:under_supported",
+            evidence=[str(item) for item in epistemic.get("missing_evidence", [])],
+            trace_id=trace.trace_id,
+            metadata={"task": advisory.get("task"), "status": status},
+        )
         packet = {
             "status": "needs_verification",
             "decision": "needs_verification",
@@ -168,6 +181,18 @@ def execute_with_verifier(
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
+    record_failure(
+        runtime_root,
+        failure_type="verifier_needs_verification",
+        summary=str(advisory.get("task") or "Verifier requested further checking."),
+        surface="verifier",
+        domain=str(advisory.get("domain") or "generic"),
+        severity="warn",
+        novelty_key=f"{advisory.get('domain', 'generic')}:needs_verification",
+        evidence=[str(item) for item in critique.get("issues", [])[:3]],
+        trace_id=trace.trace_id,
+        metadata={"task": advisory.get("task"), "decision": decision},
+    )
     trace.finish(status="ok", attributes={"decision": "needs_verification"})
     return {
         "status": "needs_verification",

@@ -61,6 +61,10 @@ def advisory_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "advisory"
 
 
+def failures_root(runtime_root: Path) -> Path:
+    return artifacts_root(runtime_root) / "failures"
+
+
 def traces_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "traces"
 

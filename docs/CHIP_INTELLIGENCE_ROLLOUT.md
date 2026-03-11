@@ -90,6 +90,8 @@ The rollout is not complete until all of these are true.
 
 The shared packet shape is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
 
+The reusable DSPy placement method for chips is documented in `docs/CHIP_DSPY_METHOD.md`.
+
 ## Rule
 
 Do not add a generalized "intelligence framework" to core because one chip wants a richer research loop.

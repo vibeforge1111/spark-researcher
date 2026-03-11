@@ -98,18 +98,11 @@ def _failure_priority_checks(advisory: dict[str, Any], *, limit: int = 3) -> lis
             continue
         domain = str(item.get("domain") or "generic").strip() or "generic"
         surface = str(item.get("surface") or "unknown").strip() or "unknown"
-        examples = []
-        for example in item.get("top_examples", [])[:2]:
-            if not isinstance(example, dict):
-                continue
-            summary = str(example.get("summary") or "").strip()
-            if summary:
-                examples.append(summary)
         checks.append(
             {
                 "label": f"{domain}/{surface}",
                 "score": item.get("surprise_score"),
-                "examples": examples,
+                "count": item.get("count"),
             }
         )
     return checks
@@ -221,9 +214,9 @@ def _critique_task(advisory: dict[str, Any], draft_a_text: str, draft_b_text: st
         for item in checks:
             label = str(item.get("label") or "generic/unknown")
             score = item.get("score")
-            lines.append(f"- Guard against {label} (surprise={score}).")
-            for example in item.get("examples", []):
-                lines.append(f"  Example: {example}")
+            count = item.get("count")
+            count_text = f", count={count}" if count is not None else ""
+            lines.append(f"- Guard against {label} (surprise={score}{count_text}).")
         lines.append("If one of these failure surfaces is implicated, set `implicated_failure_surface` to the matching `domain/surface` label.")
     return "\n".join(lines)
 

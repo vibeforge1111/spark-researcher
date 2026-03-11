@@ -14,10 +14,13 @@ This repo may be edited by external coding agents such as Codex, Claude, OpenCod
 - only edit files inside the mutable targets listed in the self-edit request
 - only work inside the copied workspace Spark provides
 - do not write outside the workspace
-- do not change git state on behalf of Spark
-- do not commit, push, merge, or open PRs
 - do not bypass declared guardrails
 - do not add hidden services, daemons, or background processes
+- do not change git state on behalf of Spark unless the owner explicitly requests it in the current task
+- do not push, merge, or open PRs unless the owner explicitly requests it in the current task
+- commits are allowed only after the requested changes are implemented and verified
+- prefer one small commit per coherent change set
+- never amend, rebase, force-push, or rewrite history unless the owner explicitly asks for it
 
 ## Change Style
 

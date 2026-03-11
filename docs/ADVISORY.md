@@ -9,11 +9,24 @@ Spark Researcher uses one lightweight intelligence path:
 - `packets`
   - reusable beliefs, failures, rules, and domain packets exported into local memory
 - `advisory`
-  - selects the smallest useful packet set for a task
+  - selects the smallest useful packet set for a task and marks the evidence status for the task
 - `adapter`
   - injects the advisory into a specific model surface
 - `outcome`
   - logs whether the advice helped
+
+## Evidence Status
+
+Advisory now includes a small epistemic layer:
+
+- `grounded`
+  - packets and boundaries are present, so bounded claims are reasonable
+- `partial`
+  - some evidence exists, but the answer should surface uncertainty and often ask clarifying questions
+- `under_supported`
+  - the task lacks enough local evidence, so the system should ask questions, retrieve more, or research before making strong claims
+
+This is meant to reduce confident overreach without growing a heavy agent runtime.
 
 ## Commands
 
@@ -24,11 +37,24 @@ spark-researcher advisory adapters
 spark-researcher advisory providers
 spark-researcher advisory build --task "draft a content belief packet" --model claude
 spark-researcher advisory execute --task "draft a content belief packet" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
+spark-researcher advisory execute --task "draft a content belief packet" --model claude
 spark-researcher advisory log --task "draft a content belief packet" --model claude --status ok --packet-id belief-run-...
 spark-researcher advisory review
 spark-researcher optimizer status
 spark-researcher optimizer export-advisory-dataset
 ```
+
+## Verifier Loop
+
+`advisory execute` now uses a bounded verifier loop by default:
+
+1. draft an answer
+2. critique that draft against the current packets, boundaries, and evidence status
+3. either approve, revise once, or return `needs_verification`
+
+If the advisory is already marked `under_supported`, Spark returns `needs_verification` before making a model call.
+
+Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 
 ## Adapter Policy
 

@@ -13,6 +13,7 @@ from typing import Any
 
 from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
+from .tracing import start_trace
 
 
 def now_stamp() -> str:
@@ -301,10 +302,13 @@ def propose(
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
+    trace = start_trace(runtime_root, kind="self_edit_propose", name=prompt[:80], attributes={"dry_run": dry_run, "backend_profile": backend_profile})
     mutable_targets = config.self_edit.mutable_targets or config.mutable_targets
     if not mutable_targets:
+        trace.finish(status="error", attributes={"error": "No mutable targets declared for self edit."})
         raise RuntimeError("No mutable targets declared for self edit.")
     if config.guardrails.require_clean_git_for_self_edit and run_git_status(repo_root):
+        trace.finish(status="error", attributes={"error": "Git worktree must be clean before self-edit proposals."})
         raise RuntimeError("Git worktree must be clean before self-edit proposals.")
     proposal_id = f"{now_stamp()}-self-edit"
     proposal_root = self_edit_root(runtime_root) / proposal_id
@@ -352,6 +356,8 @@ def propose(
         "stderr_path": str(stderr_path),
         "last_message_path": str(last_message_path),
         "backend_profile": profile["name"] if profile else None,
+        "trace_id": trace.trace_id,
+        "trace_path": str(trace.path),
         "command": command,
         "mutable_targets": mutable_targets,
         "change_count": len(allowed_changes),
@@ -360,6 +366,7 @@ def propose(
     }
     _write_json(proposal_root / "proposal.json", proposal)
     write_text(proposal_root / "diff.txt", "\n\n".join(change["diff"] for change in allowed_changes + blocked_changes if change["diff"]))
+    trace.finish(status="ok", attributes={"status": status, "change_count": len(allowed_changes), "blocked_change_count": len(blocked_changes)})
     return proposal
 
 
@@ -376,18 +383,24 @@ def review_proposal(
     notes: str = "",
 ) -> dict[str, Any]:
     runtime_root = resolve_runtime_root(config_path)
+    trace = start_trace(runtime_root, kind="self_edit_review", name=proposal_id, attributes={"decision": decision})
     proposal = _load_json(_proposal_path(runtime_root, proposal_id))
     if not proposal:
+        trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
     normalized_decision = decision.strip().lower()
     if normalized_decision not in {"approve", "defer", "reject"}:
+        trace.finish(status="error", attributes={"error": "Decision must be approve, defer, or reject."})
         raise RuntimeError("Decision must be approve, defer, or reject.")
     lineage = [item.strip() for item in lineage_failures if item.strip()]
     if normalized_decision == "approve" and len(lineage) != 3:
+        trace.finish(status="error", attributes={"error": "Approved self-edit proposals require exactly 3 lineage failures."})
         raise RuntimeError("Approved self-edit proposals require exactly 3 lineage failures.")
     if normalized_decision == "approve" and proposal.get("blocked_changes"):
+        trace.finish(status="error", attributes={"error": "Cannot approve a proposal with blocked changes."})
         raise RuntimeError("Cannot approve a proposal with blocked changes.")
     if normalized_decision == "approve" and int(proposal.get("change_count", 0)) <= 0:
+        trace.finish(status="error", attributes={"error": "Cannot approve a proposal with no changes."})
         raise RuntimeError("Cannot approve a proposal with no changes.")
     review = {
         "proposal_id": proposal_id,
@@ -400,6 +413,8 @@ def review_proposal(
         "ghost_improvement_check": ghost_improvement_check.strip(),
         "rollback_condition": rollback_condition.strip(),
         "notes": notes.strip(),
+        "trace_id": trace.trace_id,
+        "trace_path": str(trace.path),
         "guardrail_status": {
             "schema_gate": "pass",
             "lineage_gate": "pass" if len(lineage) == 3 else "fail" if normalized_decision == "approve" else "warn",
@@ -412,6 +427,7 @@ def review_proposal(
     _write_json(_review_path(runtime_root, proposal_id), review)
     proposal["status"] = "reviewed" if normalized_decision == "approve" else normalized_decision
     _write_json(_proposal_path(runtime_root, proposal_id), proposal)
+    trace.finish(status="ok", attributes={"decision": normalized_decision, "change_count": proposal.get("change_count", 0)})
     return {"proposal": _proposal_summary(proposal, review), "review": review}
 
 
@@ -427,24 +443,32 @@ def apply_proposal(
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
+    trace = start_trace(runtime_root, kind="self_edit_apply", name=proposal_id)
     if config.guardrails.require_clean_git_for_self_edit and run_git_status(repo_root):
+        trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     proposal_path = _proposal_path(runtime_root, proposal_id)
     if not proposal_path.exists():
+        trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
     proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
     review = _load_json(_review_path(runtime_root, proposal_id))
     if not review:
+        trace.finish(status="error", attributes={"error": "Proposal must be reviewed before apply."})
         raise RuntimeError("Proposal must be reviewed before apply.")
     if review.get("decision") != "approve":
+        trace.finish(status="error", attributes={"error": "Only approved proposals can be applied."})
         raise RuntimeError("Only approved proposals can be applied.")
     if len(review.get("lineage_failures", [])) != 3:
         raise RuntimeError("Approved proposals must keep exactly 3 lineage failures.")
     if proposal.get("blocked_changes"):
+        trace.finish(status="error", attributes={"error": "Proposal contains out-of-scope edits and cannot be applied."})
         raise RuntimeError("Proposal contains out-of-scope edits and cannot be applied.")
     if int(proposal.get("change_count", 0)) <= 0:
+        trace.finish(status="error", attributes={"error": "Proposal has no changes to apply."})
         raise RuntimeError("Proposal has no changes to apply.")
     if run_git_status(repo_root):
+        trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
@@ -495,7 +519,10 @@ def apply_proposal(
     proposal["git_branch"] = _current_branch(repo_root)
     proposal["git_commit_sha"] = commit_sha
     proposal["git_pushed"] = pushed
+    proposal["apply_trace_id"] = trace.trace_id
+    proposal["apply_trace_path"] = str(trace.path)
     _write_json(proposal_path, proposal)
+    trace.finish(status="ok", attributes={"git_mode": git_mode, "applied_file_count": len(applied), "pushed": pushed})
     return {
         "proposal_id": proposal_id,
         "applied_files": applied,
@@ -506,6 +533,8 @@ def apply_proposal(
         "commit_message": commit_message,
         "commit_sha": commit_sha,
         "pushed": pushed,
+        "trace_id": trace.trace_id,
+        "trace_path": str(trace.path),
     }
 
 

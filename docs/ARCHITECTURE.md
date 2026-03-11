@@ -10,11 +10,14 @@ Spark Researcher is intentionally small.
 4. Run one declared command.
 5. Parse one fixed metric.
 6. Append one immutable ledger row.
-7. Export memory docs and rebuild the Obsidian vault when needed.
+7. Emit lightweight trace artifacts for the run and related decisions.
+8. Export memory docs and rebuild the Obsidian vault when needed.
 
 ## Layers
 
 - `runner.py`: command execution, mutations, verdicts, ledger writes
+- `tracing.py`: JSONL trace recorder for run, advisory, frontier, and self-edit flows
+- `verifier.py`: bounded draft-critique-revise loop for advisory execution
 - `trainers.py`: generic example-count watchers with bounded recompiles
 - `memory.py`: Markdown memory export and lexical search
 - `obsidian.py`: watchtower generation

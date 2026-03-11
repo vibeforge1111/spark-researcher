@@ -12,6 +12,7 @@ from typing import Any
 from .chips import invoke_chip_hook
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
+from .tracing import start_trace
 
 
 @dataclass
@@ -124,7 +125,7 @@ def run_chip_evaluate(
     trial: CandidateTrial | None,
     *,
     dry_run: bool = False,
-) -> tuple[CommandResult, dict[str, Any], list[dict[str, str]]]:
+) -> tuple[CommandResult, dict[str, Any], list[dict[str, str]], dict[str, Any]]:
     ensure_parent(log_path)
     mutations = dict(trial.mutations if trial else {})
     applied_mutations = _virtual_mutations(mutations)
@@ -163,7 +164,9 @@ def run_chip_evaluate(
     )
     metrics = response.get("metrics", {})
     metrics = metrics if isinstance(metrics, dict) else {}
-    return command_result, {str(key): value for key, value in metrics.items()}, applied_mutations
+    chip_result = response.get("result", {})
+    chip_result = chip_result if isinstance(chip_result, dict) else {}
+    return command_result, {str(key): value for key, value in metrics.items()}, applied_mutations, chip_result
 
 
 def best_metric(runtime_root: Path, command_name: str, goal: str) -> float | None:
@@ -205,8 +208,9 @@ def build_record(
     verdict: str,
     trial: CandidateTrial | None,
     applied_mutations: list[dict[str, str]],
+    chip_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    record = {
         "run_id": run_dir.name,
         "created_at": now_iso(),
         "project_name": config.project_name,
@@ -230,6 +234,9 @@ def build_record(
         "stdout_excerpt": command_result.stdout[:500],
         "stderr_excerpt": command_result.stderr[:500],
     }
+    if chip_result:
+        record["chip_result"] = chip_result
+    return record
 
 
 def run_once(
@@ -244,53 +251,79 @@ def run_once(
     runtime_root = resolve_runtime_root(config_path)
     project_root = resolve_project_root(config_path, config)
     command_spec = config.commands[command_name]
+    trace = start_trace(
+        runtime_root,
+        kind="run",
+        name=command_name,
+        attributes={
+            "project_name": config.project_name,
+            "candidate_id": trial.candidate_id if trial else "baseline",
+            "dry_run": dry_run,
+        },
+    )
     run_id = make_run_id(command_spec.kind)
     run_dir = runs_root(runtime_root) / run_id
     workspace_root = run_dir / "workspace"
-    copy_project_tree(project_root, workspace_root)
-    log_path = run_dir / command_spec.log_name
-    if command_spec.kind == "chip-evaluate":
-        if overrides:
-            raise RuntimeError("Direct overrides are not supported for chip-evaluate commands.")
-        command_result, hook_metrics, applied_mutations = run_chip_evaluate(
-            config_path,
-            command_name,
+    try:
+        with trace.span("copy_project_tree", attributes={"project_root": str(project_root), "workspace_root": str(workspace_root)}):
+            copy_project_tree(project_root, workspace_root)
+        log_path = run_dir / command_spec.log_name
+        if command_spec.kind == "chip-evaluate":
+            if overrides:
+                raise RuntimeError("Direct overrides are not supported for chip-evaluate commands.")
+            with trace.span("chip_evaluate", attributes={"command_kind": command_spec.kind}):
+                command_result, hook_metrics, applied_mutations, chip_result = run_chip_evaluate(
+                    config_path,
+                    command_name,
+                    config,
+                    command_spec,
+                    workspace_root,
+                    log_path,
+                    trial,
+                    dry_run=dry_run,
+                )
+            with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
+                metrics = parse_metrics(log_path, config.metrics)
+                metrics.update(hook_metrics)
+        else:
+            mutations = dict(trial.mutations if trial else {})
+            mutations.update(overrides or {})
+            with trace.span("apply_mutations", attributes={"mutation_count": len(mutations)}):
+                applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
+            cwd = (workspace_root / command_spec.cwd).resolve()
+            with trace.span("run_process", attributes={"cwd": str(cwd), "command": command_spec.args, "dry_run": dry_run}):
+                command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
+            with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
+                metrics = parse_metrics(log_path, config.metrics)
+            chip_result = None
+        baseline_value = best_metric(runtime_root, command_name, config.eval_goal)
+        metric_value = metrics.get(config.eval_metric)
+        numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
+        verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
+        record = build_record(
             config,
-            command_spec,
-            workspace_root,
+            command_name,
+            command_result,
+            run_dir,
             log_path,
+            metrics,
+            baseline_value,
+            verdict,
             trial,
-            dry_run=dry_run,
+            applied_mutations,
+            chip_result=chip_result,
         )
-        metrics = parse_metrics(log_path, config.metrics)
-        metrics.update(hook_metrics)
-    else:
-        mutations = dict(trial.mutations if trial else {})
-        mutations.update(overrides or {})
-        applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
-        cwd = (workspace_root / command_spec.cwd).resolve()
-        command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
-        metrics = parse_metrics(log_path, config.metrics)
-    baseline_value = best_metric(runtime_root, command_name, config.eval_goal)
-    metric_value = metrics.get(config.eval_metric)
-    numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
-    verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
-    record = build_record(
-        config,
-        command_name,
-        command_result,
-        run_dir,
-        log_path,
-        metrics,
-        baseline_value,
-        verdict,
-        trial,
-        applied_mutations,
-    )
-    ensure_parent(run_dir / "result.json")
-    (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    append_jsonl(ledger_path(runtime_root), record)
-    return record
+        record["trace_id"] = trace.trace_id
+        record["trace_path"] = str(trace.path)
+        with trace.span("persist_record", attributes={"verdict": verdict, "metric_value": numeric_metric}):
+            ensure_parent(run_dir / "result.json")
+            (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            append_jsonl(ledger_path(runtime_root), record)
+        trace.finish(status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
+        return record
+    except Exception as exc:
+        trace.finish(status="error", attributes={"error": str(exc)})
+        raise
 
 
 def parse_overrides(items: list[str] | None) -> dict[str, str]:

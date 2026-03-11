@@ -13,6 +13,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - runs arbitrary project commands from one small JSON config
 - evaluates candidates against a fixed metric and writes an immutable JSONL ledger
 - exports searchable Markdown memory documents instead of building a heavy memory stack
+- records lightweight JSONL traces for runs, advisory builds, frontier suggestions, and self-edit actions
 - keeps local Markdown memory as the default backend and supports optional RuVector retrieval
 - watches trainer example files and triggers bounded recompiles like a lightweight DSPy loop
 - generates an Obsidian vault as the operator watchtower
@@ -20,6 +21,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - proposes self-edits in a temporary workspace and requires explicit human apply
 - scaffolds coding, research, and content projects with one init command
 - builds compact belief packets from improved runs and approved self-edits
+- promotes durable run beliefs more selectively instead of turning every improved run into long-lived memory
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
@@ -86,9 +88,11 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 
 - `src/spark_researcher/`: the whole runtime
 - `docs/`: short operator docs
+- `docs/book-of-ai-intelligence/`: nontechnical book-length playbook for building a smarter agent
 - `examples/toy-project/`: runnable demo target
 - external domain chips: optional sibling or separate repos loaded through a small manifest bridge
 - `artifacts/`: generated ledger, memory, trainer state, and self-edit packets
+- `artifacts/traces/`: JSONL trace files for the main runtime decisions
 - `obsidian-vault/`: generated watchtower view
 - `.autoresearch/capsules/`: collective-ready insight packets
 
@@ -108,6 +112,7 @@ spark-researcher packets search "learning rate"
 spark-researcher advisory adapters
 spark-researcher advisory build --task "draft a startup doctrine update" --model claude
 spark-researcher advisory execute --task "draft a startup doctrine update" --model claude --dry-run --command "my-wrapper {system_prompt_path} {user_prompt_path} {response_path}"
+spark-researcher advisory execute --task "draft a startup doctrine update" --model claude
 spark-researcher advisory log --task "draft a startup doctrine update" --model claude --status ok --packet-id startup_factor-theme-distribution-velocity-retention
 spark-researcher advisory review
 spark-researcher optimizer status

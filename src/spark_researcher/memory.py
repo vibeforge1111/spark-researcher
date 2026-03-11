@@ -121,6 +121,7 @@ def build_run_doc(record: dict[str, Any]) -> str:
             f"- verdict: `{record.get('verdict')}`",
             f"- metric: `{record.get('metric_name')}` = `{record.get('metric_value')}`",
             f"- baseline: `{record.get('baseline_value')}`",
+            f"- trace_id: `{record.get('trace_id')}`",
             "",
             "## Hypothesis",
             "",
@@ -138,6 +139,7 @@ def build_run_doc(record: dict[str, Any]) -> str:
             "",
             f"- log: `{record.get('log_path')}`",
             f"- run_dir: `{record.get('run_dir')}`",
+            f"- trace: `{record.get('trace_path')}`",
         ]
     )
 
@@ -171,6 +173,7 @@ def build_self_edit_doc(proposal: dict[str, Any], review: dict[str, Any] | None)
         f"- status: `{proposal.get('status')}`",
         f"- change_count: `{proposal.get('change_count')}`",
         f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
+        f"- trace_id: `{proposal.get('trace_id')}`",
         "",
         "## Prompt",
         "",
@@ -186,6 +189,7 @@ def build_self_edit_doc(proposal: dict[str, Any], review: dict[str, Any] | None)
                 f"- root_lesson: {review.get('root_lesson') or 'n/a'}",
                 f"- counterfactual: {review.get('counterfactual') or 'n/a'}",
                 f"- rollback_condition: {review.get('rollback_condition') or 'n/a'}",
+                f"- trace_id: `{review.get('trace_id')}`",
                 "",
                 "## Lineage Failures",
                 "",

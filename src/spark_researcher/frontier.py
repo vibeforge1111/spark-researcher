@@ -14,6 +14,7 @@ from .chips import load_chip_context
 from .config import load_config
 from .intent import build_intent_brief
 from .paths import resolve_runtime_root
+from .tracing import start_trace
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -80,15 +81,19 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     return notes
 def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[str, Any]], limit: int = 3) -> dict[str, Any]:
     config = load_config(config_path)
+    runtime_root = resolve_runtime_root(config_path)
+    trace = start_trace(runtime_root, kind="frontier_suggest", name=command_name, attributes={"limit": limit})
     context = load_chip_context(config_path, config)
     spec = context.manifest.get("frontier", {}) if context is not None else {}
     if not isinstance(spec, dict) or not spec.get("enabled", False):
+        trace.finish(status="ok", attributes={"suggestion_count": 0, "reason": "frontier_disabled"})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No frontier sidecar is enabled for this chip."]}
     allowed = {str(name): [str(item) for item in values] for name, values in spec.get("allowed_mutations", {}).items() if isinstance(values, list)}
     open_fields = {str(item) for item in spec.get("open_mutation_fields", []) if isinstance(item, str)}
     field_patterns = {str(name): str(pattern) for name, pattern in spec.get("field_patterns", {}).items() if isinstance(pattern, str)}
     prompt_hints = [str(item) for item in spec.get("prompt_hints", []) if isinstance(item, str)]
     if not allowed:
+        trace.finish(status="ok", attributes={"suggestion_count": 0, "reason": "missing_allowed_mutations"})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No allowed mutation grammar is defined for this chip frontier."]}
     existing = {_signature(trial.mutations) for trial in config.candidate_trials}
     tested = {
@@ -103,8 +108,10 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
         for row in best_rows
     ]
     query = f"{context.manifest.get('domain', 'generic')} " + " ".join(str(value) for row in winner_text[:1] for value in row["mutations"].values())
-    web_notes = _web_notes(query) if spec.get("web_search", False) and query.strip() else []
-    intent = build_intent_brief(config_path, domain=str(context.manifest.get("domain", "generic")), query=query)
+    with trace.span("web_notes", attributes={"web_search": bool(spec.get("web_search", False)), "query": query}):
+        web_notes = _web_notes(query) if spec.get("web_search", False) and query.strip() else []
+    with trace.span("intent_brief", attributes={"domain": str(context.manifest.get("domain", "generic"))}):
+        intent = build_intent_brief(config_path, domain=str(context.manifest.get("domain", "generic")), query=query)
     frontier_mode = str(intent.get("frontier_mode") or "relaxed")
     effective_open_fields = set() if frontier_mode == "bounded" else open_fields
     task = "\n".join(
@@ -136,8 +143,9 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     )
     advisory = build_advisory(config_path, task, model=str(spec.get("model", "generic")), limit=3, domain=str(context.manifest.get("domain", "generic")))
     try:
-        response = execute_advisory(resolve_runtime_root(config_path), advisory=advisory, model=str(spec.get("model", "generic")), dry_run=False)
+        response = execute_advisory(runtime_root, advisory=advisory, model=str(spec.get("model", "generic")), dry_run=False)
     except Exception as exc:
+        trace.finish(status="error", attributes={"error": str(exc)})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": [f"Frontier execution unavailable: {exc}"]}
     payload = response.get("response", {})
     if isinstance(payload, dict) and "proposals" in payload:
@@ -188,11 +196,15 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
             reasons.append("; ".join(str(entry) for entry in why_now[:2]))
         if len(suggestions) >= limit:
             break
-    return {
+    packet = {
         "source": "frontier",
         "chip_name": context.manifest.get("chip_name"),
         "suggestion_count": len(suggestions),
         "suggestions": suggestions,
         "reasons": reasons[: len(suggestions)] or (["Frontier sidecar recovered valid bounded candidates from the model response."] if suggestions else ["Frontier sidecar did not produce any valid new candidates."]),
         "web_notes": web_notes,
+        "trace_id": trace.trace_id,
+        "trace_path": str(trace.path),
     }
+    trace.finish(status="ok", attributes={"suggestion_count": len(suggestions), "web_note_count": len(web_notes)})
+    return packet

@@ -61,6 +61,10 @@ def advisory_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "advisory"
 
 
+def traces_root(runtime_root: Path) -> Path:
+    return artifacts_root(runtime_root) / "traces"
+
+
 def optimizer_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "optimizer"
 

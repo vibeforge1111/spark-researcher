@@ -23,7 +23,9 @@ from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
 from .self_edit import apply_proposal, backend_profiles, proposal_status, propose, review_proposal
+from .tracing import trace_status
 from .trainers import run_all_trainers, trainer_status
+from .verifier import execute_with_verifier
 
 
 def print_json(payload: object) -> None:
@@ -105,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     advisory_execute_parser.add_argument("--domain")
     advisory_execute_parser.add_argument("--command", action="append")
     advisory_execute_parser.add_argument("--dry-run", action="store_true")
+    advisory_execute_parser.add_argument("--no-verify", action="store_true")
     advisory_log_parser = advisory_sub.add_parser("log")
     add_config_argument(advisory_log_parser)
     advisory_log_parser.add_argument("--task", required=True)
@@ -261,8 +264,9 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
         return
     if args.advisory_command == "execute":
         advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
+        executor = execute_advisory if args.no_verify else execute_with_verifier
         print_json(
-            execute_advisory(
+            executor(
                 runtime_root,
                 advisory=advisory,
                 model=args.model,
@@ -571,7 +575,12 @@ def main() -> None:
         _handle_self_edit(args, config_path=config_path)
         return
     if args.action == "summary":
-        print_json(ledger_summary(runtime_root, goal=load_config(config_path).eval_goal))
+        print_json(
+            {
+                "ledger": ledger_summary(runtime_root, goal=load_config(config_path).eval_goal),
+                "traces": trace_status(runtime_root),
+            }
+        )
         return
 
 

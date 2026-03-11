@@ -16,6 +16,19 @@ class AdapterSpec:
 
 def _brief(advisory: dict[str, Any], max_chars: int) -> str:
     lines = ["Advisory Brief", ""]
+    epistemic = advisory.get("epistemic_status", {})
+    if isinstance(epistemic, dict):
+        status = str(epistemic.get("status") or "").strip()
+        if status:
+            lines.append(f"Evidence Status: {status}")
+        for item in epistemic.get("missing_evidence", [])[:2]:
+            lines.append(f"- Missing: {item}")
+        next_questions = epistemic.get("clarifying_questions", [])
+        if next_questions:
+            lines.extend(["", "Questions Before Strong Claims"])
+            for item in next_questions[:2]:
+                lines.append(f"- {item}")
+        lines.append("")
     intent = advisory.get("intent", {})
     if isinstance(intent, dict) and intent.get("active"):
         goal = str(intent.get("goal") or "").strip()

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..paths import advisory_root
+from ..tracing import start_trace
 
 
 ENV_KEYS = {
@@ -66,8 +67,16 @@ def execute_advisory(
     command_override: list[str] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
+    trace = start_trace(
+        runtime_root,
+        kind="advisory_execute",
+        name=model,
+        parent_trace_id=str(advisory.get("trace_id") or "") or None,
+        attributes={"model": model, "dry_run": dry_run},
+    )
     command = _resolve_command(model, command_override)
     if not command:
+        trace.finish(status="error", attributes={"error": f"No execution command configured for model `{model}`."})
         raise RuntimeError(f"No execution command configured for model `{model}`.")
     root = advisory_root(runtime_root) / "requests"
     root.mkdir(parents=True, exist_ok=True)
@@ -91,6 +100,7 @@ def execute_advisory(
         for part in command
     ]
     if dry_run:
+        trace.finish(status="ok", attributes={"mode": "dry_run", "command": expanded})
         return {
             "model": model,
             "dry_run": True,
@@ -99,8 +109,11 @@ def execute_advisory(
             "system_prompt_path": str(system_prompt_path),
             "user_prompt_path": str(user_prompt_path),
             "response_path": str(response_path),
+            "trace_id": trace.trace_id,
+            "trace_path": str(trace.path),
         }
-    result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    with trace.span("subprocess", attributes={"command": expanded}):
+        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]
@@ -111,6 +124,7 @@ def execute_advisory(
             response_payload = {"raw_response": response_path.read_text(encoding="utf-8", errors="replace")}
     else:
         response_payload = {"raw_response": result.stdout.strip()}
+    trace.finish(status="ok" if result.returncode == 0 else "error", attributes={"returncode": result.returncode, "response_path": str(response_path)})
     return {
         "model": model,
         "returncode": result.returncode,
@@ -122,4 +136,6 @@ def execute_advisory(
         "stdout_path": str(stdout_path),
         "stderr_path": str(stderr_path),
         "response": response_payload,
+        "trace_id": trace.trace_id,
+        "trace_path": str(trace.path),
     }

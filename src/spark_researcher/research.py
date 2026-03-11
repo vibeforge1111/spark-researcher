@@ -43,6 +43,23 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     return results
 
 
+def _citation_rows(results: list[dict[str, str]]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for index, item in enumerate(results, start=1):
+        title = str(item.get("title") or "").strip()
+        snippet = str(item.get("snippet") or "").strip()
+        if not title:
+            continue
+        rows.append(
+            {
+                "note_id": f"note-{index}",
+                "title": title,
+                "snippet": snippet,
+            }
+        )
+    return rows
+
+
 def _write_research_artifact(runtime_root: Path, payload: dict[str, Any]) -> Path:
     root = advisory_root(runtime_root) / "research"
     root.mkdir(parents=True, exist_ok=True)
@@ -62,13 +79,15 @@ def _research_task(original_task: str, research: dict[str, Any]) -> str:
         "",
         f"Research Query: {research.get('query', '')}",
         f"Collected At: {research.get('collected_at', '')}",
+        "When you rely on a research note, mention its note id in parentheses, for example `(note-1)`.",
         "Research Notes",
     ]
-    for item in research.get("results", [])[:5]:
+    for item in research.get("citations", [])[:5]:
+        note_id = str(item.get("note_id") or "").strip()
         title = str(item.get("title") or "").strip()
         snippet = str(item.get("snippet") or "").strip()
         if title:
-            lines.append(f"- {title}")
+            lines.append(f"- {note_id}: {title}")
         if snippet:
             lines.append(f"  Note: {snippet}")
     return "\n".join(lines)
@@ -146,6 +165,7 @@ def execute_with_research(
         "collected_at": _now_iso(),
         "result_count": len(results),
         "results": results,
+        "citations": _citation_rows(results),
         "targets": list(initial.get("research_targets", [])),
     }
     artifact_path = _write_research_artifact(runtime_root, research)
@@ -171,6 +191,15 @@ def execute_with_research(
     if isinstance(followup, dict):
         followup["initial_research_packet"] = initial
         followup["research_context"] = research
+        followup["citations"] = [
+            {
+                "note_id": str(item.get("note_id") or ""),
+                "title": str(item.get("title") or ""),
+                "collected_at": research.get("collected_at"),
+                "artifact_path": research.get("artifact_path"),
+            }
+            for item in research.get("citations", [])[:3]
+        ]
         followup["research_trace_id"] = trace.trace_id
         followup["research_trace_path"] = str(trace.path)
     trace.finish(

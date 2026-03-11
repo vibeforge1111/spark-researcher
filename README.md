@@ -28,6 +28,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - can use those same surprising failures inside the verifier so advisory critique checks active failure surfaces before approving an answer
 - can escalate some verifier misses into explicit `research_needed` packets when the task is time-sensitive and the mission allows fresh web research
 - can run one bounded research retry from those `research_needed` packets, save dated web notes, and feed them back through the same verifier loop once
+- can surface compact citations from that bounded research artifact so follow-up answers remain auditable
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime

@@ -79,6 +79,8 @@ That research retry is deliberately bounded:
 
 If the follow-up still lacks support, Spark stops and returns the remaining uncertainty instead of looping.
 
+When that retry succeeds, Spark now returns a small `citations` list derived from the bounded research artifact so the operator can see which dated notes were in play.
+
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 
 ## Adapter Policy

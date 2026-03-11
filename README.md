@@ -204,3 +204,5 @@ Use `spark-researcher advisory providers` to check whether a provider command is
 ## Checkloop
 
 Use `docs/CHECKLOOP.md` as the standard local proving-ground flow for validating the current core repo on this machine before trusting a new change.
+
+Use `docs/RELIABILITY_TEST_PLAN.md` when you want the more detailed subsystem-by-subsystem reliability audit for advisory, verifier, research, memory, and watchtower behavior.

@@ -1,0 +1,15 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "spark-testing-chip",
+  "domain": "testing",
+  "version": "0.1.0",
+  "description": "Deterministic reliability test chip for spark-researcher core behavior.",
+  "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
+  "commands": {
+    "evaluate": ["python", "cli.py", "evaluate"],
+    "suggest": ["python", "cli.py", "suggest"],
+    "packets": ["python", "cli.py", "packets"],
+    "watchtower": ["python", "cli.py", "watchtower"]
+  }
+}

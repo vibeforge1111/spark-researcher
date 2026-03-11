@@ -437,7 +437,18 @@ def execute_with_verifier(
     implicated_surface = str(critique.get("implicated_failure_surface") or "").strip()
     used_note_ids = [str(item) for item in critique.get("used_note_ids", []) if str(item).strip()]
     relevant_note_ids = [str(item) for item in critique.get("relevant_note_ids", []) if str(item).strip()]
-    trace.event("selected_candidate", attributes={"selected": selected})
+    issues = [str(item) for item in critique.get("issues", []) if str(item).strip()]
+    trace.event(
+        "selected_candidate",
+        attributes={
+            "selected": selected,
+            "decision": decision,
+            "issue_count": len(issues),
+            "top_issue": issues[0] if issues else "",
+            "best_next_question": str(critique.get("best_next_question") or "").strip(),
+            "implicated_failure_surface": implicated_surface,
+        },
+    )
     if implicated_surface:
         trace.event("implicated_failure_surface", attributes={"surface": implicated_surface})
     if _expected_note_ids(advisory):

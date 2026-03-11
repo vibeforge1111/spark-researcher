@@ -246,6 +246,7 @@ def render_research_signals(packet: dict) -> str:
         f"- research_escalations: `{packet.get('research_escalation_count', 0)}`",
         f"- citation_checks: `{packet.get('citation_check_count', 0)}`",
         f"- citation_mismatches: `{packet.get('citation_mismatch_count', 0)}`",
+        f"- verifier_selections: `{packet.get('verifier_selection_count', 0)}`",
         "",
     ]
     recent = packet.get("recent", [])
@@ -260,6 +261,11 @@ def render_research_signals(packet: dict) -> str:
                 f"- created_at: `{item.get('created_at', 'n/a')}`",
                 f"- trace_id: `{item.get('trace_id', 'n/a')}`",
                 f"- research_query: `{item.get('research_query', 'n/a')}`" if item.get("research_query") else "",
+                f"- selected: `{item.get('selected', 'n/a')}`" if item.get("selected") else "",
+                f"- decision: `{item.get('decision', 'n/a')}`" if item.get("decision") else "",
+                f"- issue_count: `{item.get('issue_count', 'n/a')}`" if "issue_count" in item else "",
+                f"- top_issue: {item.get('top_issue')}" if item.get("top_issue") else "",
+                f"- best_next_question: {item.get('best_next_question')}" if item.get("best_next_question") else "",
                 f"- implicated_failure_surface: `{item.get('implicated_failure_surface', 'n/a')}`" if item.get("implicated_failure_surface") else "",
                 f"- used_note_ids: `{', '.join(item.get('used_note_ids', [])) or 'none'}`" if "used_note_ids" in item else "",
                 f"- relevant_note_ids: `{', '.join(item.get('relevant_note_ids', [])) or 'none'}`" if "relevant_note_ids" in item else "",

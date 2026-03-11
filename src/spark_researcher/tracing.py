@@ -162,7 +162,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     root = traces_root(runtime_root)
     index_path = _index_path(runtime_root)
     if not index_path.exists():
-        return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "recent": []}}
+        return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "verifier_selection_count": 0, "recent": []}}
     rows = [
         json.loads(line)
         for line in index_path.read_text(encoding="utf-8").splitlines()
@@ -172,6 +172,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     research_escalation_count = 0
     citation_check_count = 0
     citation_mismatch_count = 0
+    verifier_selection_count = 0
     recent_signals: list[dict[str, Any]] = []
     for row in rows:
         trace_kind = str(row.get("trace_kind") or "")
@@ -246,6 +247,21 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
                         "sources": sources,
                     }
                 )
+            if event_name == "selected_candidate":
+                verifier_selection_count += 1
+                recent_signals.append(
+                    {
+                        "created_at": event.get("created_at"),
+                        "trace_id": event.get("trace_id"),
+                        "signal": "verifier_selection",
+                        "selected": str(attributes.get("selected") or "").strip(),
+                        "decision": str(attributes.get("decision") or "").strip(),
+                        "issue_count": attributes.get("issue_count"),
+                        "top_issue": str(attributes.get("top_issue") or "").strip(),
+                        "best_next_question": str(attributes.get("best_next_question") or "").strip(),
+                        "implicated_failure_surface": str(attributes.get("implicated_failure_surface") or "").strip(),
+                    }
+                )
     return {
         "trace_count": len(rows),
         "traces_root": str(root),
@@ -255,6 +271,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
             "research_escalation_count": research_escalation_count,
             "citation_check_count": citation_check_count,
             "citation_mismatch_count": citation_mismatch_count,
+            "verifier_selection_count": verifier_selection_count,
             "recent": list(reversed(recent_signals[-10:])),
         },
     }

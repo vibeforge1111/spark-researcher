@@ -63,12 +63,21 @@ spark-researcher optimizer export-advisory-dataset
 1. draft an answer
 2. critique that draft against the current packets, boundaries, evidence status, and top surprise-priority failure surfaces
 3. either approve, revise once, return `needs_verification`, or escalate to `research_needed` when the task is time-sensitive and the mission allows fresh web research
+4. if `research_needed` is returned, Spark now runs one bounded web-notes pass, saves the dated notes as an artifact, and feeds those notes back through the same verifier loop once
 
 If the advisory is already marked `under_supported`, Spark returns `needs_verification` before making a model call.
 
 When the verifier spots one of the active failure surfaces in a draft, it now names that implicated surface in the critique and trace so the operator can see which failure class the answer was trying to avoid.
 
 If the verifier concludes that the missing support is likely fresh or time-sensitive and the current intent includes the `web` resource, Spark now returns a `research_needed` packet with a suggested query and research targets instead of a generic `needs_verification` stop.
+
+That research retry is deliberately bounded:
+
+- one query
+- one lightweight web-notes pass
+- one follow-up verifier run
+
+If the follow-up still lacks support, Spark stops and returns the remaining uncertainty instead of looping.
 
 Use `--no-verify` to bypass this loop when you explicitly want the raw single-pass model output.
 

@@ -22,11 +22,11 @@ from .outcomes import log_advisory_outcome, review_advisory_outcomes
 from .packets import packet_status, search_packets
 from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
+from .research import execute_with_research
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
 from .self_edit import apply_proposal, backend_profiles, proposal_status, propose, review_proposal
 from .tracing import trace_status
 from .trainers import run_all_trainers, trainer_status
-from .verifier import execute_with_verifier
 
 
 def print_json(payload: object) -> None:
@@ -269,7 +269,7 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
         return
     if args.advisory_command == "execute":
         advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
-        executor = execute_advisory if args.no_verify else execute_with_verifier
+        executor = execute_advisory if args.no_verify else execute_with_research
         print_json(
             executor(
                 runtime_root,

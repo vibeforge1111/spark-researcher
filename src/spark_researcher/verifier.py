@@ -147,6 +147,9 @@ def _revision_task(draft_text: str, critique: dict[str, Any]) -> str:
 
 
 def _task_needs_fresh_research(advisory: dict[str, Any], critique: dict[str, Any]) -> bool:
+    research_context = advisory.get("research_context", {})
+    if isinstance(research_context, dict) and bool(research_context.get("attempted")):
+        return False
     task = str(advisory.get("task") or "").lower()
     task_type = str(advisory.get("task_type") or "").lower()
     intent = advisory.get("intent", {})

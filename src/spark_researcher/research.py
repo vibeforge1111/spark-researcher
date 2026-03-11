@@ -215,6 +215,22 @@ def execute_with_research(
         "citations": _citation_rows(results),
         "targets": list(initial.get("research_targets", [])),
     }
+    trace.event(
+        "research_sources",
+        attributes={
+            "research_query": query,
+            "result_count": len(results),
+            "sources": [
+                {
+                    "note_id": str(item.get("note_id") or ""),
+                    "title": str(item.get("title") or ""),
+                    "domain": str(item.get("domain") or ""),
+                    "url": str(item.get("url") or ""),
+                }
+                for item in research.get("citations", [])[:3]
+            ],
+        },
+    )
     artifact_path = _write_research_artifact(runtime_root, research)
     research["artifact_path"] = str(artifact_path)
     if not results:

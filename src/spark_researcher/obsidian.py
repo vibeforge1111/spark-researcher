@@ -257,6 +257,23 @@ def render_research_signals(packet: dict) -> str:
                 "",
             ]
         )
+        sources = item.get("sources", [])
+        if isinstance(sources, list) and sources:
+            lines.extend(["### Sources", ""])
+            for source in sources:
+                if not isinstance(source, dict):
+                    continue
+                note_id = str(source.get("note_id") or "note").strip()
+                title = str(source.get("title") or "untitled").strip()
+                domain = str(source.get("domain") or "").strip()
+                url = str(source.get("url") or "").strip()
+                source_line = f"- `{note_id}`: {title}"
+                if domain:
+                    source_line += f" [{domain}]"
+                lines.append(source_line)
+                if url:
+                    lines.append(f"  - url: `{url}`")
+            lines.append("")
     return "\n".join(line for line in lines if line != "")
 
 

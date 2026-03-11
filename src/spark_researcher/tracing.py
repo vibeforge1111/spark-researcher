@@ -223,6 +223,29 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
                         "mismatch": mismatch,
                     }
                 )
+            if event_name == "research_sources":
+                sources = []
+                for item in attributes.get("sources", [])[:3]:
+                    if not isinstance(item, dict):
+                        continue
+                    sources.append(
+                        {
+                            "note_id": str(item.get("note_id") or "").strip(),
+                            "title": str(item.get("title") or "").strip(),
+                            "domain": str(item.get("domain") or "").strip(),
+                            "url": str(item.get("url") or "").strip(),
+                        }
+                    )
+                recent_signals.append(
+                    {
+                        "created_at": event.get("created_at"),
+                        "trace_id": event.get("trace_id"),
+                        "signal": "research_sources",
+                        "research_query": attributes.get("research_query"),
+                        "result_count": attributes.get("result_count"),
+                        "sources": sources,
+                    }
+                )
     return {
         "trace_count": len(rows),
         "traces_root": str(root),

@@ -1,0 +1,313 @@
+# Chip Benchmark Bridge Guide
+
+Use this guide when a chip has, or will have, a domain benchmark and needs to connect that benchmark cleanly to doctrine promotion, memory, and outer real-world validation.
+
+This is a generic pattern.
+
+The startup chip is the first concrete example, but the same structure should transfer to:
+
+- trading
+- content
+- coding
+- recruiting
+- sales
+- any future chip with a real benchmark lane
+
+## Purpose
+
+Many chips will eventually have two different systems:
+
+1. a benchmark engine
+2. a chip intelligence system
+
+The benchmark engine is good at:
+
+- fixed evaluation
+- repeatable scoring
+- hidden or fresh tests
+- calibration and review operations
+
+The chip intelligence system is good at:
+
+- research packets
+- doctrine promotion
+- memory and watchtower state
+- outer real-world validation
+
+These two systems should not be fused into one giant framework.
+
+They should be connected by a small benchmark bridge.
+
+## Core Rule
+
+Keep the benchmark benchmark-shaped.
+Keep the chip chip-shaped.
+Add a bridge between them.
+
+Do not rewrite a benchmark around doctrine promotion.
+Do not let chip memory pretend to be the benchmark.
+
+## The Three-Layer Model
+
+### Layer 1. Benchmark Evaluation
+
+Owned by the benchmark repo or benchmark subsystem.
+
+Purpose:
+
+- run fixed tasks
+- score outputs
+- compare systems or doctrines
+- generate benchmark artifacts
+
+Truth question:
+
+- did this hold up inside the benchmark?
+
+### Layer 2. Benchmark Bridge
+
+Owned as a shared interface.
+
+Purpose:
+
+- translate benchmark results into chip-usable promotion eligibility
+
+Truth question:
+
+- did this benchmark result earn the right to influence chip doctrine or outer validation?
+
+### Layer 3. Chip Promotion And Outer Validation
+
+Owned by the chip.
+
+Purpose:
+
+- store doctrine and boundaries
+- run outer real-world validation
+- update memory and watchtower
+
+Truth question:
+
+- is this useful outside the benchmark?
+
+## What The Bridge Should Produce
+
+The bridge should produce a small artifact.
+
+Recommended conceptual name:
+
+- `promotion_packet`
+
+This is not the full benchmark report.
+It is a chip-facing eligibility artifact.
+
+## Recommended Generic Fields
+
+Start with fields like:
+
+- `bridge_version`
+- `generated_at`
+- `source_benchmark`
+- `benchmark_profile`
+- `suite_or_task_id`
+- `runner_type`
+- `runner_id`
+- `comparison_class`
+- `metric_name`
+- `metric_value`
+- `score_summary`
+- `candidate_or_doctrine_id`
+- `evidence_lane`
+- `promotion_candidate_kind`
+- `primary_mechanism`
+- `primary_boundary`
+- `eligibility_status`
+- `eligibility_reasons`
+- `blockers`
+- `recommended_next_step`
+- `trace_paths`
+- `report_paths`
+
+## Generic Semantics
+
+### `promotion_candidate_kind`
+
+Recommended starting values:
+
+- `benchmark_grounded_candidate`
+- `benchmark_grounded_boundary`
+- `benchmark_blocked`
+
+### `eligibility_status`
+
+Recommended starting values:
+
+- `not_eligible`
+- `eligible_for_chip_promotion`
+- `eligible_for_realworld_validation`
+
+### `recommended_next_step`
+
+Recommended starting values:
+
+- `store_as_benchmark_evidence`
+- `promote_as_doctrine_candidate`
+- `promote_as_boundary_candidate`
+- `queue_for_realworld_validation`
+- `hold_for_more_benchmark_evidence`
+- `reject_for_now`
+
+## Eligibility Ladder
+
+### Stage 1. Benchmark Evidence
+
+Use when:
+
+- the benchmark signal is real
+- but not strong enough yet for doctrine or outer validation
+
+Bridge result:
+
+- store as benchmark evidence
+
+### Stage 2. Doctrine Candidate
+
+Use when:
+
+- benchmark performance is clearly strong in-lane
+- mechanism is reusable
+- no strong contradiction blocks promotion
+
+Bridge result:
+
+- eligible for chip promotion as doctrine
+
+### Stage 3. Boundary Candidate
+
+Use when:
+
+- the benchmark mainly exposes a failure surface, transfer limit, or missing condition
+
+Bridge result:
+
+- eligible for chip promotion as boundary
+
+### Stage 4. Outer Validation Eligible
+
+Use when:
+
+- the benchmark result is strong enough
+- the doctrine or boundary is legible enough to test on real work
+
+Bridge result:
+
+- queue for real-world validation
+
+## Naming Rule
+
+Keep benchmark tasks and chip outer validation tasks separate in language.
+
+Examples:
+
+- benchmark real-world scenarios
+- chip realworld validation tasks
+
+Examples in other domains:
+
+- benchmark content simulations
+- chip live content evaluation tasks
+
+- benchmark trading episodes
+- chip real trading judgment tasks
+
+This prevents conceptual drift.
+
+## Why Existing Benchmark Reports Are Not Enough
+
+Benchmark reports are usually optimized for:
+
+- benchmark comparison
+- leaderboard reporting
+- calibration
+- governance
+
+They are not usually optimized for:
+
+- doctrine promotion
+- boundary extraction
+- chip memory persistence
+- outer-validation eligibility
+
+That is why the bridge should exist as a separate smaller artifact.
+
+## Where The Bridge Should Live
+
+Best first implementation:
+
+- generated by the chip after a benchmark-grounded run
+- stored in the chip artifacts
+
+Example path shape:
+
+- `artifacts/promotion/benchmark_grounded/<run_id>.json`
+
+Later, if a benchmark repo wants a first-class export command, that can be added there.
+
+## Ownership Rule
+
+### Benchmark owns
+
+- scoring
+- benchmark integrity
+- calibration
+- official reports
+
+### Bridge owns
+
+- chip-facing eligibility interpretation
+
+### Chip owns
+
+- doctrine promotion
+- boundary promotion
+- memory persistence
+- outer real-world validation
+- watchtower display
+
+## Minimal Implementation Pattern
+
+For a new chip and benchmark pair:
+
+1. keep benchmark outputs unchanged
+2. define bridge semantics
+3. generate a bridge artifact after benchmark-grounded runs
+4. use it to decide whether chip promotion or outer validation should run
+5. surface the bridge in watchtower
+
+That is enough for the first working version.
+
+## Domain-Neutral Anti-Patterns
+
+Do not:
+
+- rewrite a benchmark around the chip
+- let exploratory results emit benchmark bridge packets
+- auto-promote every benchmark win into outer validation
+- collapse benchmark evaluation and outer real-world evaluation into one lane
+- use vague human enthusiasm instead of explicit eligibility rules
+
+## Recommended Per-Domain Documents
+
+For each chip/benchmark pair, keep:
+
+- one benchmark bridge guide or spec
+- one domain-specific outer validation doc
+- one evidence-lane mapping doc if the domain is unusual
+
+## Startup Example
+
+The startup-specific version of this pattern is here:
+
+- [C:\Users\USER\Desktop\spark-researcher\docs\STARTUP_BENCH_PROMOTION_BRIDGE.md](C:/Users/USER/Desktop/spark-researcher/docs/STARTUP_BENCH_PROMOTION_BRIDGE.md)
+
+Use that as the worked example, not the generic contract.

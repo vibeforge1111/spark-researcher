@@ -40,7 +40,19 @@ At minimum:
 
 Do not wait for a giant dataset. Ten strong cases are better than a hundred weak ones.
 
-5. Add one narrow inference optimizer only if it has a grader.
+5. Add a benchmark bridge if the chip has a real benchmark lane.
+
+The bridge should:
+
+- translate benchmark outputs into chip-facing promotion eligibility
+- stay smaller than the benchmark report
+- decide what becomes eligible for chip promotion or outer validation
+
+Use the shared guide:
+
+- `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
+
+6. Add one narrow inference optimizer only if it has a grader.
 
 Good first targets:
 
@@ -54,8 +66,8 @@ Implementation note:
 - start with packet extraction from near-source notes before trying richer rankers
 - record a baseline before letting a slot influence operational decisions
 
-6. Rebuild memory and watchtower so the new lanes are visible.
-7. Add a readiness page or equivalent operator surface for any live DSPy slots.
+7. Rebuild memory and watchtower so the new lanes are visible.
+8. Add a readiness page or equivalent operator surface for any live DSPy slots.
 
 ## What To Keep Portable
 
@@ -84,9 +96,10 @@ The rollout is not complete until all of these are true.
 2. Research packets exist as a first-class artifact, not just freeform notes.
 3. Research-grounded and benchmark-grounded evidence do not share one verdict lane.
 4. The chip has at least one real-world evaluation surface.
-5. Any DSPy use is tied to a narrow graded subroutine.
-6. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
-7. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
+5. If the chip has a benchmark lane, it has a benchmark bridge or equivalent explicit promotion gate.
+6. Any DSPy use is tied to a narrow graded subroutine.
+7. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
+8. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
 
 ## Recommended Docs Per Chip
 
@@ -98,6 +111,8 @@ The rollout is not complete until all of these are true.
 The shared packet shape is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
 
 The reusable DSPy placement method for chips is documented in `docs/CHIP_DSPY_METHOD.md`.
+
+The reusable benchmark-to-chip bridge method is documented in `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`.
 
 ## Rule
 

@@ -167,3 +167,4 @@ That keeps Spark small and forces abstractions to earn their place.
 
 - `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`
 - `docs/CHIP_INTELLIGENCE_ROLLOUT.md`
+- `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`

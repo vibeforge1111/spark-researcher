@@ -34,6 +34,8 @@ class PacketRecord:
     boundary: str
     confidence: float
     path: str
+    memory_status: str = ""
+    contradiction_count: int = 0
     score: int = 0
 
 
@@ -89,6 +91,30 @@ def _confidence(kind: str, score: int) -> float:
     return round(min(base, 0.95), 2)
 
 
+def _field_value(text: str, name: str) -> str:
+    pattern = re.compile(rf"^- {re.escape(name)}:\s*`?(.+?)`?\s*$", re.MULTILINE)
+    match = pattern.search(text)
+    return match.group(1).strip() if match else ""
+
+
+def _int_field_value(text: str, name: str) -> int:
+    raw = _field_value(text, name)
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
+def _belief_status_bonus(packet: PacketRecord) -> int:
+    if packet.kind != "belief":
+        return 0
+    if packet.memory_status == "durable":
+        return 3
+    if packet.memory_status == "provisional":
+        return 1
+    return 0
+
+
 def _packet_from_path(path: Path, config_domain: str) -> PacketRecord | None:
     text = _read_text(path)
     title = _first_line_title(text, path.stem)
@@ -109,6 +135,8 @@ def _packet_from_path(path: Path, config_domain: str) -> PacketRecord | None:
         or sections.get("boundaries", "")
     )
     domain = _infer_domain(kind, title, config_domain)
+    memory_status = _field_value(text, "belief_status") if kind == "belief" else ""
+    contradiction_count = _int_field_value(text, "contradiction_count") if kind == "belief" else 0
     return PacketRecord(
         packet_id=path.stem,
         kind=kind,
@@ -119,6 +147,8 @@ def _packet_from_path(path: Path, config_domain: str) -> PacketRecord | None:
         boundary=boundary.strip(),
         confidence=_confidence(kind, 0),
         path=str(path),
+        memory_status=memory_status,
+        contradiction_count=contradiction_count,
     )
 
 
@@ -163,6 +193,8 @@ def search_packets(config_path: Path, query: str, *, limit: int = 5, domain: str
             continue
         score = term_hits
         score += _PREFERRED_KINDS.get(packet.kind, 1)
+        score += _belief_status_bonus(packet)
+        score -= min(packet.contradiction_count, 2)
         packet.score = score
         packet.confidence = _confidence(packet.kind, score)
         selected.append(packet)

@@ -40,6 +40,8 @@ Spark then assigns a belief status:
 
 This keeps operational residue and unresolved competing lessons out of durable memory.
 
+Advisory packet retrieval also uses that status: durable beliefs score above provisional ones, and contradictory beliefs are slightly down-weighted instead of being hidden.
+
 ## RuVector
 
 RuVector is not embedded as Spark's internal database.

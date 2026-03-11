@@ -20,6 +20,8 @@ Run beliefs now carry a small status:
 
 Spark also writes `docs/beliefs/CONTRADICTIONS.md` so competing lessons are visible instead of silently living side by side.
 
+Packet selection now prefers `durable` belief docs over `provisional` ones when both match the same task, but provisional beliefs still remain searchable as local evidence.
+
 ## Command
 
 ```powershell

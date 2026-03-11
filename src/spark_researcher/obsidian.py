@@ -32,7 +32,14 @@ def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
     return written
 
 
-def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict, domain_pages: list[str], research_signals: dict) -> str:
+def render_home(
+    summary: dict,
+    trainer_rows: list[dict],
+    memory_manifest: dict,
+    belief_manifest: dict,
+    domain_pages: list[str],
+    research_signals: dict,
+) -> str:
     domain_lines = [f"- [[{page}]]" for page in domain_pages]
     return "\n".join(
         [
@@ -59,6 +66,9 @@ def render_home(summary: dict, trainer_rows: list[dict], memory_manifest: dict, 
             f"- trainer entries: `{len(trainer_rows)}`",
             f"- memory docs: `{memory_manifest.get('document_count', 0)}`",
             f"- episode rows: `{memory_manifest.get('episode_count', 0)}`",
+            f"- durable beliefs: `{belief_manifest.get('durable_belief_count', 0)}`",
+            f"- provisional beliefs: `{belief_manifest.get('provisional_belief_count', 0)}`",
+            f"- active belief contradictions: `{belief_manifest.get('contradiction_count', 0)}`",
             f"- research retries: `{research_signals.get('research_retry_count', 0)}`",
             f"- citation mismatches: `{research_signals.get('citation_mismatch_count', 0)}`",
             f"- domain pages: `{len(domain_pages)}`",
@@ -314,7 +324,10 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
             write_text(output_root / page_path, str(item.get("content") or ""))
             domain_pages.append(page_path.removesuffix(".md"))
     copy_docs(repo_root, output_root / "06-References")
-    write_text(output_root / "Home.md", render_home(summary, trainer_rows, memory_manifest, domain_pages, traces.get("research_signals", {})))
+    write_text(
+        output_root / "Home.md",
+        render_home(summary, trainer_rows, memory_manifest, belief_manifest, domain_pages, traces.get("research_signals", {})),
+    )
     write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
     write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
     write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))

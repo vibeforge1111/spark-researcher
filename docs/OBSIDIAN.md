@@ -21,3 +21,5 @@ The Obsidian vault is the watchtower, not the source of truth.
 Canonical docs stay in `docs/`. The vault is rebuilt from those docs and runtime artifacts so operators can browse the current system state quickly.
 
 `05-Runtime/Research Signals.md` now includes bounded research provenance when available, including note ids, source domains, and URLs surfaced from the retry path.
+
+`Home.md` also summarizes belief quality with durable/provisional counts and active contradiction count so memory health is visible at a glance.

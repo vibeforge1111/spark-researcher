@@ -44,6 +44,8 @@ def _episodes_path(runtime_root: Path) -> Path:
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
+    except FileNotFoundError:
+        return
     except PermissionError:
         # Windows/Obsidian can transiently hold generated docs open. Keep going;
         # later writes will refresh files that still exist.
@@ -87,31 +89,163 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
     manifest_path = _manifest_path(runtime_root)
     if manifest_path.exists():
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            # A concurrent memory sync may briefly leave the manifest half-written.
+            pass
     return sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
 
 
-def _local_search_results(docs_root: Path, query: str, *, limit: int) -> list[dict[str, Any]]:
+def _kind_priority(kind: str) -> int:
+    priorities = {
+        "startup_research": 20,
+        "startup_doctrine": 18,
+        "startup_boundary": 16,
+        "startup_benchmark": 14,
+        "belief": 12,
+        "self_edit": 8,
+        "episode": 6,
+        "outcome": 4,
+        "run": 2,
+        "working": 0,
+    }
+    return priorities.get(kind, 0)
+
+
+def _tier_priority(tier: str) -> int:
+    priorities = {
+        "research_grounded": 28,
+        "grounded_doctrine": 30,
+        "grounded_boundary": 26,
+        "benchmark_evidence": 22,
+        "state_snapshot": 18,
+        "belief": 16,
+        "exploratory_frontier": 8,
+        "raw_outcome": 4,
+        "raw_run": 2,
+    }
+    return priorities.get(tier, 0)
+
+
+def _default_memory_tier(kind: str) -> str:
+    defaults = {
+        "startup_research": "research_grounded",
+        "startup_doctrine": "grounded_doctrine",
+        "startup_boundary": "grounded_boundary",
+        "startup_benchmark": "benchmark_evidence",
+        "belief": "belief",
+        "working": "state_snapshot",
+        "episode": "state_snapshot",
+        "outcome": "raw_outcome",
+        "run": "raw_run",
+        "startup_factor": "exploratory_frontier",
+    }
+    return defaults.get(kind, "raw_run")
+
+
+def _infer_document_kind(path: Path) -> str:
+    stem = path.stem
+    if stem == "working-memory":
+        return "working"
+    if stem == "episode-memory":
+        return "episode"
+    if stem.startswith("run-"):
+        return "run"
+    if stem.startswith("outcome-"):
+        return "outcome"
+    if stem.startswith("belief-"):
+        return "belief"
+    if stem.startswith("self-edit-"):
+        return "self_edit"
+    if stem.startswith("startup_doctrine-"):
+        return "startup_doctrine"
+    if stem.startswith("startup_boundary-"):
+        return "startup_boundary"
+    if stem.startswith("startup_benchmark-"):
+        return "startup_benchmark"
+    if stem.startswith("startup_research-"):
+        return "startup_research"
+    if stem.startswith("startup_factor-"):
+        return "startup_factor"
+    return "unknown"
+
+
+def _manifest_docs_by_path(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, dict[str, Any]]:
+    manifest = _local_manifest(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
+    mapped: dict[str, dict[str, Any]] = {}
+    for collection_name in ("chip_documents",):
+        collection = manifest.get(collection_name, [])
+        if isinstance(collection, list):
+            for item in collection:
+                if isinstance(item, dict) and item.get("path"):
+                    mapped[str(item["path"])] = item
+    docs_root = Path(str(manifest["documents_root"])) if manifest.get("documents_root") else None
+    if docs_root is not None:
+        for path in docs_root.glob("*.md"):
+            mapped.setdefault(
+                str(path),
+                {
+                    "path": str(path),
+                    "kind": _infer_document_kind(path),
+                    "title": path.stem,
+                    "memory_tier": _default_memory_tier(_infer_document_kind(path)),
+                },
+            )
+    return mapped
+
+
+def _local_search_results(
+    runtime_root: Path,
+    docs_root: Path,
+    query: str,
+    *,
+    limit: int,
+    repo_root: Path,
+    goal: str,
+    config_path: Path | None,
+) -> list[dict[str, Any]]:
     normalized_query = _normalize_query(query)
     terms = [term for term in normalized_query.lower().split() if term]
+    docs_by_path = _manifest_docs_by_path(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
     results = []
     for path in sorted(docs_root.glob("*.md")):
-        text = _read_text(path)
-        lowered = text.lower()
-        score = sum(lowered.count(term) for term in terms)
-        if score <= 0:
+        try:
+            text = _read_text(path)
+        except FileNotFoundError:
+            # Memory sync rewrites docs in place; skip files that disappeared mid-search.
             continue
-        first_line = text.splitlines()[0].lstrip("# ").strip() if text else path.stem
+        lowered = text.lower()
+        lexical_score = sum(1 for term in terms if term in lowered)
+        if lexical_score <= 0:
+            continue
+        doc_meta = docs_by_path.get(str(path), {})
+        kind = str(doc_meta.get("kind") or "unknown")
+        memory_tier = str(doc_meta.get("memory_tier") or _default_memory_tier(kind))
+        title = str(doc_meta.get("title") or (text.splitlines()[0].lstrip("# ").strip() if text else path.stem))
+        title_lower = title.lower()
+        title_bonus = sum(4 for term in terms if term in title_lower)
+        phrase_bonus = 6 if normalized_query.lower() in lowered else 0
+        score = lexical_score + title_bonus + phrase_bonus + _kind_priority(kind) + _tier_priority(memory_tier)
         results.append(
             {
                 "backend": "local",
                 "path": str(path),
-                "title": first_line,
+                "title": title,
+                "kind": kind,
+                "memory_tier": memory_tier,
                 "score": score,
                 "snippet": _build_snippet(text, normalized_query),
             }
         )
-    results.sort(key=lambda item: (-int(item["score"]), str(item["path"])))
+    results.sort(
+        key=lambda item: (
+            -int(item["score"]),
+            -_tier_priority(str(item.get("memory_tier") or "raw_run")),
+            -_kind_priority(str(item.get("kind") or "unknown")),
+            str(item["path"]),
+        )
+    )
     return results[: _normalize_limit(limit)]
 
 
@@ -378,12 +512,15 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     build_beliefs(repo_root, runtime_root)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
+    tier_counts: dict[str, int] = defaultdict(int)
 
     for record in rows:
         path = docs_root / f"run-{record.get('run_id', 'run')}.md"
         write_text(path, build_run_doc(record))
-        written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem)})
+        memory_tier = "raw_run"
+        written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
         kind_counts["run"] += 1
+        tier_counts[memory_tier] += 1
 
     beliefs_root = repo_root / "docs" / "beliefs"
     if beliefs_root.exists():
@@ -392,8 +529,9 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
                 continue
             target = docs_root / f"belief-{path.name}"
             shutil.copyfile(path, target)
-            written.append({"path": str(target), "kind": "belief", "title": path.stem})
+            written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
             kind_counts["belief"] += 1
+            tier_counts["belief"] += 1
 
     self_edit_docs = []
     proposals_root = self_edit_root(runtime_root)
@@ -404,30 +542,35 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
             target = docs_root / f"self-edit-{proposal.get('proposal_id')}.md"
             write_text(target, build_self_edit_doc(proposal, review))
-            written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id"))})
+            written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
             kind_counts["self_edit"] += 1
+            tier_counts["raw_outcome"] += 1
             self_edit_docs.append(str(target))
 
     working = load_working_memory(runtime_root)
     if working:
         target = docs_root / "working-memory.md"
         write_text(target, build_working_memory_doc(working))
-        written.append({"path": str(target), "kind": "working", "title": "Working Memory"})
+        working_tier = "state_snapshot"
+        written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
         kind_counts["working"] += 1
+        tier_counts[working_tier] += 1
 
     episodes = load_episode_memory(runtime_root)
     if episodes:
         target = docs_root / "episode-memory.md"
         write_text(target, build_episode_memory_doc(episodes))
-        written.append({"path": str(target), "kind": "episode", "title": "Episode Memory"})
+        written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
         kind_counts["episode"] += 1
+        tier_counts["state_snapshot"] += 1
 
     outcomes = _build_outcomes(rows, goal=goal)
     for outcome in outcomes:
         path = docs_root / f"{outcome['outcome_id']}.md"
         write_text(path, build_outcome_doc(outcome))
-        written.append({"path": str(path), "kind": "outcome", "title": outcome["title"]})
+        written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
         kind_counts["outcome"] += 1
+        tier_counts["raw_outcome"] += 1
 
     chip_documents: list[dict[str, str]] = []
     if config_path is not None and chip_has_hook(config_path, "packets"):
@@ -447,10 +590,12 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             slug = _safe_slug(str(item.get("slug") or title))
             path = docs_root / f"{kind}-{slug}.md"
             write_text(path, str(item.get("content") or ""))
-            record = {"path": str(path), "kind": kind, "title": title}
+            memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
+            record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
             written.append(record)
             chip_documents.append(record)
             kind_counts[kind] += 1
+            tier_counts[memory_tier] += 1
 
     index_lines = [
         "# Memory Index",
@@ -461,6 +606,10 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         "## Kinds",
         "",
         *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
+        "",
+        "## Memory Tiers",
+        "",
+        *[f"- {tier}: `{count}`" for tier, count in sorted(tier_counts.items())],
         "",
         "## Outcomes",
         "",
@@ -473,6 +622,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         "documents_root": str(docs_root),
         "source_runs": len(rows),
         "kinds": dict(kind_counts),
+        "memory_tiers": dict(tier_counts),
         "outcomes": outcomes,
         "self_edit_documents": self_edit_docs,
         "chip_documents": chip_documents,
@@ -495,7 +645,15 @@ def search_memory(
 ) -> list[dict[str, Any]] | dict[str, Any]:
     sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
     docs_root = _documents_root(runtime_root)
-    local_results = _local_search_results(docs_root, query, limit=limit)
+    local_results = _local_search_results(
+        runtime_root,
+        docs_root,
+        query,
+        limit=limit,
+        repo_root=repo_root,
+        goal=goal,
+        config_path=config_path,
+    )
     if backend != "ruvector":
         return local_results
     status = ruvector_status()

@@ -245,6 +245,68 @@ def build_record(
     return record
 
 
+def _refresh_chip_working_memory(config: ProjectConfig, runtime_root: Path, record: dict[str, Any]) -> None:
+    from .memory import write_working_memory
+
+    chip_result = record.get("chip_result", {})
+    if not isinstance(chip_result, dict):
+        return
+    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
+        return
+    metric_value = record.get("metric_value")
+    benchmark_profile = str(chip_result.get("benchmark_profile") or "unknown").strip() or "unknown"
+    operator_label = str(chip_result.get("baseline_id") or "unknown").strip() or "unknown"
+    if str(chip_result.get("operator_mode") or "").strip() == "script":
+        model = str(chip_result.get("operator_model") or "unknown").strip() or "unknown"
+        operator_label = f"{model} script operator"
+    track_summaries = chip_result.get("track_summaries", [])
+    best_track = None
+    weakest_track = None
+    if isinstance(track_summaries, list) and track_summaries:
+        scored_tracks = [item for item in track_summaries if isinstance(item, dict)]
+        if scored_tracks:
+            best_track = max(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
+            weakest_track = min(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
+    focus = (
+        f"{config.project_name} state: benchmark-grounded doctrine is led by {operator_label} "
+        f"on {benchmark_profile} at {config.eval_metric} {metric_value}. "
+        f"Frontier probes remain exploratory and should not be compared directly against "
+        "benchmark-grounded doctrine."
+    )
+    if weakest_track is not None:
+        focus += f" The active weakest grounded transfer surface is {weakest_track.get('track', 'unknown')}."
+    notes = [
+        "Grounded doctrine is stored in chip doctrine documents inside artifacts/memory/documents.",
+        f"Latest benchmark-grounded run_id is {record.get('run_id')}.",
+        "Frontier heuristics remain useful for idea generation but are a separate comparison lane.",
+    ]
+    lesson = str(chip_result.get("lesson") or "").strip()
+    next_probe = str(chip_result.get("next_probe") or "").strip()
+    if best_track is not None:
+        notes.append(
+            f"Strongest grounded track is {best_track.get('track', 'unknown')} at {best_track.get('scenario_score_mean', 'n/a')}."
+        )
+    if lesson:
+        notes.append(lesson)
+    questions = []
+    if next_probe:
+        questions.append(next_probe)
+    if weakest_track is not None:
+        questions.append(
+            f"What grounded probe should target the weakest track {weakest_track.get('track', 'unknown')} next?"
+        )
+    questions.append("Should exploratory frontier ideas be promoted only after benchmark re-expression?")
+    write_working_memory(
+        runtime_root,
+        kind="chip_state",
+        focus=focus,
+        status="active",
+        trace_id=str(record.get("trace_id") or "") or None,
+        notes=notes,
+        questions=questions,
+    )
+
+
 def run_once(
     config_path: Path,
     command_name: str,
@@ -326,6 +388,7 @@ def run_once(
             ensure_parent(run_dir / "result.json")
             (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             append_jsonl(ledger_path(runtime_root), record)
+        _refresh_chip_working_memory(config, runtime_root, record)
         if record["status"] != "ok" or verdict in {"regressed", "unknown"}:
             failure_type = "run_failed" if record["status"] != "ok" else f"run_{verdict}"
             evidence = [

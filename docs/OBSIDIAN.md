@@ -20,6 +20,27 @@ The Obsidian vault is the watchtower, not the source of truth.
 
 Canonical docs stay in `docs/`. The vault is rebuilt from those docs and runtime artifacts so operators can browse the current system state quickly.
 
+The vault reflects the tiered memory model:
+
+- `05-Runtime/Working Memory.md` is the current state snapshot
+- `05-Runtime/Memory Index.md` now shows memory-tier counts as well as kind counts
+- domain pages should treat grounded doctrine and grounded boundaries as the operator surface
+- exploratory frontier pages remain visible, but they are not benchmark-grounded truth
+
+```mermaid
+flowchart LR
+    A["Ledger + chip result"] --> B["memory sync"]
+    B --> C["Working Memory"]
+    B --> D["Memory Index"]
+    B --> E["Chip packet docs"]
+    E --> F["Grounded doctrine pages"]
+    E --> G["Exploratory frontier pages"]
+    C --> H["Obsidian runtime pages"]
+    D --> H
+    F --> H
+    G --> H
+```
+
 `05-Runtime/Research Signals.md` now includes bounded research provenance when available, including note ids, source domains, and URLs surfaced from the retry path. It also shows verifier draft-selection events and advisory packet-selection events so you can see which packet ids were active, which candidate won, and what issue pushed revision or caution.
 
 `Home.md` also summarizes belief quality with durable/provisional counts and active contradiction count so memory health is visible at a glance.

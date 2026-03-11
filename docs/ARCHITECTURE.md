@@ -14,6 +14,42 @@ Spark Researcher is intentionally small.
 8. Emit lightweight trace artifacts for the run and related decisions.
 9. Export memory docs and rebuild the Obsidian vault when needed.
 
+## Memory Flow
+
+Memory is file-first and tiered.
+
+- raw runs and outcomes are the audit trail
+- chips can promote domain documents into explicit memory tiers
+- working memory is the live state snapshot, not the long-term source of truth
+
+```mermaid
+flowchart TD
+    A["Run / chip evaluate"] --> B["Immutable ledger row"]
+    B --> C["memory sync"]
+    C --> D["raw_run / raw_outcome docs"]
+    B --> E["chip packets"]
+    E --> F["grounded_doctrine / grounded_boundary / benchmark_evidence / exploratory_frontier docs"]
+    B --> G["benchmark-grounded run"]
+    G --> H["working.json refresh"]
+    H --> I["state_snapshot doc"]
+    D --> J["local memory index"]
+    F --> J
+    I --> J
+    J --> K["memory search"]
+    J --> L["Obsidian watchtower"]
+```
+
+## Memory Tiers
+
+- `grounded_doctrine`: reusable doctrine that cleared a fixed evaluator
+- `research_grounded`: source-grounded packets extracted from strong external materials
+- `grounded_boundary`: weakest grounded transfer surface or failure boundary worth remembering
+- `benchmark_evidence`: benchmark-backed evidence docs that support doctrine
+- `exploratory_frontier`: explicit exploratory probes that should not be treated as grounded doctrine
+- `state_snapshot`: current working memory summary
+- `raw_outcome`: compact candidate outcome history
+- `raw_run`: full run history and trace-adjacent operational residue
+
 ## Layers
 
 - `runner.py`: command execution, mutations, verdicts, ledger writes
@@ -24,7 +60,7 @@ Spark Researcher is intentionally small.
 - `trainers.py`: generic example-count watchers with bounded recompiles
 - `candidates.py`: now uses recent surprising failures to bias repair-oriented suggestion ordering
 - `trial_queue.py`: keeps generated frontier state out of the hand-authored project config
-- `memory.py`: Markdown memory export and lexical search
+- `memory.py`: tiered Markdown memory export and lexical search
 - `obsidian.py`: watchtower generation
 - `collective.py`: portable capsule export
 - `self_edit.py`: workspace-only self-edit proposals with explicit apply

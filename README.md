@@ -13,6 +13,7 @@ The design target is simple: keep the whole repo well under `11000` counted line
 - runs arbitrary project commands from one small JSON config
 - evaluates candidates against a fixed metric and writes an immutable JSONL ledger
 - exports searchable Markdown memory documents instead of building a heavy memory stack
+- keeps memory tiered so grounded doctrine, boundaries, benchmark evidence, exploratory frontier, and raw history do not compete as if they were the same thing
 - records lightweight JSONL traces for runs, advisory builds, frontier suggestions, and self-edit actions
 - keeps local Markdown memory as the default backend and supports optional RuVector retrieval
 - watches trainer example files and triggers bounded recompiles like a lightweight DSPy loop
@@ -152,6 +153,21 @@ This repo is allowed to become more capable, but not more theatrical. If a featu
 ## Memory Rule
 
 Local Markdown memory is still the source of truth. `ruvector` remains the recommended retrieval upgrade once your corpus grows, and Spark falls back cleanly to local search when RuVector is not ready in the current shell.
+
+Memory is now explicitly tiered:
+
+- `research_grounded`
+- `grounded_doctrine`
+- `grounded_boundary`
+- `benchmark_evidence`
+- `exploratory_frontier`
+- `state_snapshot`
+- `raw_outcome`
+- `raw_run`
+
+Search prefers higher-signal tiers first. That keeps benchmark-grounded doctrine and boundaries ahead of raw run residue, while still preserving the full audit trail on disk.
+
+Working memory is also narrower now: benchmark-grounded chip runs can refresh `artifacts/memory/working.json` automatically so the runtime snapshot tracks the current doctrinal state instead of lingering as stale advisory prompt residue.
 
 ## Autonomy Boundary
 

@@ -18,7 +18,7 @@ Supported hooks:
 
 - `evaluate`: domain-specific candidate evaluation
 - `suggest`: domain-specific next-candidate generation
-- `packets`: domain-specific memory documents
+- `packets`: domain-specific memory documents and promotion decisions
 - `watchtower`: domain-specific Obsidian pages
 
 Validate a configured chip with:
@@ -30,6 +30,14 @@ spark-researcher chips validate
 The canonical schema lives at `schemas/spark-chip.schema.json`.
 
 The standard runtime validation flow for any chip is documented in `docs/CHIP_VALIDATION.md`.
+
+The standard memory and watchtower upgrade path used on the startup chip is documented in `docs/CHIP_MEMORY_ROLLOUT.md`.
+
+The reusable intelligence contract for turning one chip into a proving ground for other chips is documented in `docs/CHIP_INTELLIGENCE_CONTRACT.md`.
+
+The rollout sequence for source maps, research packets, real-world evals, and narrow inference optimizers is documented in `docs/CHIP_INTELLIGENCE_ROLLOUT.md`.
+
+The reusable research-packet shape for source-grounded chip intelligence is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
 
 Create a new chip scaffold with:
 
@@ -79,6 +87,21 @@ The chip owns:
 - domain suggestions
 - domain packets
 - domain watchtower pages
+
+## Packet Rule
+
+Chip packet output should be opinionated, not just verbose.
+
+Prefer a small number of explicit memory tiers:
+
+- `grounded_doctrine`
+- `grounded_boundary`
+- `benchmark_evidence`
+- `exploratory_frontier`
+
+Avoid treating raw run history as chip doctrine. Spark already exports raw `run` and `outcome` docs from the ledger; the chip should add the smaller set of domain docs that deserve promotion above that residue.
+
+When possible, benchmark-grounded chip runs should also drive the current working-memory snapshot through the normal run path so the runtime state stays aligned with promoted doctrine.
 
 Suggestion hooks should keep expanding the frontier from evidence, and Spark can fall back to an LLM frontier constrained by manifest grammar:
 

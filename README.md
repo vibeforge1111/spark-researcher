@@ -92,6 +92,7 @@ External agents should follow `AGENTS.md`; backend details live in `docs/AGENT_B
 - `src/spark_researcher/`: the whole runtime
 - `docs/`: short operator docs
 - `docs/book-of-ai-intelligence/`: nontechnical book-length playbook for building a smarter agent
+- `docs/AI_LAB_MAP.md`: how Spark maps to real AI-lab training, eval, retrieval, and data practice
 - `examples/toy-project/`: runnable demo target
 - external domain chips: optional sibling or separate repos loaded through a small manifest bridge
 - `artifacts/`: generated ledger, memory, trainer state, self-edit packets, failures, and traces

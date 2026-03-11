@@ -1,5 +1,9 @@
 # Book of AI Intelligence
 
+Companion reference for how those ideas map onto real AI-lab practice and Spark's own architecture:
+
+- [C:\Users\USER\Desktop\spark-researcher\docs\AI_LAB_MAP.md](C:/Users/USER/Desktop/spark-researcher/docs/AI_LAB_MAP.md)
+
 *A nontechnical training playbook for building a smarter agent.*
 
 This folder is written as a readable book, not as lab notes.

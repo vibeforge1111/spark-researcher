@@ -152,8 +152,11 @@ That means every chip should be able to say:
 
 Recommended shape:
 
-- raw source markdown or text
+- near-source notes or raw source markdown/text
 - target packet fields
+
+Prefer near-source notes over already-finished packets when possible.
+If the input is already a polished packet, the task becomes reconstruction instead of extraction.
 
 Good supervision source:
 
@@ -166,12 +169,20 @@ Metric ideas:
 - exact or near-exact match on categorical fields
 - overlap or rubric match on claim/mechanism/boundary/contradiction
 
+Field-discipline rule:
+
+- keep prose fields freeform
+- keep categorical fields bounded and short
+- add post-prediction normalization when providers turn schema ids into paragraphs
+
 ## Next-Probe Ranker Dataset
 
 Recommended shape:
 
-- candidate set
+- fixed candidate set
 - reasons available at suggestion time
+- current grounded context
+- active research context
 - later outcome of each candidate
 
 Good supervision source:
@@ -179,6 +190,12 @@ Good supervision source:
 - historical suggestion artifacts
 - later benchmark/frontier results
 - real-world usefulness labels when available
+
+Best practice:
+
+- one row should represent one actual decision batch
+- include the full candidate set and the later winner from that batch
+- avoid training only on isolated single-probe aftermath rows
 
 Metric ideas:
 
@@ -207,6 +224,7 @@ Each chip using DSPy should have:
 - one dataset export script
 - one runner per slot
 - one note explaining how the slot feeds the loop
+- one readiness surface showing whether each slot is actually worth optimizing yet
 
 ## Acceptance Checks
 
@@ -218,6 +236,7 @@ A chip's DSPy integration is well-formed only if:
 4. The slot can run without changing the core runtime contract.
 5. The chip still works when DSPy is unavailable.
 6. The slot improves an existing loop stage rather than inventing a parallel loop.
+7. The slot has a documented baseline score or an explicit note that no valid baseline exists yet.
 
 ## Anti-Patterns
 

@@ -49,7 +49,13 @@ Good first targets:
 - doctrine drafting
 - next-probe ranking
 
+Implementation note:
+
+- start with packet extraction from near-source notes before trying richer rankers
+- record a baseline before letting a slot influence operational decisions
+
 6. Rebuild memory and watchtower so the new lanes are visible.
+7. Add a readiness page or equivalent operator surface for any live DSPy slots.
 
 ## What To Keep Portable
 
@@ -80,6 +86,7 @@ The rollout is not complete until all of these are true.
 4. The chip has at least one real-world evaluation surface.
 5. Any DSPy use is tied to a narrow graded subroutine.
 6. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
+7. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
 
 ## Recommended Docs Per Chip
 

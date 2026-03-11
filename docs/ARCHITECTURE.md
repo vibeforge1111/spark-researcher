@@ -18,7 +18,7 @@ Spark Researcher is intentionally small.
 - `runner.py`: command execution, mutations, verdicts, ledger writes
 - `failures.py`: concrete failure registry and surprise-priority scoring
 - `tracing.py`: JSONL trace recorder for run, advisory, frontier, and self-edit flows
-- `verifier.py`: bounded draft-critique-revise loop for advisory execution, now aware of active surprise-priority failure surfaces
+- `verifier.py`: bounded draft-critique-revise loop for advisory execution, now aware of active surprise-priority failure surfaces and able to escalate time-sensitive misses into `research_needed`
 - `trainers.py`: generic example-count watchers with bounded recompiles
 - `candidates.py`: now uses recent surprising failures to bias repair-oriented suggestion ordering
 - `memory.py`: Markdown memory export and lexical search

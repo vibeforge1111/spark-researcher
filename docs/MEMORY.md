@@ -31,7 +31,14 @@ Spark promotes a run-derived belief only when one of these is true:
 - the same mutation signature improved more than once
 - the signature is the current best observed candidate for that command and has no regressed runs
 
-This keeps operational residue out of durable memory.
+Spark then assigns a belief status:
+
+- `durable`
+  - repeated support and no active contradiction with another promoted lesson on the same command
+- `provisional`
+  - promoted for local usefulness, but still contradicted or not yet replicated enough to count as settled memory
+
+This keeps operational residue and unresolved competing lessons out of durable memory.
 
 ## RuVector
 

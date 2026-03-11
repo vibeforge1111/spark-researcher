@@ -21,7 +21,7 @@ The design target is simple: keep the whole repo well under `11000` counted line
 - proposes self-edits in a temporary workspace and requires explicit human apply
 - scaffolds coding, research, and content projects with one init command
 - builds compact belief packets from improved runs and approved self-edits
-- promotes durable run beliefs more selectively instead of turning every improved run into long-lived memory
+- promotes durable run beliefs more selectively and marks contradictory lessons as provisional instead of turning every improved run into long-lived memory
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
 - can prioritize recent surprising failures so autoloop learns from misses before comfort-zone retuning

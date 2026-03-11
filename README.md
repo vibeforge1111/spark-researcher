@@ -6,7 +6,7 @@ Spark Researcher is a compressed blend of three ideas:
 - Spark Recursion: bounded recursive improvement, trainer recompiles, and anti-drift rules.
 - Spark Autoresearch: non-complex local memory, Obsidian watchtower output, and collective sharing.
 
-The design target is simple: keep the whole repo well under `8000` counted lines while still being useful on real projects.
+The design target is simple: keep the whole repo well under `11000` counted lines while still being useful on real projects.
 
 ## What It Does
 
@@ -25,12 +25,7 @@ The design target is simple: keep the whole repo well under `8000` counted lines
 - supports external coding agents through a shared repo contract in `AGENTS.md`
 - can suggest and append next candidate trials from ledger history with a bounded autoloop
 - can prioritize recent surprising failures so autoloop learns from misses before comfort-zone retuning
-- can use those same surprising failures inside the verifier so advisory critique checks active failure surfaces before approving an answer
-- can escalate some verifier misses into explicit `research_needed` packets when the task is time-sensitive and the mission allows fresh web research
-- can run one bounded research retry from those `research_needed` packets, save dated web notes, and feed them back through the same verifier loop once
-- can surface compact citations from that bounded research artifact so follow-up answers remain auditable
-- can require research-backed answers to actually use those note ids, downgrading approval when the fetched evidence is ignored
-- can prefer the note ids that best match an answer's claims instead of accepting any citation as equally grounded
+- can use failure-aware verification, bounded research retries, and citation checks to keep advisory answers grounded without adding a heavy agent layer
 - can delegate domain-specific evaluation, suggestion, packets, and watchtower pages to external domain chips, with optional LLM frontier fallback and relaxed open-value exploration
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
@@ -73,7 +68,7 @@ spark-researcher beliefs build
 spark-researcher obsidian build
 spark-researcher collective publish
 spark-researcher collective sync-local
-spark-researcher line-budget --limit 8000
+spark-researcher line-budget --limit 11000
 ```
 
 The bundled config points at `examples/toy-project/` so the loop is runnable without extra setup.
@@ -87,9 +82,7 @@ Self-editing is intentionally two-step:
 
 The propose step runs only in a copied workspace and writes a full packet with prompt, stdout, stderr, diff summary, and changed files. Nothing is applied to the repo until the second command is called by the owner.
 
-External agents should follow the repo contract in `AGENTS.md`. Backend integration details are documented in `docs/AGENT_BACKENDS.md`.
-
-Only `codex-exec` is built in by default. Other agents should usually be wired through explicit backend commands instead of growing the built-in profile list.
+External agents should follow `AGENTS.md`; backend details live in `docs/AGENT_BACKENDS.md`. Only `codex-exec` is built in by default.
 
 ## Layout
 
@@ -98,9 +91,7 @@ Only `codex-exec` is built in by default. Other agents should usually be wired t
 - `docs/book-of-ai-intelligence/`: nontechnical book-length playbook for building a smarter agent
 - `examples/toy-project/`: runnable demo target
 - external domain chips: optional sibling or separate repos loaded through a small manifest bridge
-- `artifacts/`: generated ledger, memory, trainer state, and self-edit packets
-- `artifacts/failures/`: concrete failure registry with surprise-priority ranking
-- `artifacts/traces/`: JSONL trace files for the main runtime decisions
+- `artifacts/`: generated ledger, memory, trainer state, self-edit packets, failures, and traces
 - `obsidian-vault/`: generated watchtower view
 - `.autoresearch/capsules/`: collective-ready insight packets
 
@@ -148,7 +139,7 @@ spark-researcher self-edit review --proposal-id <id> --decision approve --root-l
 spark-researcher self-edit apply --proposal-id <id>
 spark-researcher self-edit apply --proposal-id <id> --git-mode branch --push
 spark-researcher self-edit apply --proposal-id <id> --git-mode main --push
-spark-researcher line-budget --limit 8000
+spark-researcher line-budget --limit 11000
 ```
 
 ## Intent

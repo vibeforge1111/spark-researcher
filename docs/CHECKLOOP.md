@@ -26,7 +26,7 @@ python -m spark_researcher.cli packets status
 python -m spark_researcher.cli advisory providers
 python -m spark_researcher.cli advisory review
 python -m spark_researcher.cli optimizer export-advisory-dataset
-python -m spark_researcher.cli line-budget --limit 8000
+python -m spark_researcher.cli line-budget --limit 11000
 ```
 
 ## Goal

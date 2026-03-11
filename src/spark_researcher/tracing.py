@@ -162,10 +162,76 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     root = traces_root(runtime_root)
     index_path = _index_path(runtime_root)
     if not index_path.exists():
-        return {"trace_count": 0, "traces_root": str(root), "recent": []}
+        return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "recent": []}}
     rows = [
         json.loads(line)
         for line in index_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    return {"trace_count": len(rows), "traces_root": str(root), "recent": list(reversed(rows[-10:]))}
+    research_retry_count = 0
+    research_escalation_count = 0
+    citation_check_count = 0
+    citation_mismatch_count = 0
+    recent_signals: list[dict[str, Any]] = []
+    for row in rows:
+        trace_kind = str(row.get("trace_kind") or "")
+        if trace_kind == "advisory_research":
+            research_retry_count += 1
+        path_value = row.get("path")
+        if not isinstance(path_value, str):
+            continue
+        path = Path(path_value)
+        if not path.exists():
+            continue
+        events = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        for event in events:
+            if event.get("event_type") != "event":
+                continue
+            event_name = str(event.get("event_name") or "")
+            attributes = event.get("attributes", {})
+            if not isinstance(attributes, dict):
+                attributes = {}
+            if event_name == "research_escalation":
+                research_escalation_count += 1
+                recent_signals.append(
+                    {
+                        "created_at": event.get("created_at"),
+                        "trace_id": event.get("trace_id"),
+                        "signal": "research_escalation",
+                        "research_query": attributes.get("research_query"),
+                        "implicated_failure_surface": attributes.get("implicated_failure_surface"),
+                    }
+                )
+            if event_name == "citation_check":
+                citation_check_count += 1
+                used_note_ids = [str(item) for item in attributes.get("used_note_ids", []) if str(item).strip()]
+                relevant_note_ids = [str(item) for item in attributes.get("relevant_note_ids", []) if str(item).strip()]
+                mismatch = bool(relevant_note_ids) and not any(item in relevant_note_ids for item in used_note_ids)
+                if mismatch:
+                    citation_mismatch_count += 1
+                recent_signals.append(
+                    {
+                        "created_at": event.get("created_at"),
+                        "trace_id": event.get("trace_id"),
+                        "signal": "citation_check",
+                        "used_note_ids": used_note_ids,
+                        "relevant_note_ids": relevant_note_ids,
+                        "mismatch": mismatch,
+                    }
+                )
+    return {
+        "trace_count": len(rows),
+        "traces_root": str(root),
+        "recent": list(reversed(rows[-10:])),
+        "research_signals": {
+            "research_retry_count": research_retry_count,
+            "research_escalation_count": research_escalation_count,
+            "citation_check_count": citation_check_count,
+            "citation_mismatch_count": citation_mismatch_count,
+            "recent": list(reversed(recent_signals[-10:])),
+        },
+    }

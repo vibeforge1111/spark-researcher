@@ -104,6 +104,7 @@ Examples:
 
 - repeated failure shapes are underexplained by current packet coverage
 - important source areas are thin
+- packet count looks fine but doctrine depth is still weak
 - a benchmark boundary is clear but the mechanism behind it is not well covered by research
 
 Outputs:
@@ -160,6 +161,11 @@ So the chip must ask:
 - do we need more knowledge?
 - or do we need more testing?
 
+And inside research frontier it must ask:
+
+- do we need more sources because coverage is missing?
+- or do we need better sources because doctrine depth is still too weak?
+
 ## DSPy Placement
 
 DSPy should help narrow loop stages, not become the loop.
@@ -197,6 +203,27 @@ At minimum, keep these distinct:
 - `realworld_validated`
 
 The system gets worse when these lanes share one verdict surface.
+
+## Coverage And Depth
+
+Do not treat research coverage as a raw packet count problem only.
+
+Each richer chip should track at least:
+
+- packet count by research area
+- doctrine depth by research area
+- overcrowded or repetitive areas
+
+This helps the loop avoid two bad behaviors:
+
+- declaring an area "done" too early because it has a few packets
+- overfilling already-crowded areas while other areas are still thin
+
+Healthy order:
+
+1. fill true gaps
+2. deepen shallow doctrine
+3. avoid repetitive source expansion in already-crowded areas unless depth is still weak
 
 ## Promotion Rule
 

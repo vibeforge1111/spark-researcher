@@ -27,6 +27,18 @@ The packet should capture:
 - confidence
 - promotion status
 
+Alongside the packet schema, define what "doctrine-rich" source material looks like for the domain.
+
+The chip should know how to reject:
+
+- event updates
+- low-signal announcements
+- repetitive source expansions that do not improve doctrine
+
+Use the shared guide:
+
+- `docs/CHIP_RESEARCH_QUALITY_RULESET.md`
+
 3. Add a small tag registry.
 
 Start with the smallest useful registry for recurring packet patterns.
@@ -83,7 +95,13 @@ Implementation note:
 8. Rebuild memory and watchtower so the new lanes are visible.
 9. Add a readiness page or equivalent operator surface for any live DSPy slots.
 10. Move toward one governing loop with separate research frontier and trial frontier once the chip has enough source and benchmark depth.
-11. Commit in small coherent chunks as the chip stabilizes.
+11. Add a simple coverage-and-depth model so the chip can distinguish:
+
+- missing research areas
+- shallow doctrine areas
+- overcrowded areas
+
+12. Commit in small coherent chunks as the chip stabilizes.
 
 ## Commit Cadence Rule
 
@@ -148,11 +166,13 @@ The rollout is not complete until all of these are true.
 7. Any DSPy use is tied to a narrow graded subroutine.
 8. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
 9. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
+10. The chip can explain whether it needs more sources, deeper doctrine, or less repetitive source growth.
 
 ## Recommended Docs Per Chip
 
 - `docs/<DOMAIN>_SOURCE_MAP.md`
 - `docs/<DOMAIN>_RESEARCH_PACKET.md`
+- `docs/<DOMAIN>_RESEARCH_QUALITY_RULESET.md`
 - `docs/<DOMAIN>_TAGGING_RULESET.md`
 - `docs/<DOMAIN>_REALWORLD_EVAL.md`
 - optional `docs/<DOMAIN>_DSPY_PLAN.md`

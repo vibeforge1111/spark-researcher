@@ -35,6 +35,11 @@ DSPy should also not hide whether a chip really needs:
 - more source learning
 - or more testing
 
+And it should not hide whether a chip needs:
+
+- more sources
+- or deeper doctrine from the sources it already has
+
 That distinction belongs to the governing loop.
 
 ## The Two Best Default Slots

@@ -60,6 +60,23 @@ Every chip should define the same five surfaces.
 
 These are slots, not requirements to add a framework. If a chip does not have a graded use for a slot yet, leave it empty.
 
+## Governing Loop Rule
+
+Once a chip has richer research, benchmarking, and memory behavior, it should evolve toward one governing loop with conditional stages.
+
+That loop should:
+
+- refresh research
+- gate packet quality
+- decide whether the next need is a knowledge gap or a trial gap
+- use a research frontier for new source learning
+- use a trial frontier for bounded experiments
+- update memory and watchtower every pass
+
+This pattern is documented in:
+
+- `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
+
 ## Separation Rule
 
 Keep the pattern generic and the content domain-specific.
@@ -168,3 +185,4 @@ That keeps Spark small and forces abstractions to earn their place.
 - `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`
 - `docs/CHIP_INTELLIGENCE_ROLLOUT.md`
 - `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
+- `docs/CHIP_ONE_LOOP_FLYWHEEL.md`

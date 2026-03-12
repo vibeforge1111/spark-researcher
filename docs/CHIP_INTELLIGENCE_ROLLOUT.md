@@ -27,7 +27,21 @@ The packet should capture:
 - confidence
 - promotion status
 
-3. Add evidence lanes.
+3. Add a small tag registry.
+
+Start with the smallest useful registry for recurring packet patterns.
+
+At minimum, define:
+
+- contradiction tags
+- when a tag is allowed to be added
+- how DSPy may suggest tags without owning the registry
+
+Use the shared guide:
+
+- `docs/CHIP_TAGGING_RULESET.md`
+
+4. Add evidence lanes.
 
 At minimum:
 
@@ -36,11 +50,11 @@ At minimum:
 - `realworld_validated`
 - `exploratory_frontier`
 
-4. Add a small real-world eval set.
+5. Add a small real-world eval set.
 
 Do not wait for a giant dataset. Ten strong cases are better than a hundred weak ones.
 
-5. Add a benchmark bridge if the chip has a real benchmark lane.
+6. Add a benchmark bridge if the chip has a real benchmark lane.
 
 The bridge should:
 
@@ -52,7 +66,7 @@ Use the shared guide:
 
 - `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
 
-6. Add one narrow inference optimizer only if it has a grader.
+7. Add one narrow inference optimizer only if it has a grader.
 
 Good first targets:
 
@@ -66,8 +80,9 @@ Implementation note:
 - start with packet extraction from near-source notes before trying richer rankers
 - record a baseline before letting a slot influence operational decisions
 
-7. Rebuild memory and watchtower so the new lanes are visible.
-8. Add a readiness page or equivalent operator surface for any live DSPy slots.
+8. Rebuild memory and watchtower so the new lanes are visible.
+9. Add a readiness page or equivalent operator surface for any live DSPy slots.
+10. Move toward one governing loop with separate research frontier and trial frontier once the chip has enough source and benchmark depth.
 
 ## What To Keep Portable
 
@@ -75,8 +90,11 @@ These should transfer across chips:
 
 - source-registry structure
 - research-packet shape
+- tag-registry rules
 - evidence-lane names
 - promotion policy categories
+- one-loop governing pattern
+- research frontier vs trial frontier split
 - watchtower page types
 - real-world eval framing
 
@@ -94,25 +112,31 @@ The rollout is not complete until all of these are true.
 
 1. The chip has an explicit source map.
 2. Research packets exist as a first-class artifact, not just freeform notes.
-3. Research-grounded and benchmark-grounded evidence do not share one verdict lane.
-4. The chip has at least one real-world evaluation surface.
-5. If the chip has a benchmark lane, it has a benchmark bridge or equivalent explicit promotion gate.
-6. Any DSPy use is tied to a narrow graded subroutine.
-7. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
-8. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
+3. The chip has a small stable tag registry and a rule for when new tags may be added.
+4. Research-grounded and benchmark-grounded evidence do not share one verdict lane.
+5. The chip has at least one real-world evaluation surface.
+6. If the chip has a benchmark lane, it has a benchmark bridge or equivalent explicit promotion gate.
+7. Any DSPy use is tied to a narrow graded subroutine.
+8. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
+9. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
 
 ## Recommended Docs Per Chip
 
 - `docs/<DOMAIN>_SOURCE_MAP.md`
 - `docs/<DOMAIN>_RESEARCH_PACKET.md`
+- `docs/<DOMAIN>_TAGGING_RULESET.md`
 - `docs/<DOMAIN>_REALWORLD_EVAL.md`
 - optional `docs/<DOMAIN>_DSPY_PLAN.md`
 
 The shared packet shape is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
 
+The shared tagging method is documented in `docs/CHIP_TAGGING_RULESET.md`.
+
 The reusable DSPy placement method for chips is documented in `docs/CHIP_DSPY_METHOD.md`.
 
 The reusable benchmark-to-chip bridge method is documented in `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`.
+
+The reusable one-loop flywheel pattern for richer chips is documented in `docs/CHIP_ONE_LOOP_FLYWHEEL.md`.
 
 ## Rule
 

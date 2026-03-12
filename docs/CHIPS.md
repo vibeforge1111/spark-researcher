@@ -39,7 +39,11 @@ The rollout sequence for source maps, research packets, real-world evals, and na
 
 The reusable research-packet shape for source-grounded chip intelligence is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
 
+The reusable chip tagging method for contradiction, factor, and other packet tags is documented in `docs/CHIP_TAGGING_RULESET.md`.
+
 The reusable DSPy method for narrow chip optimizers is documented in `docs/CHIP_DSPY_METHOD.md`.
+
+The reusable one-loop flywheel pattern for richer chips is documented in `docs/CHIP_ONE_LOOP_FLYWHEEL.md`.
 
 Create a new chip scaffold with:
 

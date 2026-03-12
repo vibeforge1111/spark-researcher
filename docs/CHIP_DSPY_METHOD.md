@@ -30,6 +30,13 @@ Bad placement:
 - as ungraded ideation
 - as a replacement for benchmarks or real-world evals
 
+DSPy should also not hide whether a chip really needs:
+
+- more source learning
+- or more testing
+
+That distinction belongs to the governing loop.
+
 ## The Two Best Default Slots
 
 If a chip is early, use only one slot first.
@@ -243,6 +250,16 @@ Each chip using DSPy should have:
 - one runner per slot
 - one note explaining how the slot feeds the loop
 - one readiness surface showing whether each slot is actually worth optimizing yet
+
+When a chip has a richer governing loop, document how each slot connects to:
+
+- research frontier
+- trial frontier
+- benchmark path
+
+Use the shared pattern:
+
+- `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
 
 ## Acceptance Checks
 

@@ -83,6 +83,35 @@ Implementation note:
 8. Rebuild memory and watchtower so the new lanes are visible.
 9. Add a readiness page or equivalent operator surface for any live DSPy slots.
 10. Move toward one governing loop with separate research frontier and trial frontier once the chip has enough source and benchmark depth.
+11. Commit in small coherent chunks as the chip stabilizes.
+
+## Commit Cadence Rule
+
+Do not wait for one giant commit when working on a richer chip loop.
+
+Preferred rule:
+
+- one small commit per coherent change set
+
+Good commit boundaries:
+
+- loop-logic change
+- docs or spec change
+- research-source expansion wave
+- DSPy runner improvement
+- watchtower or memory surface change
+
+Avoid:
+
+- bundling unrelated runtime residue into those commits
+- mixing docs, logic, generated artifacts, and queue state in one commit
+- waiting so long that reviewable changes blur together
+
+This keeps chip evolution:
+
+- reviewable
+- revertable
+- easier to transfer to future chips
 
 ## What To Keep Portable
 

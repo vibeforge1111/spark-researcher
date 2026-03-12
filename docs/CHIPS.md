@@ -128,6 +128,20 @@ Generated chip suggestions now land in `artifacts/frontier/queue.json`. Keep `sp
 
 This keeps the kernel portable while letting domains evolve in separate repos.
 
+## Commit Rule
+
+When evolving a chip, prefer one small commit per coherent change set.
+
+Good boundaries:
+
+- loop logic
+- docs/spec updates
+- source-pack expansion
+- DSPy runner work
+- memory/watchtower changes
+
+Do not mix unrelated runtime residue or queue state into those commits unless you are intentionally snapshotting runtime state.
+
 ## Registry
 
 Current known chips are listed in `docs/CHIP_REGISTRY.md`.

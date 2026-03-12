@@ -153,6 +153,30 @@ Keep this separate from discovery:
 - selection decides what to learn next and why
 - discovery only fetches or drafts sources from that bounded decision surface
 
+### Doctrine Review
+
+When a chip already has decent broad coverage, it also needs a novelty-pressure stage so it does not keep circling the same doctrine families forever.
+
+The reusable pattern is:
+
+- every `15` research runs, review doctrine and coverage distribution
+- recommend up to `3` doctrine directions to broaden
+- recommend up to `2` coverage areas to broaden
+- optionally let DSPy select from those candidate directions
+- use those outputs to steer research selection and bounded discovery
+
+This stage should:
+
+- identify crowded doctrine tags
+- identify underweighted doctrine tags
+- identify underweighted coverage areas
+- prefer source expansion that broadens doctrine territory, not just source count
+
+DSPy should remain bounded here:
+
+- it may choose among candidate doctrine/coverage directions
+- it should not automatically mutate the stable doctrine registry
+
 ### Benchmark Path
 
 Run when:

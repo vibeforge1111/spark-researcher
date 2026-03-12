@@ -159,6 +159,8 @@ def _packet_from_path(path: Path, config_domain: str) -> PacketRecord | None:
         # Memory sync rewrites generated docs in place; skip files that
         # disappear between globbing and packet loading.
         return None
+    if path.stem.upper() == "BELIEF-CONTRADICTIONS":
+        return None
     title = _first_line_title(text, path.stem)
     kind = _infer_kind(path)
     if kind == "outcome":

@@ -216,6 +216,24 @@ That means:
 
 This preserves Spark's lightweight kernel.
 
+## Artifact Rule
+
+Do not trust process-tail output alone for long DSPy runs.
+
+Every stable DSPy slot should:
+
+- write its score or batch result to an artifact file
+- emit the artifact path in stdout
+- prefer artifact-first truth over terminal-tail truth
+
+This matters because model calls can complete successfully while teardown or thread shutdown remains messy.
+
+A good default is:
+
+- `artifacts/optimizer/<slot>.last_eval.json`
+- `artifacts/optimizer/<slot>.predictions.jsonl`
+- `artifacts/optimizer/<slot>.last_batch.json`
+
 ## Documentation Pattern
 
 Each chip using DSPy should have:

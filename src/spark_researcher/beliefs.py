@@ -65,9 +65,25 @@ def _is_better(candidate: float, current: float | None, goal: str) -> bool:
     return candidate > current if goal == "maximize" else candidate < current
 
 
+def _skip_core_run_belief(row: dict[str, Any]) -> bool:
+    chip_result = row.get("chip_result")
+    if not isinstance(chip_result, dict):
+        return False
+    comparison_class = str(chip_result.get("comparison_class") or "").strip()
+    benchmark_profile = str(chip_result.get("benchmark_profile") or "").strip()
+    baseline_id = str(chip_result.get("baseline_id") or "").strip()
+    if comparison_class == "benchmark_grounded":
+        return True
+    if benchmark_profile and baseline_id:
+        return True
+    return False
+
+
 def _command_best(rows: list[dict[str, Any]], *, goal: str) -> dict[str, float]:
     best: dict[str, float] = {}
     for row in rows:
+        if _skip_core_run_belief(row):
+            continue
         command_name = str(row.get("command_name") or "")
         metric_value = row.get("metric_value")
         if not command_name or not isinstance(metric_value, (int, float)):
@@ -83,6 +99,8 @@ def _promotable_run_groups(rows: list[dict[str, Any]], *, goal: str) -> list[dic
     grouped: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]] = {}
     best_by_command = _command_best(rows, goal=goal)
     for row in rows:
+        if _skip_core_run_belief(row):
+            continue
         command_name = str(row.get("command_name") or "")
         metric_value = row.get("metric_value")
         signature = _signature(row)
@@ -265,6 +283,8 @@ def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str
         for group in promoted_groups
     }
     for row in rows:
+        if _skip_core_run_belief(row):
+            continue
         if row.get("verdict") != "improved" or not row.get("applied_mutations"):
             continue
         signature = (str(row.get("command_name") or ""), _signature(row))

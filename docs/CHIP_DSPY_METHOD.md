@@ -228,6 +228,12 @@ That means:
 
 This preserves Spark's lightweight kernel.
 
+If a chip later adds DSPy autorun inside its governing loop, keep it opt-in and narrow:
+
+- only trigger slot 1 when new source notes or new draft packets appeared on that pass
+- write explicit autorun state into artifacts so operators can see whether it ran, skipped, or failed
+- do not auto-promote packet doctrine just because the model produced a structured output
+
 ## Artifact Rule
 
 Do not trust process-tail output alone for long DSPy runs.

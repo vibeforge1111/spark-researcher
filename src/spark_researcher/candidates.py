@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import asdict
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,37 @@ from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
 from .runner import read_jsonl, run_once
 from .trial_queue import append_queue_trials, merged_candidate_trials
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+def _continuous_status_path(runtime_root: Path) -> Path:
+    return runtime_root / "artifacts" / "loop" / "continuous_status.json"
+
+
+def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
+    tracked = [
+        runtime_root / "artifacts" / "research" / "refresh.json",
+        runtime_root / "artifacts" / "research" / "frontier.json",
+        runtime_root / "artifacts" / "research" / "selection.json",
+        runtime_root / "artifacts" / "research" / "agent.json",
+        runtime_root / "artifacts" / "optimizer" / "startup_packet_extractor.last_batch.json",
+        runtime_root / "artifacts" / "realworld" / "queue.json",
+        ledger_path(runtime_root),
+    ]
+    return {
+        str(path): path.stat().st_mtime
+        for path in tracked
+        if path.exists()
+    }
+
+
+def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
+    path = _continuous_status_path(runtime_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -573,8 +606,13 @@ def run_continuous_autoloop(
     apply_suggestions: bool = True,
 ) -> dict[str, Any]:
     passes: list[dict[str, Any]] = []
+    runtime_root = resolve_runtime_root(config_path)
     try:
         while True:
+            pass_index = len(passes) + 1
+            pass_started_at = _now_iso()
+            start_monotonic = time.monotonic()
+            artifact_before = _tracked_loop_artifacts(runtime_root)
             packet = run_autoloop(
                 config_path,
                 command_name,
@@ -583,13 +621,65 @@ def run_continuous_autoloop(
                 dry_run=dry_run,
                 apply_suggestions=apply_suggestions,
             )
-            passes.append({
-                "pass": len(passes) + 1,
+            artifact_after = _tracked_loop_artifacts(runtime_root)
+            pass_finished_at = _now_iso()
+            work_duration_seconds = round(time.monotonic() - start_monotonic, 3)
+            run_count = sum(int(item.get("run_count", 0)) for item in packet["history"])
+            appended_count = sum(int(item["appended"]["appended_count"]) for item in packet["history"])
+            suggested_count = sum(
+                int((item.get("suggestions") or {}).get("suggestion_count", 0))
+                + int((item.get("next_suggestions") or {}).get("suggestion_count", 0))
+                for item in packet["history"]
+            )
+            changed_artifacts = [
+                path
+                for path, mtime in artifact_after.items()
+                if artifact_before.get(path) != mtime
+            ]
+            productive = (
+                run_count > 0
+                or appended_count > 0
+                or suggested_count > 0
+                or bool(changed_artifacts)
+            )
+            next_sleep_seconds = 1 if productive else max(pause_seconds, 1)
+            wake_at = datetime.now(UTC).timestamp() + next_sleep_seconds
+            pass_summary = {
+                "pass": pass_index,
+                "pass_started_at": pass_started_at,
+                "pass_finished_at": pass_finished_at,
+                "work_duration_seconds": work_duration_seconds,
                 "round_count": packet["round_count"],
-                "run_count": sum(int(item.get("run_count", 0)) for item in packet["history"]),
-                "appended_count": sum(int(item["appended"]["appended_count"]) for item in packet["history"]),
+                "run_count": run_count,
+                "appended_count": appended_count,
+                "suggested_count": suggested_count,
+                "productive": productive,
+                "changed_artifact_count": len(changed_artifacts),
+                "changed_artifacts": changed_artifacts,
+                "next_sleep_seconds": next_sleep_seconds,
+                "next_wake_at": datetime.fromtimestamp(wake_at, UTC).replace(microsecond=0).isoformat(),
                 "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
-            })
-            time.sleep(max(pause_seconds, 1))
+            }
+            passes.append(pass_summary)
+            _write_continuous_status(
+                runtime_root,
+                {
+                    "updated_at": pass_finished_at,
+                    "command_name": command_name,
+                    "project_name": load_config(config_path).project_name,
+                    "continuous": True,
+                    "pass_count": len(passes),
+                    "current_pass": pass_summary,
+                    "recent_passes": passes[-5:],
+                },
+            )
+            time.sleep(next_sleep_seconds)
     except KeyboardInterrupt:
-        return {"command_name": command_name, "project_name": load_config(config_path).project_name, "continuous": True, "pass_count": len(passes), "passes": passes, "interrupted": True}
+        return {
+            "command_name": command_name,
+            "project_name": load_config(config_path).project_name,
+            "continuous": True,
+            "pass_count": len(passes),
+            "passes": passes,
+            "interrupted": True,
+        }

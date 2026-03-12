@@ -33,6 +33,15 @@ That loop should decide what to do from state.
 
 It should not run every subsystem on every pass just because those subsystems exist.
 
+For continuous loops, the runtime should also expose lightweight pass timing:
+
+- pass started / finished
+- work duration
+- whether the pass was productive
+- when the next wake-up is expected
+
+And productive passes should be allowed to rerun quickly instead of always sleeping the full configured pause interval.
+
 ## Why This Matters
 
 Without this pattern, chips drift into:

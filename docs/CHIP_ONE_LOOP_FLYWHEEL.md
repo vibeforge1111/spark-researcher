@@ -148,6 +148,34 @@ Run when:
 
 This is the chip's main inner truth surface when a benchmark exists.
 
+One practical lesson from the startup chip:
+
+- once a packet has been deepened enough, the loop needs a real `ready_for_benchmark` handoff
+- that handoff should emit fresh benchmark candidates, not just a nicer state label
+
+If the chip dedupes benchmark work only by a coarse signature like:
+
+- benchmark profile
+- baseline/operator id
+
+then deepened doctrine can get stuck, because the loop thinks the benchmark was "already tried."
+
+The healthier pattern is:
+
+- keep the benchmark facts layer unchanged
+- but let packet-derived benchmark candidates carry a doctrine anchor
+
+That doctrine anchor can be:
+
+- packet id
+- plus a compact hash of the current claim/mechanism/boundary state
+
+This allows the chip to treat:
+
+- "same benchmark surface, newly deepened doctrine"
+
+as fresh benchmark work without forcing the benchmark system itself to understand doctrine semantics.
+
 ### Trial Frontier
 
 Run when:

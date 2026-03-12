@@ -45,6 +45,12 @@ The reusable DSPy method for narrow chip optimizers is documented in `docs/CHIP_
 
 The reusable one-loop flywheel pattern for richer chips is documented in `docs/CHIP_ONE_LOOP_FLYWHEEL.md`.
 
+For richer chips, keep source choice separate from source fetching:
+
+- `research_frontier` decides whether the chip needs more knowledge
+- `research_selection` decides which sources should be added next
+- bounded discovery or approved-source ingest then fetches or drafts those sources
+
 Create a new chip scaffold with:
 
 ```powershell

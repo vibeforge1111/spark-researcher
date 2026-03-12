@@ -70,6 +70,7 @@ That loop should:
 - gate packet quality
 - decide whether the next need is a knowledge gap or a trial gap
 - use a research frontier for new source learning
+- use research selection to choose the best next sources before discovery runs
 - use a trial frontier for bounded experiments
 - update memory and watchtower every pass
 

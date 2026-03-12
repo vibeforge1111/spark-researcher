@@ -95,13 +95,14 @@ Implementation note:
 8. Rebuild memory and watchtower so the new lanes are visible.
 9. Add a readiness page or equivalent operator surface for any live DSPy slots.
 10. Move toward one governing loop with separate research frontier and trial frontier once the chip has enough source and benchmark depth.
-11. Add a simple coverage-and-depth model so the chip can distinguish:
+11. Add a research-selection layer so the chip can choose the best next sources before bounded discovery runs.
+12. Add a simple coverage-and-depth model so the chip can distinguish:
 
 - missing research areas
 - shallow doctrine areas
 - overcrowded areas
 
-12. Commit in small coherent chunks as the chip stabilizes.
+13. Commit in small coherent chunks as the chip stabilizes.
 
 ## Commit Cadence Rule
 
@@ -167,6 +168,7 @@ The rollout is not complete until all of these are true.
 8. Watchtower pages show which claims are exploratory, benchmark-grounded, research-grounded, or real-world validated.
 9. Any DSPy slot in live use has a visible baseline, dataset count, and readiness status.
 10. The chip can explain whether it needs more sources, deeper doctrine, or less repetitive source growth.
+11. If the chip does bounded discovery, it can also explain which specific sources or source families it wants next and why.
 
 ## Recommended Docs Per Chip
 

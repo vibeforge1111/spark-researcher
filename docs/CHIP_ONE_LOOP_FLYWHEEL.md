@@ -50,25 +50,26 @@ flowchart TD
     E --> F["Packet quality gate"]
     F --> G{"Knowledge gap detected?"}
     G -->|yes| H["Open research frontier"]
-    H --> I["Approved-source expansion or bounded source drafts"]
-    I --> B
-    G -->|no| J{"Candidate set exists?"}
-    J -->|yes| K{"Choice ambiguity exists?"}
-    J -->|no| L["Open bounded trial frontier"]
-    K -->|yes| M["Use ranker or DSPy slot 2 if available"]
-    K -->|no| N["Use normal candidate ordering"]
-    M --> O["Benchmark-first evaluation"]
-    N --> O
-    L --> O
-    O --> P{"Uncertainty remains after benchmark?"}
-    P -->|yes| Q["Run bounded trial frontier probes"]
-    P -->|no| R["Skip trial frontier"]
-    Q --> S["Update memory and watchtower"]
-    R --> S
-    S --> T{"Promotion eligible?"}
-    T -->|yes| U["Queue outer real-world validation"]
-    T -->|no| V["Sleep until next pass"]
-    U --> V
+    H --> I["Run research selection"]
+    I --> J["Approved-source expansion or bounded source drafts"]
+    J --> B
+    G -->|no| K{"Candidate set exists?"}
+    K -->|yes| L{"Choice ambiguity exists?"}
+    K -->|no| M["Open bounded trial frontier"]
+    L -->|yes| N["Use ranker or DSPy slot 2 if available"]
+    L -->|no| O["Use normal candidate ordering"]
+    N --> P["Benchmark-first evaluation"]
+    O --> P
+    M --> P
+    P --> Q{"Uncertainty remains after benchmark?"}
+    Q -->|yes| R["Run bounded trial frontier probes"]
+    Q -->|no| S["Skip trial frontier"]
+    R --> T["Update memory and watchtower"]
+    S --> T
+    T --> U{"Promotion eligible?"}
+    U -->|yes| V["Queue outer real-world validation"]
+    U -->|no| W["Sleep until next pass"]
+    V --> W
 ```
 
 ## Always-On Stages
@@ -114,6 +115,22 @@ Outputs:
 - new packet opportunities
 
 It should not emit doctrine directly.
+
+### Research Selection
+
+Research selection is the source-choice layer that sits between "we need more knowledge" and "go fetch more sources."
+
+It should:
+
+- read coverage and doctrine-depth state
+- identify which underweighted areas matter most
+- choose the next best source candidates from trusted seeds
+- emit ranked fallback targets when exact sources are not yet available
+
+Keep this separate from discovery:
+
+- selection decides what to learn next and why
+- discovery only fetches or drafts sources from that bounded decision surface
 
 ### Benchmark Path
 
@@ -224,6 +241,11 @@ Healthy order:
 1. fill true gaps
 2. deepen shallow doctrine
 3. avoid repetitive source expansion in already-crowded areas unless depth is still weak
+
+This usually means the loop should ask:
+
+- do we need more sources for this area?
+- or do we need better sources because the doctrine is still thin?
 
 ## Promotion Rule
 

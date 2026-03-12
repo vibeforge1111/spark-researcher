@@ -42,6 +42,8 @@ This keeps operational residue and unresolved competing lessons out of durable m
 
 Advisory packet retrieval also uses that status: durable beliefs score above provisional ones, and contradictory beliefs are slightly down-weighted instead of being hidden.
 
+Research-oriented outcome docs can also appear in packet search as `research_outcome` entries, but only for the `research` command. These are evidence-only packet surfaces for discoverability, not promoted doctrine, and they rank below doctrine or belief packets when both match.
+
 ## RuVector
 
 RuVector is not embedded as Spark's internal database.

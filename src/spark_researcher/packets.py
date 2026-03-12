@@ -18,6 +18,7 @@ _PREFERRED_KINDS = {
     "startup_factor": 5,
     "trading_rule": 5,
     "content_belief": 5,
+    "research_outcome": 0,
     "trading_failure": 4,
     "content_failure": 4,
 }
@@ -83,6 +84,10 @@ def _infer_domain(kind: str, title: str, config_domain: str) -> str:
 
 
 def _confidence(kind: str, score: int) -> float:
+    if kind == "research_outcome":
+        # Research outcomes should stay discoverable, but never look as settled
+        # as promoted doctrine or belief packets.
+        return round(min(0.42 + min(score, 3) * 0.05, 0.57), 2)
     base = 0.55 + min(score, 4) * 0.08
     if kind in {"startup_factor", "trading_rule", "content_belief"}:
         base += 0.08
@@ -115,10 +120,49 @@ def _belief_status_bonus(packet: PacketRecord) -> int:
     return 0
 
 
+def _semantic_rank(packet: PacketRecord) -> int:
+    if packet.kind == "belief":
+        return 5 if packet.memory_status == "durable" else 4
+    if packet.kind in {"startup_factor", "trading_rule", "content_belief", "trading_failure", "content_failure", "testing_belief"}:
+        return 3
+    if packet.kind == "research_outcome":
+        return 1
+    return 2
+
+
+def _research_outcome_packet(path: Path, text: str, config_domain: str) -> PacketRecord | None:
+    command = _field_value(text, "command").lower()
+    if command != "research":
+        return None
+    candidate = _field_value(text, "candidate") or path.stem
+    latest_verdict = _field_value(text, "latest_verdict") or "unknown"
+    run_count = _field_value(text, "run_count") or "0"
+    best_metric = _field_value(text, "best_metric") or "n/a"
+    title = _first_line_title(text, path.stem)
+    return PacketRecord(
+        packet_id=path.stem,
+        kind="research_outcome",
+        domain=config_domain or "generic",
+        title=title,
+        claim=f"Bounded research evidence: suite `{candidate}` currently reports verdict `{latest_verdict}`.",
+        mechanism="Captured from the research command ledger as evidence-only support, not as promoted doctrine or belief.",
+        boundary=f"Single recorded research outcome with run_count `{run_count}` and best_metric `{best_metric}`; use as bounded evidence only.",
+        confidence=0.42,
+        path=str(path),
+    )
+
+
 def _packet_from_path(path: Path, config_domain: str) -> PacketRecord | None:
-    text = _read_text(path)
+    try:
+        text = _read_text(path)
+    except FileNotFoundError:
+        # Memory sync rewrites generated docs in place; skip files that
+        # disappear between globbing and packet loading.
+        return None
     title = _first_line_title(text, path.stem)
     kind = _infer_kind(path)
+    if kind == "outcome":
+        return _research_outcome_packet(path, text, config_domain)
     if kind in _NON_PACKET_KINDS:
         return None
     sections = _split_sections(text)
@@ -198,7 +242,7 @@ def search_packets(config_path: Path, query: str, *, limit: int = 5, domain: str
         packet.score = score
         packet.confidence = _confidence(packet.kind, score)
         selected.append(packet)
-    selected.sort(key=lambda item: (-item.score, item.packet_id))
+    selected.sort(key=lambda item: (-_semantic_rank(item), -item.score, item.packet_id))
     return {
         "query": query,
         "domain": domain,

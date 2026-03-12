@@ -7,7 +7,7 @@ Spark Researcher uses one lightweight intelligence path:
 ## What Each Layer Does
 
 - `packets`
-  - reusable beliefs, failures, rules, and domain packets exported into local memory
+  - reusable beliefs, failures, rules, domain packets, and bounded research-evidence packets exported into local memory
 - `advisory`
   - selects the smallest useful packet set for a task and marks the evidence status for the task
 - `adapter`
@@ -33,6 +33,12 @@ Advisory now also tracks packet stability:
 - if matching beliefs are mostly `durable`, advisory can stay more confident within the listed boundaries
 - if matching beliefs are only `provisional`, advisory is downgraded toward `partial` and told to surface uncertainty
 - active contradiction counts are carried forward as missing-evidence pressure instead of being hidden
+
+Packet retrieval is intentionally asymmetric:
+
+- durable or provisional belief packets outrank evidence-only research outcome packets when both match
+- `research_outcome` packets exist only to surface bounded local research evidence from the `research` command
+- `research_outcome` packets are not promoted doctrine and should not be treated as settled memory by themselves
 
 ## Failure Priorities
 

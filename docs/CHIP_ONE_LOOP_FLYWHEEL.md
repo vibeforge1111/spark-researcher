@@ -97,6 +97,13 @@ Run when:
 
 This is where packet-extractor DSPy usually belongs if a chip has it.
 
+If a chip adds slot-1 autorun inside the live loop:
+
+- keep it opt-in
+- only trigger it when that pass created new source notes or draft packets
+- write explicit autorun status into artifacts and watchtower pages
+- never treat model output alone as automatic packet promotion
+
 ### Research Frontier
 
 Run when the chip has a knowledge gap, not just a trial gap.

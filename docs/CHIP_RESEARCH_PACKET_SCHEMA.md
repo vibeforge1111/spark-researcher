@@ -151,3 +151,21 @@ If DSPy is added, use it to improve one packet-making subroutine at a time, such
 - packet ranking for doctrine promotion
 
 Do not use DSPy first for open-ended ideation.
+
+## Tagging Guidance
+
+If tags are used, keep them:
+
+- drawn from a small fixed registry
+- useful for retrieval and grouping
+- separate from freeform prose
+
+Recommended flow:
+
+1. extract the prose fields well
+2. assign tags from an allowed set
+3. use DSPy to suggest tags only after the registry exists
+
+See also:
+
+- [C:\Users\USER\Desktop\spark-researcher\docs\CHIP_TAGGING_RULESET.md](C:/Users/USER/Desktop/spark-researcher/docs/CHIP_TAGGING_RULESET.md)

@@ -31,6 +31,7 @@ The design target is simple: keep the whole repo well under `11000` counted line
 - can select reusable packets, build model-specific advisory briefs, and log advisory outcomes
 - advisory now carries packet-stability hints so verifier decisions can distinguish durable memory from provisional memory
 - packet retrieval now prefers durable beliefs over provisional ones so advisory pulls the steadier local lessons first
+- research-command outcomes can surface as evidence-only `research_outcome` packets for discovery, but they stay ranked below doctrine or belief packets
 - keeps DSPy optional as an optimizer for measurable subroutines instead of making it part of the core runtime
 - can execute advisory-backed model requests through lightweight command templates instead of hardwiring provider SDKs
 

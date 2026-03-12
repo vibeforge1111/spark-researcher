@@ -8,6 +8,7 @@ from .config import ProjectConfig
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .memory import load_episode_memory, load_working_memory, sync_memory
+from .packets import packet_status
 from .paths import trainers_root, vault_root
 from .runner import ledger_summary, read_jsonl
 from .tracing import trace_status
@@ -38,6 +39,7 @@ def render_home(
     trainer_rows: list[dict],
     memory_manifest: dict,
     belief_manifest: dict,
+    packet_manifest: dict,
     domain_pages: list[str],
     research_signals: dict,
     frontier_queue_count: int,
@@ -53,6 +55,7 @@ def render_home(
             "- [[05-Runtime/Run Ledger]]",
             "- [[05-Runtime/Trainer State]]",
             "- [[05-Runtime/Memory Index]]",
+            "- [[05-Runtime/Packet Status]]",
             "- [[05-Runtime/Working Memory]]",
             "- [[05-Runtime/Episode Memory]]",
             "- [[05-Runtime/Outcome State]]",
@@ -67,6 +70,7 @@ def render_home(
             f"- tracked metrics: `{len(summary['best_by_metric'])}`",
             f"- trainer entries: `{len(trainer_rows)}`",
             f"- memory docs: `{memory_manifest.get('document_count', 0)}`",
+            f"- packet docs: `{packet_manifest.get('packet_count', 0)}`",
             f"- episode rows: `{memory_manifest.get('episode_count', 0)}`",
             f"- durable beliefs: `{belief_manifest.get('durable_belief_count', 0)}`",
             f"- provisional beliefs: `{belief_manifest.get('provisional_belief_count', 0)}`",
@@ -148,6 +152,38 @@ def render_memory_index(memory_manifest: dict) -> str:
         "",
     ]
     lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
+    return "\n".join(lines)
+
+
+def render_packet_status(packet_manifest: dict) -> str:
+    kinds = packet_manifest.get("kinds", {})
+    lines = [
+        "# Packet Status",
+        "",
+        f"- packet_count: `{packet_manifest.get('packet_count', 0)}`",
+        f"- packets_root: `{packet_manifest.get('packets_root', 'n/a')}`",
+        "",
+        "## Packet Kinds",
+        "",
+    ]
+    lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
+    lines.extend(
+        [
+            "",
+            "## Evidence Contract",
+            "",
+            "- `belief` packets are promoted local lessons and can be `durable` or `provisional`.",
+            "- `research_outcome` packets are bounded evidence-only surfaces derived from the `research` command.",
+            "- `research_outcome` packets are not promoted doctrine or belief and should rank below those packet types when both match.",
+            "",
+            "## Research Outcome Fields",
+            "",
+            "- `kind`: `research_outcome`",
+            "- `claim`: bounded statement of the current research-suite result",
+            "- `mechanism`: explicit note that the row comes from the research ledger as evidence-only support",
+            "- `boundary`: explicit limit that the row is a single recorded research outcome and not doctrine",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -305,6 +341,7 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
     memory_manifest = sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=effective_config_path)
     belief_manifest = build_beliefs(repo_root, runtime_root)
+    packet_manifest = packet_status(effective_config_path)
     output_root = vault_root(runtime_root)
     summary = ledger_summary(runtime_root, goal=config.eval_goal)
     traces = trace_status(runtime_root)
@@ -342,12 +379,13 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     copy_docs(repo_root, output_root / "06-References")
     write_text(
         output_root / "Home.md",
-        render_home(summary, trainer_rows, memory_manifest, belief_manifest, domain_pages, traces.get("research_signals", {}), frontier_queue_count),
+        render_home(summary, trainer_rows, memory_manifest, belief_manifest, packet_manifest, domain_pages, traces.get("research_signals", {}), frontier_queue_count),
     )
     write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
     write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
     write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))
     write_text(output_root / "05-Runtime" / "Memory Index.md", render_memory_index(memory_manifest))
+    write_text(output_root / "05-Runtime" / "Packet Status.md", render_packet_status(packet_manifest))
     write_text(output_root / "05-Runtime" / "Working Memory.md", render_working_memory(working_memory))
     write_text(output_root / "05-Runtime" / "Episode Memory.md", render_episode_memory(episode_rows))
     write_text(output_root / "05-Runtime" / "Outcome State.md", render_outcome_state(memory_manifest))

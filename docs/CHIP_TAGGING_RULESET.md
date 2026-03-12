@@ -53,6 +53,7 @@ Use a small number of tag families first.
 Recommended families:
 
 - `contradiction_mode`
+- `doctrine_tag`
 - `factor`
 - `operator_function`
 - `distribution_mode`
@@ -123,6 +124,31 @@ They power:
   - avoid over-promoting doctrine that keeps failing in the same tagged way
 - outer validation:
   - send doctrines with important contradiction tags to real-world checks
+
+## Required vs Optional Packet Metadata
+
+For richer chips, separate:
+
+- required structural metadata
+- optional inference metadata
+
+Recommended required fields:
+
+- `coverage_areas`
+- `doctrine_tags`
+- `doctrine_richness`
+- `doctrine_richness_score`
+
+Recommended optional fields:
+
+- `factor_hint`
+- `quality_signal_hint`
+- `transfer_check_hint`
+- `contradiction_mode_hint`
+
+The required fields should be fully populated across the packet corpus.
+
+The optional fields should improve over time, but should not be forced with weak guesses just to make a packet look complete.
 
 ## DSPy Policy
 

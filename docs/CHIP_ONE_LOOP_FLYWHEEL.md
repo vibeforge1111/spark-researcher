@@ -20,6 +20,11 @@ This pattern helps a chip combine:
 - outer validation
 - optional DSPy help
 
+For packet-heavy chips, the loop should also make packet metadata policy explicit:
+
+- required structural metadata should be fully populated across the corpus
+- optional hint fields should improve over time without being forced by weak guesses
+
 ## Core Rule
 
 A mature chip should have one governing loop, not many disconnected loops.

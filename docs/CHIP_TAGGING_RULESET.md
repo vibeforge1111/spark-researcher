@@ -175,6 +175,31 @@ This keeps the tags stable while still benefiting from model help.
 3. only add a new tag if multiple packets clearly need it
 4. document every new stable tag in the chip registry
 
+## Broad vs Narrow Doctrine Tags
+
+When a chip matures, broad doctrine tags often become saturated.
+
+At that point, do not keep adding more sources under the same coarse labels only.
+
+Instead:
+
+- keep the broad doctrine tags for coverage and high-level grouping
+- add narrower doctrine tags for novelty pressure and doctrine expansion
+
+Example:
+
+- broad:
+  - `doctrine:pricing_and_sales_execution`
+- narrower:
+  - `doctrine:enterprise_buying_and_sales_motion`
+  - `doctrine:pricing_psychology_and_conversion`
+
+This lets the loop distinguish:
+
+- “we have enough material in this broad area”
+- from
+- “we are still missing important doctrine inside this broad area”
+
 ## Promotion Rule For New Tags
 
 Do not create a new stable tag because one packet used unusual wording.

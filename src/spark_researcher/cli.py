@@ -8,7 +8,7 @@ from .adapters import adapter_status, execute_advisory, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, run_continuous_autoloop, suggest_trials
-from .chip_starter import init_chip
+from .chip_starter import init_chip, normalize_chip_name, resolve_chip_target
 from .chips import chip_status, chip_validation
 from .collective import absorb, collective_status, publish_latest, sync_local_collective
 from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
@@ -130,8 +130,8 @@ def build_parser() -> argparse.ArgumentParser:
     chips_parser = sub.add_parser("chips")
     chips_sub = chips_parser.add_subparsers(dest="chips_command")
     chips_init_parser = chips_sub.add_parser("init")
-    chips_init_parser.add_argument("--path", required=True)
-    chips_init_parser.add_argument("--chip-name", required=True)
+    chips_init_parser.add_argument("--path")
+    chips_init_parser.add_argument("--chip-name")
     chips_init_parser.add_argument("--domain", required=True)
     chips_init_parser.add_argument("--metric-name", default="quality_score")
     chips_init_parser.add_argument("--goal", choices=["maximize", "minimize"], default="maximize")
@@ -542,16 +542,18 @@ def main() -> None:
         return
     if args.action == "chips":
         if args.chips_command == "init":
+            chip_name = normalize_chip_name(args.domain, args.chip_name)
+            target_dir = resolve_chip_target(Path(args.path), chip_name) if args.path else resolve_chip_target(None, chip_name)
             print_json(
                 init_chip(
-                    Path(args.path),
-                    chip_name=args.chip_name,
+                    target_dir,
+                    chip_name=chip_name,
                     domain=args.domain,
                     metric_name=args.metric_name,
                     goal=args.goal,
-            package_name=args.package_name,
-            preset=args.preset,
-        )
+                    package_name=args.package_name,
+                    preset=args.preset,
+                )
             )
             return
         if args.chips_command == "validate":

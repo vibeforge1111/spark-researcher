@@ -15,6 +15,29 @@ def _package_name(chip_name: str) -> str:
     return _slug(chip_name).replace(".", "_").replace("-", "_")
 
 
+def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
+    candidate = _slug(chip_name or "") or _slug(domain)
+    if candidate == "chip":
+        candidate = _slug(domain)
+    if not candidate.startswith("domain-chip-"):
+        candidate = f"domain-chip-{candidate}"
+    return candidate
+
+
+def _desktop_root() -> Path:
+    desktop = Path.home() / "Desktop"
+    return desktop if desktop.exists() else Path.home()
+
+
+def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
+    if target_dir is None:
+        return (_desktop_root() / chip_name).resolve()
+    candidate = target_dir.expanduser()
+    if candidate.is_absolute():
+        return candidate.resolve()
+    return (_desktop_root() / candidate).resolve()
+
+
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
@@ -127,7 +150,7 @@ def _generic_project(chip_name: str, package_name: str, domain: str, metric_name
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def _generic_readme(chip_name: str, domain: str) -> str:
+def _generic_readme(chip_name: str, domain: str, chip_root: Path) -> str:
     return dedent(
         f"""
         # {chip_name}
@@ -137,7 +160,7 @@ def _generic_readme(chip_name: str, domain: str) -> str:
         ## Quick Start
 
         ```powershell
-        cd {chip_name}
+        cd {chip_root}
         python -m pip install -e .
         python -m spark_researcher.cli chips validate
         python -m spark_researcher.cli autoloop --command research
@@ -294,7 +317,7 @@ def _crypto_project(chip_name: str, package_name: str) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def _crypto_readme(chip_name: str, package_name: str) -> str:
+def _crypto_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
     return dedent(
         f"""
         # {chip_name}
@@ -311,7 +334,7 @@ def _crypto_readme(chip_name: str, package_name: str) -> str:
         ## Quick Start
 
         ```powershell
-        cd {chip_name}
+        cd {chip_root}
         python -m pip install -e .
         python -m pip install -e C:\\Users\\USER\\Desktop\\spark-researcher
         $env:PYTHONPATH='C:\\Users\\USER\\Desktop\\spark-researcher\\src;src'
@@ -623,7 +646,7 @@ def _xcontent_project(chip_name: str, package_name: str) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def _xcontent_readme(chip_name: str, package_name: str) -> str:
+def _xcontent_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
     return dedent(
         f"""
         # {chip_name}
@@ -642,7 +665,7 @@ def _xcontent_readme(chip_name: str, package_name: str) -> str:
         ## Quick Start
 
         ```powershell
-        cd {chip_name}
+        cd {chip_root}
         python -m pip install -e .
         python -m pip install -e C:\\Users\\USER\\Desktop\\spark-researcher
         $env:PYTHONPATH='C:\\Users\\USER\\Desktop\\spark-researcher\\src;src'
@@ -1085,7 +1108,7 @@ def init_chip(
             root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
             root / "spark-chip.json": _crypto_manifest(chip_name, package),
             root / "spark-researcher.project.json": _crypto_project(chip_name, package),
-            root / "README.md": _crypto_readme(chip_name, package),
+            root / "README.md": _crypto_readme(chip_name, package, root),
             root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
             root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
             root / "src" / package / "__init__.py": _init_file(),
@@ -1100,7 +1123,7 @@ def init_chip(
             root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
             root / "spark-chip.json": _xcontent_manifest(chip_name, package),
             root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
-            root / "README.md": _xcontent_readme(chip_name, package),
+            root / "README.md": _xcontent_readme(chip_name, package, root),
             root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
             root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
             root / "src" / package / "__init__.py": _init_file(),
@@ -1115,7 +1138,7 @@ def init_chip(
             root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
             root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
             root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
-            root / "README.md": _generic_readme(chip_name, domain),
+            root / "README.md": _generic_readme(chip_name, domain, root),
             root / "src" / package / "__init__.py": _init_file(),
             root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
         }

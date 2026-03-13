@@ -55,7 +55,7 @@ spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limit 2 --pause-seconds 300
 spark-researcher init --path C:\work\my-project --preset coding --project-name my-project
-spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
+spark-researcher chips init --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
 spark-researcher intent set --goal "Build the strongest startup-understanding agent" --outcome "Create agentic startups from first-principles doctrine" --success-criterion "Find reusable startup doctrines" --success-criterion "Map failure boundaries" --resource web --resource memory --resource ruvector --resource dspy --frontier-mode open
@@ -108,7 +108,7 @@ spark-researcher run --command train
 spark-researcher loop --command train
 spark-researcher autoloop --command train
 spark-researcher autoloop --command train --continuous --rounds 2 --suggest-limit 2 --pause-seconds 300
-spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score
+spark-researcher chips init --domain foo --metric-name foo_score
 spark-researcher chips status
 spark-researcher chips validate
 spark-researcher intent show
@@ -195,7 +195,7 @@ Spark still owns the loop, ledger, memory index, self-edit policy, and collectiv
 
 Use `docs/CHIP_VALIDATION.md` as the standard pass/fail protocol for validating any chip against the current core.
 
-New chips should usually start from `spark-researcher chips init`, then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.
+New chips should usually start from `spark-researcher chips init`, which now defaults to creating a standalone Desktop sibling folder like `C:\Users\USER\Desktop\domain-chip-foo`. Relative `--path` values are also resolved under Desktop. Then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.
 
 ## Advisory Path
 

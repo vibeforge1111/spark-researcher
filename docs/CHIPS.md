@@ -54,13 +54,27 @@ For richer chips, keep source choice separate from source fetching:
 Create a new chip scaffold with:
 
 ```powershell
-spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score --goal maximize
+spark-researcher chips init --domain foo --metric-name foo_score --goal maximize
 ```
+
+This defaults to a standalone Desktop sibling folder:
+
+```text
+C:\Users\USER\Desktop\domain-chip-foo
+```
+
+Rules:
+
+- chip names are normalized to start with `domain-chip-`
+- omitting `--chip-name` uses `domain-chip-<domain>`
+- omitting `--path` creates the chip on the Desktop
+- relative `--path` values are also resolved under the Desktop instead of inside `spark-researcher`
+- use an absolute `--path` only when you intentionally want a different external location
 
 Create the experimental crypto-trading starter with:
 
 ```powershell
-spark-researcher chips init --path C:\work\domain-chip-trading-crypto --chip-name domain-chip-trading-crypto --domain trading --preset crypto-trading
+spark-researcher chips init --domain trading --chip-name domain-chip-trading-crypto --preset crypto-trading
 ```
 
 The starter writes only the minimum valid repo:
@@ -80,7 +94,7 @@ The experimental `crypto-trading` preset also writes:
 Create the X content research starter with:
 
 ```powershell
-spark-researcher chips init --path C:\work\domain-chip-xcontent --chip-name domain-chip-xcontent --domain xcontent --preset xcontent
+spark-researcher chips init --domain xcontent --preset xcontent
 ```
 
 The `xcontent` preset evaluates X (Twitter) content format + hook type + audience combinations against engagement quality, useful reach, and Grok/xAI relevance scoring. It writes:

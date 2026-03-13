@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 import sys
+import json
 
 from spark_researcher import chip_starter
 
@@ -104,3 +105,32 @@ def test_cli_chips_init_refusal_is_clean() -> None:
     assert result.returncode != 0
     assert "outside spark-researcher" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "chips",
+            "init",
+            "--path",
+            str(tmp_path / "bootstrap-chip"),
+            "--domain",
+            "bootstrap",
+            "--metric-name",
+            "bootstrap_score",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["chip_name"] == "domain-chip-bootstrap"
+    assert payload["chip_root"] == str((tmp_path / "bootstrap-chip").resolve())
+    assert payload["next_steps"][0] == f"cd {(tmp_path / 'bootstrap-chip').resolve()}"
+    assert "git init" in payload["next_steps"]
+    assert any("chips validate --config" in step for step in payload["next_steps"])

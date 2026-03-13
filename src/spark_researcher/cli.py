@@ -544,17 +544,20 @@ def main() -> None:
         if args.chips_command == "init":
             chip_name = normalize_chip_name(args.domain, args.chip_name)
             target_dir = resolve_chip_target(Path(args.path), chip_name) if args.path else resolve_chip_target(None, chip_name)
-            print_json(
-                init_chip(
-                    target_dir,
-                    chip_name=chip_name,
-                    domain=args.domain,
-                    metric_name=args.metric_name,
-                    goal=args.goal,
-                    package_name=args.package_name,
-                    preset=args.preset,
+            try:
+                print_json(
+                    init_chip(
+                        target_dir,
+                        chip_name=chip_name,
+                        domain=args.domain,
+                        metric_name=args.metric_name,
+                        goal=args.goal,
+                        package_name=args.package_name,
+                        preset=args.preset,
+                    )
                 )
-            )
+            except ValueError as exc:
+                raise SystemExit(str(exc))
             return
         if args.chips_command == "validate":
             print_json(chip_validation(config_path))

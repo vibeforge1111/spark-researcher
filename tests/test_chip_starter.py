@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 
 from spark_researcher import chip_starter
 
@@ -72,3 +74,30 @@ def test_init_chip_refuses_targets_inside_spark_repo(monkeypatch, tmp_path: Path
         assert "outside spark-researcher" in str(exc)
     else:
         raise AssertionError("Expected init_chip to refuse a target inside spark-researcher")
+
+
+def test_cli_chips_init_refusal_is_clean() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    blocked_target = repo_root / "domain-chip-bad"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "chips",
+            "init",
+            "--path",
+            str(blocked_target),
+            "--domain",
+            "bad",
+            "--metric-name",
+            "bad_score",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "outside spark-researcher" in result.stderr
+    assert "Traceback" not in result.stderr

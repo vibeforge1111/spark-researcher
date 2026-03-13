@@ -130,8 +130,14 @@ def build_parser() -> argparse.ArgumentParser:
     chips_parser = sub.add_parser("chips")
     chips_sub = chips_parser.add_subparsers(dest="chips_command")
     chips_init_parser = chips_sub.add_parser("init")
-    chips_init_parser.add_argument("--path")
-    chips_init_parser.add_argument("--chip-name")
+    chips_init_parser.add_argument(
+        "--path",
+        help="Optional external chip target. Defaults to Desktop/domain-chip-<domain>. Relative paths resolve under Desktop; in-repo targets are refused.",
+    )
+    chips_init_parser.add_argument(
+        "--chip-name",
+        help="Optional chip repo name. Defaults to domain-chip-<domain> and auto-adds the domain-chip- prefix when missing.",
+    )
     chips_init_parser.add_argument("--domain", required=True)
     chips_init_parser.add_argument("--metric-name", default="quality_score")
     chips_init_parser.add_argument("--goal", choices=["maximize", "minimize"], default="maximize")

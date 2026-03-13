@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .chips import chip_has_hook, invoke_chip_hook
-from .config import CandidateTrial, MutationSpec, intent_policy, load_config
+from .config import CandidateTrial, MutationSpec, intent_policy, load_config, trial_applies_to_command
 from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
@@ -240,12 +240,13 @@ def _neighborhood_suggestions(
     return suggestions, reasons
 
 
-def _trial_from_packet(item: dict[str, Any]) -> CandidateTrial:
+def _trial_from_packet(item: dict[str, Any], *, default_commands: list[str] | None = None) -> CandidateTrial:
     return CandidateTrial(
         candidate_id=str(item["candidate_id"]),
         candidate_summary=str(item.get("candidate_summary", "")),
         hypothesis=str(item.get("hypothesis", "")),
         mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+        commands=[str(part) for part in item.get("commands", default_commands or [])],
     )
 
 
@@ -253,8 +254,12 @@ def _serialize_trials(trials: list[CandidateTrial], *, limit: int) -> list[dict[
     return [asdict(item) for item in trials[:limit]]
 
 
-def _pending_trials(config: Any, tested: set[tuple[tuple[str, str], ...]]) -> list[CandidateTrial]:
-    return [trial for trial in config.candidate_trials if _signature(trial.mutations) not in tested]
+def _pending_trials(config: Any, tested: set[tuple[tuple[str, str], ...]], command_name: str) -> list[CandidateTrial]:
+    return [
+        trial
+        for trial in config.candidate_trials
+        if trial_applies_to_command(trial, command_name) and _signature(trial.mutations) not in tested
+    ]
 
 
 def _recent_runner_failures(runtime_root: Path, command_name: str, *, limit: int = 5) -> list[dict[str, Any]]:
@@ -368,11 +373,15 @@ def _chip_suggestion_packet(
             "intent": intent_policy(config),
             "failure_priorities": failure_priorities,
             "ledger_rows": rows,
-            "candidate_trials": [asdict(item) for item in merged_candidate_trials(config_path, config=config)],
+            "candidate_trials": [
+                asdict(item)
+                for item in merged_candidate_trials(config_path, config=config)
+                if trial_applies_to_command(item, command_name)
+            ],
         },
         config=config,
     )
-    suggestions = [_trial_from_packet(item) for item in packet.get("suggestions", [])]
+    suggestions = [_trial_from_packet(item, default_commands=[command_name]) for item in packet.get("suggestions", [])]
     if suggestions:
         return {
             "command_name": command_name,
@@ -404,7 +413,7 @@ def _chip_suggestion_packet(
 def _core_suggestion_packet(config: Any, runtime_root: Path, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
     baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
     tested = _tested_signatures(rows, command_name)
-    existing = {_signature(trial.mutations) for trial in config.candidate_trials}
+    existing = {_signature(trial.mutations) for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)}
     primitives = _best_single_primitives(rows, command_name, config.eval_goal, baseline_metric)
     numeric_specs = _numeric_specs(config)
     anchors = _beneficial_numeric_anchors(rows, command_name, config.eval_goal, baseline_metric, numeric_specs)
@@ -491,9 +500,9 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
     return _core_suggestion_packet(config, runtime_root, command_name, rows, limit=limit)
 
 
-def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]]) -> dict[str, Any]:
+def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]], *, command_name: str | None = None) -> dict[str, Any]:
     config = load_config(config_path)
-    trials = [_trial_from_packet(item) for item in suggestions]
+    trials = [_trial_from_packet(item, default_commands=[command_name] if command_name else None) for item in suggestions]
     return append_queue_trials(config_path, trials, config=config)
 
 
@@ -537,12 +546,16 @@ def run_autoloop(
         runtime_root = resolve_runtime_root(config_path)
         rows = read_jsonl(ledger_path(runtime_root))
         tested = _tested_signatures(rows, command_name)
-        pending = _pending_trials(config, tested)
+        pending = _pending_trials(config, tested, command_name)
 
         if not pending:
             suggestion_packet = queued_packet or suggest_trials(config_path, command_name, limit=suggest_limit)
             queued_packet = None
-            append_packet = append_suggestions(config_path, suggestion_packet["suggestions"]) if apply_suggestions else {"appended_count": 0, "appended": []}
+            append_packet = (
+                append_suggestions(config_path, suggestion_packet["suggestions"], command_name=command_name)
+                if apply_suggestions
+                else {"appended_count": 0, "appended": []}
+            )
             if int(append_packet["appended_count"]) <= 0:
                 history.append(
                     {
@@ -557,7 +570,7 @@ def run_autoloop(
                 break
             config = load_config(config_path)
             config.candidate_trials = merged_candidate_trials(config_path, config=config)
-            pending = _pending_trials(config, tested)
+            pending = _pending_trials(config, tested, command_name)
         else:
             suggestion_packet = {"suggestion_count": 0, "suggestions": [], "reasons": []}
             append_packet = {"appended_count": 0, "appended": []}
@@ -613,6 +626,34 @@ def run_continuous_autoloop(
             pass_started_at = _now_iso()
             start_monotonic = time.monotonic()
             artifact_before = _tracked_loop_artifacts(runtime_root)
+            _write_continuous_status(
+                runtime_root,
+                {
+                    "updated_at": pass_started_at,
+                    "command_name": command_name,
+                    "project_name": load_config(config_path).project_name,
+                    "continuous": True,
+                    "pass_count": len(passes),
+                    "current_pass": {
+                        "pass": pass_index,
+                        "pass_started_at": pass_started_at,
+                        "pass_finished_at": None,
+                        "work_duration_seconds": None,
+                        "round_count": None,
+                        "run_count": None,
+                        "appended_count": None,
+                        "suggested_count": None,
+                        "productive": None,
+                        "changed_artifact_count": None,
+                        "changed_artifacts": [],
+                        "next_sleep_seconds": None,
+                        "next_wake_at": None,
+                        "stopped": None,
+                        "status": "running",
+                    },
+                    "recent_passes": passes[-5:],
+                },
+            )
             packet = run_autoloop(
                 config_path,
                 command_name,
@@ -659,6 +700,7 @@ def run_continuous_autoloop(
                 "next_sleep_seconds": next_sleep_seconds,
                 "next_wake_at": datetime.fromtimestamp(wake_at, UTC).replace(microsecond=0).isoformat(),
                 "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
+                "status": "completed",
             }
             passes.append(pass_summary)
             _write_continuous_status(

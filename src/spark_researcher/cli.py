@@ -527,7 +527,7 @@ def main() -> None:
     if args.action == "candidates":
         if args.candidates_command == "apply":
             packet = suggest_trials(config_path, args.project_command, limit=args.limit)
-            print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"])})
+            print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"], command_name=args.project_command)})
             return
         print_json(suggest_trials(config_path, args.project_command, limit=args.limit))
         return

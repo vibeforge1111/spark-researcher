@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .chips import invoke_chip_hook
-from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root
+from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
@@ -437,7 +437,8 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
     max_iterations = min(limit or config.guardrails.max_loop_iterations, config.guardrails.max_loop_iterations)
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
-    for trial in config.candidate_trials[:max_iterations]:
+    pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
+    for trial in pending_trials[:max_iterations]:
         record = run_once(config_path, command_name, trial=trial, dry_run=dry_run)
         results.append(record)
         if record["verdict"] == "improved":

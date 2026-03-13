@@ -37,6 +37,7 @@ class CandidateTrial:
     candidate_summary: str = ""
     hypothesis: str = ""
     mutations: dict[str, str] = field(default_factory=dict)
+    commands: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -134,6 +135,7 @@ def _candidate_to_payload(spec: CandidateTrial) -> dict[str, object]:
         "candidate_summary": spec.candidate_summary,
         "hypothesis": spec.hypothesis,
         "mutations": dict(spec.mutations),
+        "commands": list(spec.commands),
     }
 
 
@@ -322,6 +324,7 @@ def load_config(path: Path) -> ProjectConfig:
             candidate_summary=str(item.get("candidate_summary", "")),
             hypothesis=str(item.get("hypothesis", "")),
             mutations={key: str(value) for key, value in item.get("mutations", {}).items()},
+            commands=[str(part) for part in item.get("commands", [])],
         )
         for item in payload.get("candidate_trials", [])
     ]
@@ -400,3 +403,7 @@ def resolve_project_root(config_path: Path, config: ProjectConfig) -> Path:
 
 def mutation_lookup(config: ProjectConfig) -> dict[str, MutationSpec]:
     return {item.name: item for item in config.mutable_parameters}
+
+
+def trial_applies_to_command(trial: CandidateTrial, command_name: str) -> bool:
+    return not trial.commands or command_name in trial.commands

@@ -16,6 +16,10 @@ def _signature_from_row(row: dict[str, object]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
 
 
+def _trial_signature(trial: CandidateTrial) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    return (_signature(trial.mutations), tuple(sorted(str(item) for item in trial.commands)))
+
+
 def queue_path_for_config(config_path: Path) -> Path:
     return frontier_queue_path(resolve_runtime_root(config_path))
 
@@ -38,6 +42,7 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
                 candidate_summary=str(item.get("candidate_summary", "")),
                 hypothesis=str(item.get("hypothesis", "")),
                 mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+                commands=[str(part) for part in item.get("commands", [])],
             )
         )
     return trials
@@ -45,15 +50,15 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
 
 def merged_candidate_trials(config_path: Path, *, config: ProjectConfig | None = None) -> list[CandidateTrial]:
     merged: list[CandidateTrial] = []
-    seen: set[tuple[tuple[str, str], ...]] = set()
+    seen: set[tuple[tuple[tuple[str, str], ...], tuple[str, ...]]] = set()
     for trial in (config.candidate_trials if config is not None else []):
-        sig = _signature(trial.mutations)
+        sig = _trial_signature(trial)
         if sig in seen:
             continue
         seen.add(sig)
         merged.append(trial)
     for trial in load_queue_trials(config_path):
-        sig = _signature(trial.mutations)
+        sig = _trial_signature(trial)
         if sig in seen:
             continue
         seen.add(sig)
@@ -64,11 +69,11 @@ def merged_candidate_trials(config_path: Path, *, config: ProjectConfig | None =
 def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, config: ProjectConfig | None = None) -> dict[str, object]:
     path = queue_path_for_config(config_path)
     existing_trials = merged_candidate_trials(config_path, config=config)
-    seen = {_signature(trial.mutations) for trial in existing_trials}
+    seen = {_trial_signature(trial) for trial in existing_trials}
     queue_trials = load_queue_trials(config_path)
     appended: list[dict[str, object]] = []
     for trial in trials:
-        sig = _signature(trial.mutations)
+        sig = _trial_signature(trial)
         if sig in seen:
             continue
         seen.add(sig)

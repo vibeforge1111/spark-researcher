@@ -57,6 +57,12 @@ Create a new chip scaffold with:
 spark-researcher chips init --path C:\work\domain-chip-foo --chip-name domain-chip-foo --domain foo --metric-name foo_score --goal maximize
 ```
 
+Create the experimental crypto-trading starter with:
+
+```powershell
+spark-researcher chips init --path C:\work\domain-chip-trading-crypto --chip-name domain-chip-trading-crypto --domain trading --preset crypto-trading
+```
+
 The starter writes only the minimum valid repo:
 
 - `pyproject.toml`
@@ -65,6 +71,24 @@ The starter writes only the minimum valid repo:
 - `README.md`
 - `src/<package>/__init__.py`
 - `src/<package>/cli.py`
+
+The experimental `crypto-trading` preset also writes:
+
+- `docs/CRYPTO_TRADING_ONE_LOOP_SPEC.md`
+- `docs/CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md`
+
+Create the X content research starter with:
+
+```powershell
+spark-researcher chips init --path C:\work\domain-chip-xcontent --chip-name domain-chip-xcontent --domain xcontent --preset xcontent
+```
+
+The `xcontent` preset evaluates X (Twitter) content format + hook type + audience combinations against engagement quality, useful reach, and Grok/xAI relevance scoring. It writes:
+
+- `docs/XCONTENT_ONE_LOOP_SPEC.md`
+- `docs/XCONTENT_BENCH_PROMOTION_BRIDGE.md`
+
+Integration surfaces: X API (post analytics, trending topics), Grok/xAI API (relevance scoring, discoverability prediction).
 
 ## Config
 

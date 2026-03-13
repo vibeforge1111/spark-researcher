@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from textwrap import dedent
 
 
 def _slug(value: str) -> str:
@@ -14,16 +15,53 @@ def _package_name(chip_name: str) -> str:
     return _slug(chip_name).replace(".", "_").replace("-", "_")
 
 
-def _class_label(domain: str) -> str:
-    return "".join(part.capitalize() for part in re.split(r"[^a-zA-Z0-9]+", domain) if part) or "Domain"
-
-
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
-def _manifest(chip_name: str, domain: str, package_name: str) -> str:
+def _gitignore() -> str:
+    return "\n".join(
+        [
+            "artifacts/",
+            "obsidian-vault/",
+            "docs/beliefs/",
+            "__pycache__/",
+            "*.pyc",
+            "*.egg-info/",
+        ]
+    )
+
+
+def _init_file() -> str:
+    return '\n'.join(['__all__ = ["__version__"]', "", '__version__ = "0.1.0"'])
+
+
+def _pyproject(chip_name: str, description: str) -> str:
+    return "\n".join(
+        [
+            "[build-system]",
+            'requires = ["setuptools>=68"]',
+            'build-backend = "setuptools.build_meta"',
+            "",
+            "[project]",
+            f'name = "{chip_name}"',
+            'version = "0.1.0"',
+            f'description = "{description}"',
+            'readme = "README.md"',
+            'requires-python = ">=3.10"',
+            "dependencies = []",
+            "",
+            "[tool.setuptools]",
+            'package-dir = {"" = "src"}',
+            "",
+            "[tool.setuptools.packages.find]",
+            'where = ["src"]',
+        ]
+    )
+
+
+def _generic_manifest(chip_name: str, domain: str, package_name: str) -> str:
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -42,19 +80,14 @@ def _manifest(chip_name: str, domain: str, package_name: str) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def _project_config(chip_name: str, package_name: str, metric_name: str, goal: str) -> str:
+def _generic_project(chip_name: str, package_name: str, domain: str, metric_name: str, goal: str) -> str:
     payload = {
         "project_name": chip_name,
         "project_root": ".",
         "eval_metric": metric_name,
         "eval_goal": goal,
         "commands": {
-            "research": {
-                "args": [],
-                "cwd": ".",
-                "kind": "chip-evaluate",
-                "log_name": f"{_slug(chip_name)}.log",
-            }
+            "research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": f"{_slug(chip_name)}.log"}
         },
         "metrics": {
             metric_name: {"pattern": rf"^{metric_name}:\s+([0-9.]+)$", "kind": "float"},
@@ -94,80 +127,28 @@ def _project_config(chip_name: str, package_name: str, metric_name: str, goal: s
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
-def _pyproject(chip_name: str) -> str:
-    return "\n".join(
-        [
-            "[build-system]",
-            'requires = ["setuptools>=68"]',
-            'build-backend = "setuptools.build_meta"',
-            "",
-            "[project]",
-            f'name = "{chip_name}"',
-            'version = "0.1.0"',
-            f'description = "Portable domain chip scaffold for {chip_name}."',
-            'readme = "README.md"',
-            'requires-python = ">=3.10"',
-            "dependencies = []",
-            "",
-            "[tool.setuptools]",
-            'package-dir = {"" = "src"}',
-            "",
-            "[tool.setuptools.packages.find]",
-            'where = ["src"]',
-        ]
-    )
+def _generic_readme(chip_name: str, domain: str) -> str:
+    return dedent(
+        f"""
+        # {chip_name}
+
+        `{chip_name}` is a Spark domain chip scaffold for `{domain}`.
+
+        ## Quick Start
+
+        ```powershell
+        cd {chip_name}
+        python -m pip install -e .
+        python -m spark_researcher.cli chips validate
+        python -m spark_researcher.cli autoloop --command research
+        ```
+        """
+    ).strip()
 
 
-def _readme(chip_name: str, domain: str) -> str:
-    return "\n".join(
-        [
-            f"# {chip_name}",
-            "",
-            f"`{chip_name}` is a Spark domain chip scaffold for `{domain}`.",
-            "",
-            "## What To Change",
-            "",
-            "- replace the deterministic placeholder logic in `src/.../cli.py` with real domain logic",
-            "- add real candidate trials to `spark-researcher.project.json`",
-            "- keep the manifest on `spark-chip.v1`",
-            "- validate with `python -m spark_researcher.cli chips validate`",
-            "",
-            "## Quick Start",
-            "",
-            "```powershell",
-            f"cd {chip_name}",
-            "python -m pip install -e .",
-            "python -m spark_researcher.cli chips status",
-            "python -m spark_researcher.cli chips validate",
-            "python -m spark_researcher.cli autoloop --command research",
-            "```",
-        ]
-    )
-
-
-def _gitignore() -> str:
-    return "\n".join(
-        [
-            "artifacts/",
-            "obsidian-vault/",
-            "docs/beliefs/",
-            "__pycache__/",
-            "*.pyc",
-            "*.egg-info/",
-        ]
-    )
-
-
-def _init_file() -> str:
-    return '\n'.join(['__all__ = ["__version__"]', "", '__version__ = "0.1.0"'])
-
-
-def _cli_file(package_name: str, domain: str, metric_name: str, goal: str) -> str:
-    label = _class_label(domain)
-    better_word = "higher" if goal == "maximize" else "lower"
-    baseline_value = "0.40" if goal == "maximize" else "0.60"
-    improved_value = "0.62" if goal == "maximize" else "0.38"
-    verdict_word = "supports" if goal == "maximize" else "supports"
+def _generic_cli(package_name: str, domain: str, metric_name: str, goal: str) -> str:
+    baseline = "0.40" if goal == "maximize" else "0.60"
+    improved = "0.62" if goal == "maximize" else "0.38"
     return "\n".join(
         [
             "from __future__ import annotations",
@@ -176,98 +157,40 @@ def _cli_file(package_name: str, domain: str, metric_name: str, goal: str) -> st
             "import json",
             "from pathlib import Path",
             "",
-            "",
             "def _load(path: str) -> dict:",
             '    return json.loads(Path(path).read_text(encoding="utf-8-sig"))',
-            "",
             "",
             "def _write(path: str, payload: dict) -> None:",
             '    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")',
             "",
-            "",
-            "def _candidate(payload: dict) -> dict[str, str]:",
+            "def _mutations(payload: dict) -> dict[str, str]:",
             '    candidate = payload.get("candidate", {})',
-            '    mutations = candidate.get("mutations", {}) if isinstance(candidate, dict) else {}',
-            "    return {str(key): str(value) for key, value in mutations.items()}",
-            "",
+            '    raw = candidate.get("mutations", {}) if isinstance(candidate, dict) else {}',
+            "    return {str(key): str(value) for key, value in raw.items()}",
             "",
             "def evaluate(payload: dict) -> dict:",
-            "    mutations = _candidate(payload)",
-            f'    focused = bool(mutations.get("{domain}_axis")) or bool(mutations)',
-            f"    metric_value = {improved_value} if focused else {baseline_value}",
-            '    verdict_confidence = 0.84 if focused else 0.50',
-            "    stdout = \"\\n\".join(",
-            "        [",
-            f'            "{metric_name}: " + str(metric_value),',
-            '            "verdict_confidence: " + str(verdict_confidence),',
-            f'            "summary: " + ("Focused {domain} candidate" if focused else "Global baseline"),',
-            "        ]",
-            "    )",
+            "    focused = bool(_mutations(payload))",
+            f"    metric_value = {improved} if focused else {baseline}",
+            '    verdict_confidence = 0.84 if focused else 0.5',
+            "    stdout = \"\\n\".join([",
+            f'        "{metric_name}: " + str(metric_value),',
+            '        "verdict_confidence: " + str(verdict_confidence),',
+            f'        "summary: " + ("Focused {domain} candidate" if focused else "Global baseline"),',
+            "    ])",
             "    return {",
-            '        "returncode": 0,',
-            '        "stdout": stdout,',
-            '        "stderr": "",',
+            '        "returncode": 0, "stdout": stdout, "stderr": "",',
             f'        "metrics": {{"{metric_name}": metric_value, "verdict_confidence": verdict_confidence}},',
-            '        "result": {',
-            f'            "claim": "Focused {domain} candidates should yield {better_word} {metric_name}.",',
-            f'            "verdict": "{verdict_word}" if focused else "inconclusive",',
-            f'            "mechanism": "{label} mechanism placeholder.",',
-            '        },',
+            '        "result": {"claim": "Placeholder.", "verdict": "supports" if focused else "inconclusive", "mechanism": "Placeholder."},',
             "    }",
-            "",
             "",
             "def suggest(payload: dict) -> dict:",
-            "    rows = payload.get(\"ledger_rows\", [])",
-            "    limit = max(1, int(payload.get(\"limit\", 3) or 3))",
-            "    tested = set()",
-            "    for row in rows if isinstance(rows, list) else []:",
-            "        if str(row.get(\"command_name\", \"\")) != str(payload.get(\"command_name\", \"research\")):",
-            "            continue",
-            "        axis = \"\"",
-            "        for item in row.get(\"applied_mutations\", []) if isinstance(row.get(\"applied_mutations\"), list) else []:",
-            f'            if str(item.get("name")) == "{domain}_axis":',
-            '                axis = str(item.get("value", ""))',
-            "        tested.add(axis)",
-            "    suggestions = []",
-            "    if \"primary\" not in tested:",
-            "        suggestions.append(",
-            "            {",
-            '                "candidate_id": "primary-axis",',
-            f'                "candidate_summary": "Probe the primary {domain} axis.",',
-            f'                "hypothesis": "A focused {domain} axis should beat the baseline.",',
-            f'                "mutations": {{"{domain}_axis": "primary"}},',
-            "            }",
-            "        )",
-            "    return {",
-            '        "baseline_metric": None,',
-            f'        "reasons": ["Probe the primary {domain} axis first."][:limit],',
-            '        "suggestions": suggestions[:limit],',
-            "    }",
-            "",
+            f'    return {{"baseline_metric": None, "reasons": ["Probe the primary {domain} axis first."], "suggestions": [{{"candidate_id": "primary-axis", "candidate_summary": "Probe the primary {domain} axis.", "hypothesis": "A focused {domain} axis should beat the baseline.", "mutations": {{"{domain}_axis": "primary"}}}}]}}',
             "",
             "def packets(payload: dict) -> dict:",
-            "    return {",
-            '        "documents": [',
-            "            {",
-            f'                "kind": "{domain}_belief",',
-            f'                "slug": "{domain}-placeholder",',
-            f'                "title": "{label} Belief Placeholder",',
-            f'                "content": "# {label} Belief Placeholder\\n\\nReplace this with real {domain} packet logic.",',
-            "            }",
-            "        ]",
-            "    }",
-            "",
+            f'    return {{"documents": [{{"kind": "{domain}_belief", "slug": "{domain}-placeholder", "title": "{domain.title()} Placeholder", "content": "# Placeholder"}}]}}',
             "",
             "def watchtower(payload: dict) -> dict:",
-            "    return {",
-            '        "pages": [',
-            "            {",
-            f'                "path": "07-Domains/{label}/Home.md",',
-            f'                "content": "# {label} Domain\\n\\nReplace this with real watchtower pages.",',
-            "            }",
-            "        ]",
-            "    }",
-            "",
+            f'    return {{"pages": [{{"path": "07-Domains/{domain.title()}/Home.md", "content": "# {domain.title()} Domain"}}]}}',
             "",
             "def main() -> None:",
             f'    parser = argparse.ArgumentParser(prog="{package_name}")',
@@ -276,21 +199,871 @@ def _cli_file(package_name: str, domain: str, metric_name: str, goal: str) -> st
             '    parser.add_argument("--output", required=True)',
             "    args = parser.parse_args()",
             "    payload = _load(args.input)",
-            '    if args.hook == "evaluate":',
-            "        response = evaluate(payload)",
-            '    elif args.hook == "suggest":',
-            "        response = suggest(payload)",
-            '    elif args.hook == "packets":',
-            "        response = packets(payload)",
-            "    else:",
-            "        response = watchtower(payload)",
+            '    response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)',
             "    _write(args.output, response)",
-            "",
             "",
             'if __name__ == "__main__":',
             "    main()",
         ]
     )
+
+
+def _crypto_manifest(chip_name: str, package_name: str) -> str:
+    payload = {
+        "schema_version": "spark-chip.v1",
+        "io_protocol": "spark-hook-io.v1",
+        "chip_name": chip_name,
+        "domain": "trading",
+        "version": "0.1.0",
+        "description": "Experimental crypto trading doctrine-and-strategy chip with backtest and paper-trade promotion lanes.",
+        "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
+        "commands": {
+            "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
+            "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
+            "packets": ["python", "-m", f"{package_name}.cli", "packets"],
+            "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
+        },
+        "allowed_mutations": {
+            "doctrine_id": [
+                "trend_regime_following",
+                "mean_reversion_liquidity_reclaim",
+                "breakout_volatility_expansion",
+                "risk_first_asymmetric_capture",
+            ],
+            "strategy_id": [
+                "ema_pullback_long",
+                "range_reclaim_scalp",
+                "breakout_open_interest_confirmation",
+                "funding_mean_revert",
+            ],
+            "market_regime": ["trend", "range", "high_vol", "event_driven"],
+            "timeframe": ["15m", "1h", "4h"],
+            "venue": ["binance", "bybit", "hyperliquid"],
+            "paper_gate": ["strict", "balanced"],
+        },
+        "open_mutation_fields": ["asset_universe"],
+        "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _crypto_project(chip_name: str, package_name: str) -> str:
+    payload = {
+        "project_name": chip_name,
+        "project_root": ".",
+        "eval_metric": "profitability_score",
+        "eval_goal": "maximize",
+        "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "crypto-trading-research.log"}},
+        "metrics": {
+            "profitability_score": {"pattern": r"^profitability_score:\s+([0-9.]+)$", "kind": "float"},
+            "sharpe_ratio": {"pattern": r"^sharpe_ratio:\s+([0-9.]+)$", "kind": "float"},
+            "max_drawdown": {"pattern": r"^max_drawdown:\s+([0-9.]+)$", "kind": "float"},
+            "win_rate": {"pattern": r"^win_rate:\s+([0-9.]+)$", "kind": "float"},
+            "paper_trade_readiness": {"pattern": r"^paper_trade_readiness:\s+([0-9.]+)$", "kind": "float"},
+            "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
+        },
+        "mutable_parameters": [],
+        "candidate_trials": [
+            {"candidate_id": "global-baseline", "candidate_summary": "Benchmark passive BTC/ETH exposure.", "hypothesis": "The passive baseline defines the floor before doctrine-guided trading.", "mutations": {}},
+            {"candidate_id": "trend-ema-btceth-4h", "candidate_summary": "Trend doctrine with EMA pullback continuation on BTC and ETH 4h.", "hypothesis": "Trend doctrine paired with continuation entries should beat passive baseline.", "mutations": {"doctrine_id": "trend_regime_following", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}},
+            {"candidate_id": "range-reclaim-majors-1h", "candidate_summary": "Mean-reversion reclaim on majors 1h.", "hypothesis": "Range doctrine should monetize rotation with tighter drawdown.", "mutations": {"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "range_reclaim_scalp", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "BTC,ETH,SOL", "paper_gate": "balanced"}},
+            {"candidate_id": "breakout-oi-sol-15m", "candidate_summary": "Breakout doctrine with OI confirmation on SOL 15m.", "hypothesis": "Breakout doctrine should win in high-vol bursts if drawdown stays bounded.", "mutations": {"doctrine_id": "breakout_volatility_expansion", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "high_vol", "timeframe": "15m", "venue": "hyperliquid", "asset_universe": "SOL", "paper_gate": "strict"}},
+        ],
+        "trainers": [],
+        "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+        "chip": {"path": ".", "manifest": "spark-chip.json"},
+        "memory": {"backend": "local"},
+        "self_edit": {
+            "command": [],
+            "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+            "prompt_preamble": "Keep the chip benchmark-first, risk-aware, and legible. Do not let backtest residue become doctrine without bridge evidence.",
+            "git_mode": "manual",
+            "auto_push": False,
+            "branch_prefix": "self-edit/",
+            "main_branch": "main",
+            "commit_message_template": "Apply self-edit proposal {proposal_id}",
+        },
+        "guardrails": {
+            "max_loop_iterations": 8,
+            "consecutive_discard_limit": 3,
+            "require_clean_git_for_self_edit": True,
+            "require_human_approval_for_self_edit": True,
+            "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
+        },
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _crypto_readme(chip_name: str, package_name: str) -> str:
+    return dedent(
+        f"""
+        # {chip_name}
+
+        `{chip_name}` is an experimental private-repo-ready Spark domain chip scaffold for crypto trading.
+
+        It mirrors the startup chip standards, but adds the missing trading-specific lanes:
+
+        - doctrine plus strategy combinations instead of strategy-only probes
+        - backtesting as the inner benchmark surface
+        - explicit bridge semantics for promotion to paper trade
+        - benchmark evidence, doctrine candidates, boundary candidates, and exploratory probes kept separate
+
+        ## Quick Start
+
+        ```powershell
+        cd {chip_name}
+        python -m pip install -e .
+        python -m pip install -e C:\\Users\\USER\\Desktop\\spark-researcher
+        $env:PYTHONPATH='C:\\Users\\USER\\Desktop\\spark-researcher\\src;src'
+        python -m spark_researcher.cli chips validate
+        python -m spark_researcher.cli autoloop --command research
+        ```
+
+        ## Next Steps
+
+        1. Replace the deterministic evaluator in `src/{package_name}/cli.py` with a real backtest runner.
+        2. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
+        3. Consume only `queue_for_paper_trade` candidates in the paper-trade lane.
+
+        Included experimental docs:
+
+        - `docs/CRYPTO_TRADING_ONE_LOOP_SPEC.md`
+        - `docs/CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md`
+        """
+    ).strip()
+
+
+def _crypto_cli(package_name: str) -> str:
+    return dedent(
+        f"""
+        from __future__ import annotations
+
+        import argparse
+        import json
+        from pathlib import Path
+
+        BASE = {{"profitability_score": 0.34, "sharpe_ratio": 0.72, "max_drawdown": 0.24, "win_rate": 0.48, "doctrine_fit": 0.31}}
+        DOCTRINES = {{
+            "trend_regime_following": {{"p": 0.18, "s": 0.52, "d": 0.08, "w": 0.03, "f": 0.12, "lesson": "Trend doctrine works when regime filters are explicit.", "boundary": "Weak in chop without a regime filter."}},
+            "mean_reversion_liquidity_reclaim": {{"p": 0.13, "s": 0.37, "d": 0.05, "w": 0.06, "f": 0.11, "lesson": "Liquidity reclaims monetize rotation if exits stay disciplined.", "boundary": "Fails when expansion is mistaken for reclaim."}},
+            "breakout_volatility_expansion": {{"p": 0.16, "s": 0.31, "d": 0.11, "w": 0.01, "f": 0.10, "lesson": "Breakout doctrine pays in violent expansion with strict false-break filters.", "boundary": "Punishes loose risk during fakeouts."}},
+            "risk_first_asymmetric_capture": {{"p": 0.14, "s": 0.44, "d": 0.04, "w": 0.02, "f": 0.14, "lesson": "Asymmetric capture works when downside truncation is encoded first.", "boundary": "Undertrades if the doctrine becomes too selective."}},
+        }}
+        STRATEGIES = {{
+            "ema_pullback_long": {{"p": 0.17, "s": 0.39, "d": 0.07, "w": 0.04, "f": 0.09}},
+            "range_reclaim_scalp": {{"p": 0.12, "s": 0.34, "d": 0.05, "w": 0.07, "f": 0.08}},
+            "breakout_open_interest_confirmation": {{"p": 0.16, "s": 0.28, "d": 0.10, "w": 0.02, "f": 0.08}},
+            "funding_mean_revert": {{"p": 0.11, "s": 0.30, "d": 0.04, "w": 0.05, "f": 0.07}},
+        }}
+        REGIMES = {{"trend": {{"p": 0.08, "s": 0.12, "d": 0.02, "f": 0.06}}, "range": {{"p": 0.05, "s": 0.07, "d": 0.01, "f": 0.05}}, "high_vol": {{"p": 0.07, "s": 0.02, "d": 0.06, "f": 0.03}}, "event_driven": {{"p": 0.06, "s": 0.04, "d": 0.05, "f": 0.04}}}}
+        TIMEFRAMES = {{"15m": {{"p": 0.03, "s": 0.00, "d": 0.06, "w": 0.02}}, "1h": {{"p": 0.05, "s": 0.05, "d": 0.03, "w": 0.03}}, "4h": {{"p": 0.07, "s": 0.08, "d": 0.02, "w": 0.01}}}}
+        VENUES = {{"binance": {{"p": 0.03, "s": 0.03, "d": 0.01}}, "bybit": {{"p": 0.02, "s": 0.02, "d": 0.02}}, "hyperliquid": {{"p": 0.04, "s": 0.03, "d": 0.04}}}}
+        PAIRS = {{"trend_regime_following|ema_pullback_long": 0.12, "mean_reversion_liquidity_reclaim|range_reclaim_scalp": 0.11, "breakout_volatility_expansion|breakout_open_interest_confirmation": 0.10, "risk_first_asymmetric_capture|funding_mean_revert": 0.08}}
+        REGIME_MATCH = {{"trend_regime_following|trend": 0.08, "mean_reversion_liquidity_reclaim|range": 0.08, "breakout_volatility_expansion|high_vol": 0.09, "risk_first_asymmetric_capture|event_driven": 0.07}}
+
+        def _load(path: str) -> dict:
+            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+
+        def _write(path: str, payload: dict) -> None:
+            Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+
+        def _mutations(payload: dict) -> dict[str, str]:
+            candidate = payload.get("candidate", {{}})
+            raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
+            return {{str(key): str(value) for key, value in raw.items()}}
+
+        def _clamp(value: float) -> float:
+            return round(max(0.0, min(0.99, value)), 4)
+
+        def _asset_bonus(raw: str) -> float:
+            assets = [item.strip() for item in raw.split(",") if item.strip()]
+            majors = sum(1 for asset in assets if asset in {{"BTC", "ETH", "SOL"}})
+            return min(0.04, len(assets) * 0.01) + (majors * 0.008)
+
+        def _score(mutations: dict[str, str]) -> dict[str, float | str]:
+            doctrine_id = mutations.get("doctrine_id", "")
+            strategy_id = mutations.get("strategy_id", "")
+            regime = mutations.get("market_regime", "")
+            timeframe = mutations.get("timeframe", "")
+            venue = mutations.get("venue", "")
+            doctrine = DOCTRINES.get(doctrine_id, {{}})
+            strategy = STRATEGIES.get(strategy_id, {{}})
+            regime_spec = REGIMES.get(regime, {{}})
+            timeframe_spec = TIMEFRAMES.get(timeframe, {{}})
+            venue_spec = VENUES.get(venue, {{}})
+            synergy = PAIRS.get(doctrine_id + "|" + strategy_id, -0.02 if doctrine_id and strategy_id else 0.0)
+            regime_match = REGIME_MATCH.get(doctrine_id + "|" + regime, -0.03 if doctrine_id and regime else 0.0)
+            profit = _clamp(BASE["profitability_score"] + doctrine.get("p", 0.0) + strategy.get("p", 0.0) + regime_spec.get("p", 0.0) + timeframe_spec.get("p", 0.0) + venue_spec.get("p", 0.0) + synergy + regime_match + _asset_bonus(mutations.get("asset_universe", "")))
+            sharpe = _clamp(BASE["sharpe_ratio"] + doctrine.get("s", 0.0) + strategy.get("s", 0.0) + regime_spec.get("s", 0.0) + timeframe_spec.get("s", 0.0) + venue_spec.get("s", 0.0))
+            drawdown = round(max(0.02, min(0.95, BASE["max_drawdown"] + doctrine.get("d", 0.0) + strategy.get("d", 0.0) + regime_spec.get("d", 0.0) + timeframe_spec.get("d", 0.0) + venue_spec.get("d", 0.0) - doctrine.get("f", 0.0) * 0.3)), 4)
+            win_rate = _clamp(BASE["win_rate"] + doctrine.get("w", 0.0) + strategy.get("w", 0.0) + timeframe_spec.get("w", 0.0))
+            doctrine_fit = _clamp(BASE["doctrine_fit"] + doctrine.get("f", 0.0) + strategy.get("f", 0.0) + regime_spec.get("f", 0.0) + max(0.0, synergy * 0.6))
+            readiness = _clamp(profit * 0.4 + sharpe * 0.25 + doctrine_fit * 0.2 + win_rate * 0.15 - drawdown * 0.35)
+            gate = 0.78 if mutations.get("paper_gate", "strict") == "strict" else 0.72
+            if readiness >= gate and drawdown <= 0.22:
+                verdict, next_step = "approve", "queue_for_paper_trade"
+            elif profit >= 0.66 and doctrine_fit >= 0.60:
+                verdict, next_step = "defer", "hold_for_more_backtest_evidence"
+            else:
+                verdict, next_step = "reject", "run_contradiction_probe"
+            return {{"profitability_score": profit, "sharpe_ratio": sharpe, "max_drawdown": drawdown, "win_rate": win_rate, "paper_trade_readiness": readiness, "verdict_confidence": _clamp(0.4 + profit * 0.25 + sharpe * 0.2 + doctrine_fit * 0.15 - drawdown * 0.1), "verdict": verdict, "recommended_next_step": next_step, "lesson": doctrine.get("lesson", "Baseline only. Add a doctrine before promoting any strategy claim."), "boundary": doctrine.get("boundary", "Passive baseline is not doctrine and should not be promoted.")}}
+
+        def evaluate(payload: dict) -> dict:
+            metrics = _score(_mutations(payload))
+            stdout = "\\n".join(["profitability_score: " + str(metrics["profitability_score"]), "sharpe_ratio: " + str(metrics["sharpe_ratio"]), "max_drawdown: " + str(metrics["max_drawdown"]), "win_rate: " + str(metrics["win_rate"]), "paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "verdict_confidence: " + str(metrics["verdict_confidence"])])
+            return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"profitability_score": metrics["profitability_score"], "sharpe_ratio": metrics["sharpe_ratio"], "max_drawdown": metrics["max_drawdown"], "win_rate": metrics["win_rate"], "paper_trade_readiness": metrics["paper_trade_readiness"], "verdict_confidence": metrics["verdict_confidence"]}}, "result": {{"claim": "Backtest profitability must be judged with drawdown, regime fit, and paper-trade readiness.", "verdict": metrics["verdict"], "mechanism": metrics["lesson"], "boundary": metrics["boundary"], "recommended_next_step": metrics["recommended_next_step"], "evidence_lane": "backtest_benchmark"}}}}
+
+        def suggest(payload: dict) -> dict:
+            frontier = [
+                {{"candidate_id": "trend-breakout-btceth-1h", "candidate_summary": "Pressure-test trend doctrine with a faster breakout expression.", "hypothesis": "If trend doctrine is real, a second strategy expression should keep doctrine fit without collapsing drawdown.", "mutations": {{"doctrine_id": "trend_regime_following", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "trend", "timeframe": "1h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}}}},
+                {{"candidate_id": "range-funding-ethsol-1h", "candidate_summary": "Probe whether funding dislocations work better under a range doctrine.", "hypothesis": "A weaker strategy may improve when doctrine and regime alignment are corrected.", "mutations": {{"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "funding_mean_revert", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "ETH,SOL", "paper_gate": "balanced"}}}},
+                {{"candidate_id": "riskfirst-ema-btc-4h", "candidate_summary": "Transfer the strongest risk doctrine onto a slower continuation expression.", "hypothesis": "Cross-pollination should raise paper-trade readiness if risk doctrine is genuinely portable.", "mutations": {{"doctrine_id": "risk_first_asymmetric_capture", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC", "paper_gate": "strict"}}}},
+            ]
+            limit = max(1, int(payload.get("limit", 3) or 3))
+            return {{"baseline_metric": None, "reasons": ["Expand from doctrine and strategy combinations, not isolated indicator churn."] * min(limit, len(frontier)), "suggestions": frontier[:limit]}}
+
+        def packets(payload: dict) -> dict:
+            candidate = payload.get("candidate", {{}}) if isinstance(payload.get("candidate"), dict) else {{}}
+            candidate_id = str(candidate.get("candidate_id", "global-baseline"))
+            metrics = _score(_mutations(payload))
+            docs = [{{"kind": "benchmark_evidence", "slug": "crypto-backtest-" + candidate_id, "title": candidate_id + " Backtest Evidence", "content": "\\n".join(["# " + candidate_id + " Backtest Evidence", "", "- evidence_lane: backtest_benchmark", "- profitability_score: " + str(metrics["profitability_score"]), "- sharpe_ratio: " + str(metrics["sharpe_ratio"]), "- max_drawdown: " + str(metrics["max_drawdown"]), "- paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "- recommended_next_step: " + str(metrics["recommended_next_step"])])}}]
+            if metrics["recommended_next_step"] == "queue_for_paper_trade":
+                docs.append({{"kind": "grounded_doctrine", "slug": "crypto-doctrine-" + candidate_id, "title": candidate_id + " Doctrine Candidate", "content": "Eligible for paper trade after backtest bridge review."}})
+            elif metrics["recommended_next_step"] == "run_contradiction_probe":
+                docs.append({{"kind": "grounded_boundary", "slug": "crypto-boundary-" + candidate_id, "title": candidate_id + " Boundary Candidate", "content": "Treat as a failure surface or contradiction probe, not doctrine."}})
+            return {{"documents": docs}}
+
+        def watchtower(payload: dict) -> dict:
+            return {{"pages": [{{"path": "07-Domains/Crypto Trading/Home.md", "content": "# Crypto Trading Domain\\n\\n- Backtest is the inner benchmark lane.\\n- Paper trade is the slower outer validation lane.\\n- Promote doctrine only when profitability and risk gates both clear."}}]}}
+
+        def main() -> None:
+            parser = argparse.ArgumentParser(prog="{package_name}")
+            parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
+            parser.add_argument("--input", required=True)
+            parser.add_argument("--output", required=True)
+            args = parser.parse_args()
+            payload = _load(args.input)
+            response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)
+            _write(args.output, response)
+
+        if __name__ == "__main__":
+            main()
+        """
+    ).strip()
+
+
+def _crypto_one_loop() -> str:
+    return dedent(
+        """
+        # Crypto Trading One-Loop Spec
+
+        Keep one governing loop:
+
+        1. refresh doctrine, strategy, and benchmark state
+        2. decide whether the bottleneck is research, backtesting, contradiction testing, or paper-trade escalation
+        3. run the smallest justified lane
+        4. update memory and watchtower
+
+        Rules:
+
+        - treat `doctrine_id + strategy_id + market_regime` as the main candidate unit
+        - optimize for risk-adjusted profitability, not raw PnL
+        - use backtest as the inner benchmark lane
+        - use paper trade as a separate outer validation lane
+        - do not let parameter churn masquerade as new doctrine
+        """
+    ).strip()
+
+
+def _crypto_bridge() -> str:
+    return dedent(
+        """
+        # Crypto Trading Backtest Promotion Bridge
+
+        Backtesting is the benchmark lane for this chip.
+        Paper trade is outer validation.
+
+        Required bridge fields:
+
+        - `candidate_id`
+        - `doctrine_id`
+        - `strategy_id`
+        - `market_regime`
+        - `profitability_score`
+        - `sharpe_ratio`
+        - `max_drawdown`
+        - `win_rate`
+        - `paper_trade_readiness`
+        - `recommended_next_step`
+        - `primary_mechanism`
+        - `primary_boundary`
+
+        Ladder:
+
+        - `store_as_benchmark_evidence`
+        - `promote_as_doctrine_candidate`
+        - `promote_as_boundary_candidate`
+        - `queue_for_paper_trade`
+
+        Anti-patterns:
+
+        - do not rank combinations by PnL alone
+        - do not promote a strategy without a doctrine anchor
+        - do not send every profitable curve to paper trade
+        """
+    ).strip()
+
+
+def _xcontent_manifest(chip_name: str, package_name: str) -> str:
+    payload = {
+        "schema_version": "spark-chip.v1",
+        "io_protocol": "spark-hook-io.v1",
+        "chip_name": chip_name,
+        "domain": "xcontent",
+        "version": "0.1.0",
+        "description": "X content research chip with engagement quality evaluation, Grok/xAI relevance scoring, and promotion-safe content doctrine.",
+        "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
+        "commands": {
+            "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
+            "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
+            "packets": ["python", "-m", f"{package_name}.cli", "packets"],
+            "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
+        },
+        "frontier": {
+            "enabled": True,
+            "model": "claude",
+            "web_search": True,
+            "allowed_mutations": {
+                "content_format": [
+                    "thread",
+                    "single_post",
+                    "quote_tweet",
+                    "poll",
+                ],
+                "hook_type": [
+                    "proof_founder",
+                    "contrarian_take",
+                    "question_hook",
+                    "data_insight",
+                ],
+                "audience_segment": [
+                    "founders",
+                    "operators",
+                    "developers",
+                    "traders",
+                ],
+                "quality_filter": [
+                    "proof_quality",
+                    "novelty_tension",
+                    "thread_depth",
+                ],
+                "distribution_mode": [
+                    "organic",
+                    "grok_optimized",
+                    "engagement_loop",
+                ],
+                "topic_tag": [
+                    "general",
+                ],
+            },
+            "required_fields": ["content_format", "hook_type"],
+            "open_mutation_fields": ["topic_tag"],
+            "field_patterns": {"topic_tag": "^[a-z0-9_]{2,30}$"},
+        },
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _xcontent_project(chip_name: str, package_name: str) -> str:
+    payload = {
+        "project_name": chip_name,
+        "project_root": ".",
+        "eval_metric": "engagement_quality_score",
+        "eval_goal": "maximize",
+        "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "xcontent-research.log"}},
+        "metrics": {
+            "engagement_quality_score": {"pattern": r"^engagement_quality_score:\s+([0-9.]+)$", "kind": "float"},
+            "useful_reach_score": {"pattern": r"^useful_reach_score:\s+([0-9.]+)$", "kind": "float"},
+            "grok_relevance_score": {"pattern": r"^grok_relevance_score:\s+([0-9.]+)$", "kind": "float"},
+            "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
+        },
+        "mutable_parameters": [],
+        "candidate_trials": [
+            {"candidate_id": "global-baseline", "candidate_summary": "Measure the generic X content baseline with no focused format or hook.", "hypothesis": "The baseline defines the floor before content format and hook refinement.", "mutations": {}},
+            {"candidate_id": "thread-proof-founder", "candidate_summary": "Thread format with proof-led founder hook.", "hypothesis": "Proof threads should outperform single posts on engagement quality because threads reward depth and X algo favors dwell time.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders"}},
+            {"candidate_id": "single-contrarian-operators", "candidate_summary": "Single post contrarian take aimed at operators.", "hypothesis": "Contrarian single posts create feed stops and quote-tweet loops that amplify reach among operators.", "mutations": {"content_format": "single_post", "hook_type": "contrarian_take", "audience_segment": "operators"}},
+            {"candidate_id": "thread-data-developers", "candidate_summary": "Data insight thread aimed at developers.", "hypothesis": "Developers engage deeply with data-backed threads and share them into technical communities.", "mutations": {"content_format": "thread", "hook_type": "data_insight", "audience_segment": "developers"}},
+            {"candidate_id": "quote-contrarian-traders", "candidate_summary": "Quote tweet contrarian take for trader audience.", "hypothesis": "Quote tweets with contrarian framing on trending trader topics should generate high-quality debate engagement.", "mutations": {"content_format": "quote_tweet", "hook_type": "contrarian_take", "audience_segment": "traders"}},
+            {"candidate_id": "poll-question-founders", "candidate_summary": "Poll with question hook for founders.", "hypothesis": "Polls with a strong question hook should drive reply depth and Grok surfacing via structured interaction data.", "mutations": {"content_format": "poll", "hook_type": "question_hook", "audience_segment": "founders"}},
+            {"candidate_id": "thread-proof-grok-optimized", "candidate_summary": "Proof thread with Grok-optimized distribution.", "hypothesis": "Grok-optimized threads with proof structure should score higher on grok_relevance and downstream discoverability.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "distribution_mode": "grok_optimized"}},
+            {"candidate_id": "thread-proof-proof-quality", "candidate_summary": "Proof thread with proof_quality filter applied.", "hypothesis": "Adding proof_quality filter to the strongest format+hook should push engagement quality past promotion threshold.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "quality_filter": "proof_quality"}},
+        ],
+        "trainers": [],
+        "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+        "chip": {"path": ".", "manifest": "spark-chip.json"},
+        "memory": {"backend": "local"},
+        "self_edit": {
+            "command": [],
+            "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+            "prompt_preamble": "Keep the chip evidence-first and promotion-safe. Do not let vanity metrics masquerade as engagement quality. Use X API analytics and Grok relevance as grounding surfaces.",
+            "git_mode": "manual",
+            "auto_push": False,
+            "branch_prefix": "self-edit/",
+            "main_branch": "main",
+            "commit_message_template": "Apply self-edit proposal {proposal_id}",
+        },
+        "guardrails": {
+            "max_loop_iterations": 8,
+            "consecutive_discard_limit": 3,
+            "require_clean_git_for_self_edit": True,
+            "require_human_approval_for_self_edit": True,
+            "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
+        },
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _xcontent_readme(chip_name: str, package_name: str) -> str:
+    return dedent(
+        f"""
+        # {chip_name}
+
+        `{chip_name}` is a Spark domain chip for X (Twitter) content research.
+
+        It evaluates content format + hook type + audience segment combinations
+        against engagement quality, useful reach, and Grok/xAI relevance scoring.
+
+        Integration surfaces:
+
+        - **X API**: Post analytics (impressions, engagements, profile clicks, bookmark rate)
+        - **Grok/xAI API**: Content relevance scoring, trend alignment, discoverability prediction
+        - **Benchmark**: Deterministic scaffold evaluator (replace with live X API + Grok grading)
+
+        ## Quick Start
+
+        ```powershell
+        cd {chip_name}
+        python -m pip install -e .
+        python -m pip install -e C:\\Users\\USER\\Desktop\\spark-researcher
+        $env:PYTHONPATH='C:\\Users\\USER\\Desktop\\spark-researcher\\src;src'
+        python -m spark_researcher.cli chips validate
+        python -m spark_researcher.cli autoloop --command research
+        ```
+
+        ## Next Steps
+
+        1. Replace the deterministic evaluator with live X API analytics grading.
+        2. Add Grok/xAI API calls for content relevance and trend alignment scoring.
+        3. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
+        4. Consume only `promote_as_doctrine` candidates in the content calendar.
+
+        ## X API Integration Points
+
+        - `GET /2/tweets/:id` — tweet metrics (impressions, likes, retweets, replies, bookmarks)
+        - `GET /2/tweets/:id/quote_tweets` — quote tweet engagement depth
+        - `GET /2/users/:id/tweets` — historical performance baselines
+        - `GET /2/tweets/search/recent` — trending topic alignment
+
+        ## Grok/xAI API Integration Points
+
+        - Content quality analysis (proof density, novelty tension, audience fit)
+        - Trend alignment scoring against current X discourse
+        - Discoverability prediction (will Grok surface this in answers?)
+        - Engagement quality prediction (meaningful vs vanity metrics)
+
+        Included docs:
+
+        - `docs/XCONTENT_ONE_LOOP_SPEC.md`
+        - `docs/XCONTENT_BENCH_PROMOTION_BRIDGE.md`
+        """
+    ).strip()
+
+
+def _xcontent_cli(package_name: str) -> str:
+    return dedent(
+        f"""
+        from __future__ import annotations
+
+        import argparse
+        import json
+        from pathlib import Path
+        from typing import Any
+
+        FORMAT_CATALOG: dict[str, dict[str, Any]] = {{
+            "thread": {{"base_engagement": 0.18, "base_reach": 0.15, "base_grok": 0.20, "dwell_bonus": 0.12, "label": "Thread", "claim": "Threads reward depth and X algo favors dwell time.", "mechanism": "Multi-post structure creates progressive commitment and bookmark behavior.", "boundary": "Weak when individual posts lack standalone hooks.", "next_probe": "Test with different hook types to find best thread opener."}},
+            "single_post": {{"base_engagement": 0.14, "base_reach": 0.18, "base_grok": 0.10, "dwell_bonus": 0.0, "label": "Single Post", "claim": "Single posts optimize for feed stops and retweet loops.", "mechanism": "Compression forces clarity. Strong single posts get quote-tweeted into new audiences.", "boundary": "Ceiling is lower without depth. Easily lost in feed volume.", "next_probe": "Pair with contrarian or data hook for maximum feed-stop power."}},
+            "quote_tweet": {{"base_engagement": 0.16, "base_reach": 0.20, "base_grok": 0.08, "dwell_bonus": 0.04, "label": "Quote Tweet", "claim": "Quote tweets borrow existing distribution and add opinion leverage.", "mechanism": "Riding existing viral surface while adding novel framing creates dual-audience exposure.", "boundary": "Depends on source tweet quality. Can look reactive without strong angle.", "next_probe": "Test with trending topic alignment for maximum borrowed reach."}},
+            "poll": {{"base_engagement": 0.20, "base_reach": 0.12, "base_grok": 0.14, "dwell_bonus": 0.06, "label": "Poll", "claim": "Polls drive structured interaction data and high reply depth.", "mechanism": "Voting creates micro-commitment. Reply threads under polls generate Grok-indexable discussion.", "boundary": "Low conversion to profile follows unless paired with strong question framing.", "next_probe": "Add question hook to drive reply quality beyond vote counts."}},
+        }}
+        HOOK_CATALOG: dict[str, dict[str, Any]] = {{
+            "proof_founder": {{"engagement": 0.14, "reach": 0.10, "grok": 0.16, "confidence": 0.84, "label": "Proof-led founder", "claim": "Quantified proof with direct operator lessons travels well on X.", "mechanism": "Concrete numbers reduce skepticism. Founders share proof posts as reference material.", "audience": "founders", "boundary": "Weak when proof is vague or the numbers are cherry-picked."}},
+            "contrarian_take": {{"engagement": 0.12, "reach": 0.16, "grok": 0.06, "confidence": 0.72, "label": "Contrarian take", "claim": "Contrarian framing creates feed stops and quote-tweet debate loops.", "mechanism": "Novelty tension creates engagement spikes. Quote tweets amplify into new audience pockets.", "audience": "operators", "boundary": "Decays into generic hot-take writing without evidence backing."}},
+            "question_hook": {{"engagement": 0.16, "reach": 0.06, "grok": 0.12, "confidence": 0.68, "label": "Question hook", "claim": "Question hooks drive reply depth and Grok-indexable discussion threads.", "mechanism": "Open questions create lightweight commitment. Reply threads become searchable discourse.", "audience": "founders", "boundary": "Weak for action-oriented goals. Can attract low-signal replies."}},
+            "data_insight": {{"engagement": 0.10, "reach": 0.12, "grok": 0.18, "confidence": 0.80, "label": "Data insight", "claim": "Data-backed posts earn saves, bookmarks, and Grok reference surfacing.", "mechanism": "Specific data creates reference value. Bookmarks signal Grok-indexable quality.", "audience": "developers", "boundary": "Requires genuine data access. Fabricated stats destroy credibility fast."}},
+        }}
+        AUDIENCE_BONUS: dict[str, dict[str, float]] = {{
+            "founders": {{"engagement": 0.02, "reach": 0.01, "grok": 0.03}},
+            "operators": {{"engagement": 0.03, "reach": 0.02, "grok": 0.01}},
+            "developers": {{"engagement": 0.01, "reach": 0.01, "grok": 0.04}},
+            "traders": {{"engagement": 0.03, "reach": 0.03, "grok": 0.00}},
+        }}
+        QUALITY_FILTER_UPLIFT: dict[str, dict[str, float]] = {{
+            "proof_quality": {{"engagement": 0.06, "reach": 0.04, "grok": 0.08}},
+            "novelty_tension": {{"engagement": 0.05, "reach": 0.06, "grok": 0.03}},
+            "thread_depth": {{"engagement": 0.04, "reach": 0.02, "grok": 0.06}},
+        }}
+        DISTRIBUTION_MODIFIER: dict[str, dict[str, float]] = {{
+            "organic": {{"engagement": 0.0, "reach": 0.0, "grok": 0.0}},
+            "grok_optimized": {{"engagement": 0.02, "reach": 0.03, "grok": 0.10}},
+            "engagement_loop": {{"engagement": 0.06, "reach": 0.04, "grok": -0.02}},
+        }}
+        FORMAT_HOOK_SYNERGY: dict[str, float] = {{
+            "thread|proof_founder": 0.10,
+            "thread|data_insight": 0.08,
+            "single_post|contrarian_take": 0.09,
+            "quote_tweet|contrarian_take": 0.08,
+            "poll|question_hook": 0.10,
+            "thread|question_hook": 0.05,
+            "single_post|proof_founder": 0.04,
+            "quote_tweet|data_insight": 0.06,
+            "poll|data_insight": 0.05,
+        }}
+        HOOK_AUDIENCE_SYNERGY: dict[str, float] = {{
+            "proof_founder|founders": 0.07,
+            "contrarian_take|operators": 0.06,
+            "contrarian_take|traders": 0.08,
+            "data_insight|developers": 0.09,
+            "question_hook|founders": 0.05,
+            "data_insight|traders": 0.04,
+        }}
+        BASELINE = {{"engagement_quality_score": 0.32, "useful_reach_score": 0.28, "grok_relevance_score": 0.18, "verdict_confidence": 0.50}}
+
+        def _load(path: str) -> dict[str, Any]:
+            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+
+        def _write(path: str, payload: dict[str, Any]) -> None:
+            Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+
+        def _mutations(payload: dict[str, Any]) -> dict[str, str]:
+            candidate = payload.get("candidate", {{}})
+            raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
+            return {{str(key): str(value) for key, value in raw.items()}}
+
+        def _clamp(value: float) -> float:
+            return round(max(0.0, min(0.99, value)), 4)
+
+        def _score(mutations: dict[str, str]) -> dict[str, Any]:
+            content_format = mutations.get("content_format", "")
+            hook_type = mutations.get("hook_type", "")
+            audience_segment = mutations.get("audience_segment", "")
+            quality_filter = mutations.get("quality_filter", "")
+            distribution_mode = mutations.get("distribution_mode", "")
+            fmt = FORMAT_CATALOG.get(content_format, {{}})
+            hook = HOOK_CATALOG.get(hook_type, {{}})
+            audience = AUDIENCE_BONUS.get(audience_segment, {{}})
+            quality = QUALITY_FILTER_UPLIFT.get(quality_filter, {{}})
+            dist = DISTRIBUTION_MODIFIER.get(distribution_mode, {{}})
+            if not fmt and not hook:
+                return {{**BASELINE, "verdict": "baseline", "promotion_status": "advisory", "claim": "Generic X content baseline with no format or hook focus.", "mechanism": "Without a concrete format and hook, engagement is accidental.", "boundary": "Too broad for doctrine promotion.", "next_probe": "Probe the strongest format+hook combination.", "label": "Global baseline", "recommended_next_step": "run_format_hook_probe"}}
+            synergy_fh = FORMAT_HOOK_SYNERGY.get(content_format + "|" + hook_type, -0.02 if content_format and hook_type else 0.0)
+            synergy_ha = HOOK_AUDIENCE_SYNERGY.get(hook_type + "|" + audience_segment, -0.01 if hook_type and audience_segment else 0.0)
+            engagement = _clamp(BASELINE["engagement_quality_score"] + fmt.get("base_engagement", 0.0) + hook.get("engagement", 0.0) + audience.get("engagement", 0.0) + quality.get("engagement", 0.0) + dist.get("engagement", 0.0) + synergy_fh + synergy_ha + fmt.get("dwell_bonus", 0.0) * 0.5)
+            reach = _clamp(BASELINE["useful_reach_score"] + fmt.get("base_reach", 0.0) + hook.get("reach", 0.0) + audience.get("reach", 0.0) + quality.get("reach", 0.0) + dist.get("reach", 0.0) + synergy_fh * 0.6)
+            grok = _clamp(BASELINE["grok_relevance_score"] + fmt.get("base_grok", 0.0) + hook.get("grok", 0.0) + audience.get("grok", 0.0) + quality.get("grok", 0.0) + dist.get("grok", 0.0) + synergy_ha * 0.4)
+            confidence = _clamp(0.45 + engagement * 0.2 + reach * 0.15 + grok * 0.2 + hook.get("confidence", 0.5) * 0.15)
+            label_parts = [fmt.get("label", content_format), hook.get("label", hook_type)]
+            if audience_segment:
+                label_parts.append(f"[{{audience_segment}}]")
+            if quality_filter:
+                label_parts.append(f"+ {{quality_filter.replace('_', ' ')}}")
+            if distribution_mode and distribution_mode != "organic":
+                label_parts.append(f"({{distribution_mode}})")
+            label = " ".join(label_parts)
+            claim = fmt.get("claim", "") + " " + hook.get("claim", "")
+            mechanism = fmt.get("mechanism", "") + " " + hook.get("mechanism", "")
+            boundary = fmt.get("boundary", "") + " " + hook.get("boundary", "")
+            next_probe = hook.get("next_probe", fmt.get("next_probe", "Expand along the weakest axis."))
+            if engagement >= 0.78 and grok >= 0.55:
+                verdict, next_step = "approve", "promote_as_doctrine"
+            elif engagement >= 0.62 and reach >= 0.50:
+                verdict, next_step = "defer", "hold_for_more_x_analytics"
+            else:
+                verdict, next_step = "reject", "run_format_hook_probe"
+            promotion_status = "validated" if verdict == "approve" else "candidate" if verdict == "defer" else "advisory"
+            return {{"engagement_quality_score": engagement, "useful_reach_score": reach, "grok_relevance_score": grok, "verdict_confidence": confidence, "verdict": verdict, "promotion_status": promotion_status, "recommended_next_step": next_step, "claim": claim.strip(), "mechanism": mechanism.strip(), "boundary": boundary.strip(), "next_probe": next_probe, "label": label}}
+
+        def evaluate(payload: dict[str, Any]) -> dict[str, Any]:
+            result = _score(_mutations(payload))
+            stdout = "\\n".join(["engagement_quality_score: " + str(result["engagement_quality_score"]), "useful_reach_score: " + str(result["useful_reach_score"]), "grok_relevance_score: " + str(result["grok_relevance_score"]), "verdict_confidence: " + str(result["verdict_confidence"]), "verdict: " + str(result["verdict"]), "promotion_status: " + str(result["promotion_status"]), "next_probe: " + str(result["next_probe"])])
+            return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"engagement_quality_score": result["engagement_quality_score"], "useful_reach_score": result["useful_reach_score"], "grok_relevance_score": result["grok_relevance_score"], "verdict_confidence": result["verdict_confidence"]}}, "result": result}}
+
+        def suggest(payload: dict[str, Any]) -> dict[str, Any]:
+            command_name = str(payload.get("command_name", "research"))
+            limit = max(1, int(payload.get("limit", 3) or 3))
+            rows = payload.get("ledger_rows", [])
+            rows = rows if isinstance(rows, list) else []
+            tested: set[tuple[str, ...]] = set()
+            for row in rows:
+                if str(row.get("command_name", "")) != command_name:
+                    continue
+                muts = row.get("applied_mutations", [])
+                muts = muts if isinstance(muts, list) else []
+                sig = {{str(m.get("name", "")): str(m.get("value", "")) for m in muts if isinstance(m, dict)}}
+                tested.add((sig.get("content_format", ""), sig.get("hook_type", ""), sig.get("audience_segment", ""), sig.get("quality_filter", ""), sig.get("distribution_mode", "")))
+            existing: set[tuple[str, ...]] = set()
+            for item in payload.get("candidate_trials", []):
+                if not isinstance(item, dict):
+                    continue
+                m = item.get("mutations", {{}})
+                existing.add((str(m.get("content_format", "")), str(m.get("hook_type", "")), str(m.get("audience_segment", "")), str(m.get("quality_filter", "")), str(m.get("distribution_mode", ""))))
+            suggestions: list[dict[str, Any]] = []
+            reasons: list[str] = []
+            improved_rows = [row for row in rows if str(row.get("command_name", "")) == command_name and str(row.get("verdict", "")) == "improved"]
+            if improved_rows:
+                best_row = max(improved_rows, key=lambda r: float(r.get("metric_value", 0.0) or 0.0))
+                best_muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in best_row.get("applied_mutations", []) if isinstance(m, dict)}}
+                best_fmt = best_muts.get("content_format", "")
+                best_hook = best_muts.get("hook_type", "")
+                best_audience = best_muts.get("audience_segment", "")
+                if best_fmt and best_hook:
+                    for qf in ("proof_quality", "novelty_tension", "thread_depth"):
+                        sig = (best_fmt, best_hook, best_audience, qf, "")
+                        if sig in tested or sig in existing:
+                            continue
+                        mutations = {{"content_format": best_fmt, "hook_type": best_hook, "quality_filter": qf}}
+                        if best_audience:
+                            mutations["audience_segment"] = best_audience
+                        suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{qf}}", "candidate_summary": f"Add {{qf}} filter to winning {{best_fmt}}+{{best_hook}} combo.", "hypothesis": f"Quality filter `{{qf}}` should push engagement quality past promotion threshold.", "mutations": mutations}})
+                        reasons.append(f"Attach quality filter `{{qf}}` to best observed format+hook `{{best_fmt}}+{{best_hook}}`.")
+                        break
+                    for dm in ("grok_optimized", "engagement_loop"):
+                        sig = (best_fmt, best_hook, best_audience, "", dm)
+                        if sig in tested or sig in existing:
+                            continue
+                        mutations = {{"content_format": best_fmt, "hook_type": best_hook, "distribution_mode": dm}}
+                        if best_audience:
+                            mutations["audience_segment"] = best_audience
+                        suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{dm}}", "candidate_summary": f"Test {{dm}} distribution on winning {{best_fmt}}+{{best_hook}}.", "hypothesis": f"Distribution mode `{{dm}}` should amplify the winning combo's reach or Grok relevance.", "mutations": mutations}})
+                        reasons.append(f"Test distribution mode `{{dm}}` on best observed combo.")
+                        if len(suggestions) >= limit:
+                            break
+                    if best_hook and len(suggestions) < limit:
+                        for audience in ("founders", "operators", "developers", "traders"):
+                            if audience == best_audience:
+                                continue
+                            sig = (best_fmt, best_hook, audience, "", "")
+                            if sig in tested or sig in existing:
+                                continue
+                            suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{audience}}", "candidate_summary": f"Transfer-check {{best_fmt}}+{{best_hook}} for {{audience}}.", "hypothesis": f"Check whether the winning format+hook transfers to the `{{audience}}` audience.", "mutations": {{"content_format": best_fmt, "hook_type": best_hook, "audience_segment": audience}}}})
+                            reasons.append(f"Run audience transfer check `{{audience}}` on winning combo.")
+                            if len(suggestions) >= limit:
+                                break
+            synergy_ranked = sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda item: item[1], reverse=True)
+            for combo_key, _ in synergy_ranked:
+                if len(suggestions) >= limit:
+                    break
+                parts = combo_key.split("|")
+                if len(parts) != 2:
+                    continue
+                fmt_key, hook_key = parts
+                sig = (fmt_key, hook_key, "", "", "")
+                if sig in tested or sig in existing:
+                    continue
+                suggestions.append({{"candidate_id": f"{{fmt_key}}-{{hook_key}}", "candidate_summary": f"Probe high-synergy combo {{fmt_key}}+{{hook_key}}.", "hypothesis": f"Format `{{fmt_key}}` paired with hook `{{hook_key}}` has strong synergy.", "mutations": {{"content_format": fmt_key, "hook_type": hook_key}}}})
+                reasons.append(f"High-synergy untested combo: {{fmt_key}}+{{hook_key}}.")
+            baseline_metric = None
+            for row in rows:
+                if str(row.get("command_name", "")) == command_name and not row.get("applied_mutations"):
+                    value = row.get("metric_value")
+                    if isinstance(value, (int, float)):
+                        baseline_metric = float(value)
+                        break
+            return {{"baseline_metric": baseline_metric, "reasons": reasons[:limit], "suggestions": suggestions[:limit]}}
+
+        def packets(payload: dict[str, Any]) -> dict[str, Any]:
+            rows = payload.get("ledger_rows", [])
+            rows = rows if isinstance(rows, list) else []
+            ordered = [row for row in rows if isinstance(row.get("metric_value"), (int, float))]
+            ordered.sort(key=lambda r: float(r.get("metric_value", 0.0) or 0.0), reverse=True)
+            documents: list[dict[str, Any]] = []
+            for row in ordered[:3]:
+                muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in row.get("applied_mutations", []) if isinstance(m, dict)}}
+                result = _score(muts)
+                label = result.get("label", "unknown")
+                slug = label.lower().replace(" ", "-").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace("+", "plus")[:60]
+                documents.append({{"kind": "benchmark_evidence", "slug": f"xcontent-evidence-{{slug}}", "title": f"X Content Evidence: {{label}}", "content": "\\n".join(["# X Content Evidence: " + label, "", "- evidence_lane: x_analytics_benchmark", "- engagement_quality_score: " + str(result["engagement_quality_score"]), "- useful_reach_score: " + str(result["useful_reach_score"]), "- grok_relevance_score: " + str(result["grok_relevance_score"]), "- verdict: " + str(result["verdict"]), "- recommended_next_step: " + str(result["recommended_next_step"]), "", "## Claim", "", result.get("claim", ""), "", "## Mechanism", "", result.get("mechanism", ""), "", "## Boundary", "", result.get("boundary", "")])}})
+                if result.get("verdict") == "approve":
+                    documents.append({{"kind": "grounded_doctrine", "slug": f"xcontent-doctrine-{{slug}}", "title": f"X Content Doctrine: {{label}}", "content": "Promoted after engagement quality and Grok relevance gates both cleared."}})
+            weak_rows = [row for row in rows if str(row.get("verdict", "")) == "regressed" and isinstance(row.get("metric_value"), (int, float))]
+            if weak_rows:
+                weakest = min(weak_rows, key=lambda r: float(r.get("metric_value", 1.0) or 1.0))
+                muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in weakest.get("applied_mutations", []) if isinstance(m, dict)}}
+                result = _score(muts)
+                label = result.get("label", "unknown")
+                documents.append({{"kind": "grounded_boundary", "slug": "xcontent-boundary-" + label.lower().replace(" ", "-")[:40], "title": f"X Content Boundary: {{label}}", "content": "\\n".join(["# X Content Boundary: " + label, "", "- engagement_quality_score: " + str(weakest.get("metric_value")), "", "## Root Lesson", "", "This format+hook combination did not produce enough engagement quality for promotion.", "", "## Boundary", "", result.get("boundary", "")])}})
+            return {{"documents": documents}}
+
+        def watchtower(payload: dict[str, Any]) -> dict[str, Any]:
+            summary = payload.get("summary", {{}})
+            best_by_metric = summary.get("best_by_metric", {{}})
+            best_engagement = best_by_metric.get("engagement_quality_score", {{}})
+            best_grok = best_by_metric.get("grok_relevance_score", {{}})
+            pages = [
+                {{"path": "07-Domains/X Content/Home.md", "content": "\\n".join(["# X Content Domain", "", "- chip: `xcontent`", "- total runs: `" + str(summary.get("run_count", 0)) + "`", "- tracked metrics: `" + str(len(best_by_metric)) + "`", "- best engagement_quality: `" + str(best_engagement.get("value", "n/a")) + "`", "- best grok_relevance: `" + str(best_grok.get("value", "n/a")) + "`", "", "## Integration Surfaces", "", "- X API: Post analytics, audience insights, trending topics", "- Grok/xAI API: Relevance scoring, trend alignment, discoverability", "", "## Views", "", "- [[07-Domains/X Content/Format Hook Matrix]]", "- [[07-Domains/X Content/Grok Relevance]]", "- [[07-Domains/X Content/Next Probes]]"])}},
+                {{"path": "07-Domains/X Content/Format Hook Matrix.md", "content": "\\n".join(["# Format + Hook Synergy Matrix", ""] + ["- `" + k + "` synergy: `" + str(v) + "`" for k, v in sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda x: x[1], reverse=True)])}},
+                {{"path": "07-Domains/X Content/Grok Relevance.md", "content": "\\n".join(["# Grok Relevance Scoring", "", "Grok/xAI relevance measures how likely content is to be surfaced in Grok answers and X search.", "", "## Format Grok Scores", ""] + ["- `" + k + "` base_grok: `" + str(v["base_grok"]) + "`" for k, v in FORMAT_CATALOG.items()] + ["", "## Hook Grok Scores", ""] + ["- `" + k + "` grok: `" + str(v["grok"]) + "`" for k, v in HOOK_CATALOG.items()])}},
+                {{"path": "07-Domains/X Content/Next Probes.md", "content": "\\n".join(["# Next Probes", ""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in HOOK_CATALOG.items()] + [""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in FORMAT_CATALOG.items()])}},
+            ]
+            return {{"pages": pages}}
+
+        def main() -> None:
+            parser = argparse.ArgumentParser(prog="{package_name}")
+            parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
+            parser.add_argument("--input", required=True)
+            parser.add_argument("--output", required=True)
+            args = parser.parse_args()
+            payload = _load(args.input)
+            if args.hook == "evaluate":
+                response = evaluate(payload)
+            elif args.hook == "suggest":
+                response = suggest(payload)
+            elif args.hook == "packets":
+                response = packets(payload)
+            else:
+                response = watchtower(payload)
+            _write(args.output, response)
+
+        if __name__ == "__main__":
+            main()
+        """
+    ).strip()
+
+
+def _xcontent_one_loop() -> str:
+    return dedent(
+        """
+        # X Content One-Loop Spec
+
+        ## Intent
+
+        Make someone's X content meaningfully better in any niche they choose.
+
+        Not vanity metrics. Not follower count. Not impressions.
+
+        Better means:
+        - the right people engage deeply (saves, bookmarks, thoughtful replies)
+        - the content builds authority in the chosen niche over time
+        - Grok/xAI surfaces the content as reference material
+        - each post teaches the system what works for this specific person in this specific niche
+
+        ## Goals
+
+        1. **Discover what works**: Find the content format + hook type + audience combinations that produce real engagement in the operator's niche
+        2. **Separate signal from noise**: Distinguish engagement quality (bookmarks, profile clicks, reply depth, follows) from vanity metrics (impressions, likes)
+        3. **Build niche doctrine**: Accumulate proven content patterns that work repeatedly, not one-off viral accidents
+        4. **Map failure boundaries**: Know exactly where each content approach breaks so the operator never wastes effort
+        5. **Optimize for Grok discoverability**: Content that Grok surfaces as reference material compounds over time
+        6. **Transfer across niches**: The system learns which content primitives are portable vs niche-locked
+
+        ## Niche Adaptation
+
+        The `topic_tag` open mutation field lets the operator specify their niche:
+        - `topic_tag: "defi"` for crypto/DeFi content
+        - `topic_tag: "saas_growth"` for SaaS operator content
+        - `topic_tag: "ai_engineering"` for AI/ML practitioner content
+        - `topic_tag: "indie_hacking"` for bootstrapped founder content
+
+        The chip learns which format+hook+audience combinations work best FOR THAT NICHE, not generically.
+
+        ## One Governing Loop
+
+        1. Refresh content format, hook type, audience, and distribution state
+        2. Classify the bottleneck:
+           - `format_hook_gap`: haven't tested enough format+hook combos for this niche
+           - `quality_gap`: best combo found but not yet quality-filtered for promotion
+           - `audience_gap`: winning combo not yet transfer-checked across audiences
+           - `distribution_gap`: winning combo not yet tested with Grok optimization
+           - `promotion_gap`: ready for real-world validation via actual posting
+        3. Run the smallest justified lane
+        4. Update memory and watchtower
+
+        ## Rules
+
+        - Treat `content_format + hook_type + audience_segment` as the main candidate unit
+        - Optimize for engagement quality, not vanity metrics
+        - Use X API analytics as the inner benchmark lane
+        - Use Grok/xAI relevance as the discoverability benchmark
+        - Use real-world posting results as the outer validation lane
+        - Do not let format churn masquerade as new doctrine
+        - Do not promote any content strategy without both engagement quality and Grok relevance gates clearing
+
+        ## X API Grounding
+
+        Replace the deterministic evaluator with:
+
+        1. Analyze the operator's existing X posts via `GET /2/users/:id/tweets` for baseline
+        2. Use X search API to study what works in the operator's niche
+        3. Post content via X API
+        4. Wait for analytics window (24-48h minimum for meaningful signals)
+        5. Pull tweet metrics: impressions, engagements, bookmarks, profile clicks, reply depth
+        6. Compute engagement_quality_score from:
+           - bookmark_rate (strongest signal of reference value)
+           - reply_depth (weighted by reply quality, not count)
+           - profile_click_rate (strongest signal of authority building)
+           - follow_rate (strongest signal of niche positioning)
+
+        ## Grok/xAI API Grounding
+
+        - Analyze content structure for proof density and novelty tension
+        - Score trend alignment against current X discourse in the operator's niche
+        - Predict Grok surfacing probability (will this appear in Grok answers?)
+        - Feed scores back as grok_relevance_score metric
+        - Use Grok to analyze competitor content in the niche for gap identification
+        """
+    ).strip()
+
+
+def _xcontent_bridge() -> str:
+    return dedent(
+        """
+        # X Content Promotion Bridge
+
+        X API analytics is the inner benchmark lane for this chip.
+        Real-world posting with measured outcomes is outer validation.
+
+        ## Bridge Fields
+
+        - `candidate_id`
+        - `content_format`
+        - `hook_type`
+        - `audience_segment`
+        - `engagement_quality_score`
+        - `useful_reach_score`
+        - `grok_relevance_score`
+        - `bookmark_rate` (from X API)
+        - `reply_depth` (from X API)
+        - `profile_click_rate` (from X API)
+        - `grok_surfacing_probability` (from xAI API)
+        - `recommended_next_step`
+        - `primary_mechanism`
+        - `primary_boundary`
+
+        ## Promotion Ladder
+
+        - `store_as_benchmark_evidence`
+        - `promote_as_doctrine_candidate`
+        - `promote_as_boundary_candidate`
+        - `queue_for_content_calendar`
+
+        ## Anti-Patterns
+
+        - do not rank by impressions or likes alone (vanity metrics)
+        - do not promote a format without a hook anchor
+        - do not send every viral post to the content calendar
+        - do not confuse Grok relevance with engagement quality (they measure different things)
+        - do not optimize distribution mode as a substitute for content quality
+        """
+    ).strip()
 
 
 def init_chip(
@@ -301,19 +1074,51 @@ def init_chip(
     metric_name: str,
     goal: str = "maximize",
     package_name: str | None = None,
+    preset: str = "generic",
 ) -> dict[str, str]:
     root = target_dir.resolve()
     root.mkdir(parents=True, exist_ok=True)
     package = package_name or _package_name(chip_name)
-    files = {
-        root / ".gitignore": _gitignore(),
-        root / "pyproject.toml": _pyproject(chip_name),
-        root / "spark-chip.json": _manifest(chip_name, domain, package),
-        root / "spark-researcher.project.json": _project_config(chip_name, package, metric_name, goal),
-        root / "README.md": _readme(chip_name, domain),
-        root / "src" / package / "__init__.py": _init_file(),
-        root / "src" / package / "cli.py": _cli_file(package, domain, metric_name, goal),
-    }
+    if preset == "crypto-trading":
+        files = {
+            root / ".gitignore": _gitignore(),
+            root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
+            root / "spark-chip.json": _crypto_manifest(chip_name, package),
+            root / "spark-researcher.project.json": _crypto_project(chip_name, package),
+            root / "README.md": _crypto_readme(chip_name, package),
+            root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
+            root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
+            root / "src" / package / "__init__.py": _init_file(),
+            root / "src" / package / "cli.py": _crypto_cli(package),
+        }
+        domain = "trading"
+        metric_name = "profitability_score"
+        goal = "maximize"
+    elif preset == "xcontent":
+        files = {
+            root / ".gitignore": _gitignore(),
+            root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
+            root / "spark-chip.json": _xcontent_manifest(chip_name, package),
+            root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
+            root / "README.md": _xcontent_readme(chip_name, package),
+            root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
+            root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
+            root / "src" / package / "__init__.py": _init_file(),
+            root / "src" / package / "cli.py": _xcontent_cli(package),
+        }
+        domain = "xcontent"
+        metric_name = "engagement_quality_score"
+        goal = "maximize"
+    else:
+        files = {
+            root / ".gitignore": _gitignore(),
+            root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
+            root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
+            root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
+            root / "README.md": _generic_readme(chip_name, domain),
+            root / "src" / package / "__init__.py": _init_file(),
+            root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
+        }
     existing = [str(path) for path in files if path.exists()]
     if existing:
         raise FileExistsError(f"Chip starter refused to overwrite existing files: {', '.join(existing)}")
@@ -328,4 +1133,5 @@ def init_chip(
         "package_name": package,
         "manifest_path": str(root / "spark-chip.json"),
         "config_path": str(root / "spark-researcher.project.json"),
+        "preset": preset,
     }

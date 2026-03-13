@@ -504,7 +504,32 @@ def _sync_trust_capital_state(state: dict[str, Any], trust_capital: dict[str, An
     return state
 
 
-def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[str, Any], trust_capital: dict[str, Any]) -> list[dict[str, Any]]:
+def _sync_portfolio_learning_state(state: dict[str, Any], portfolio_learning: dict[str, Any]) -> dict[str, Any]:
+    summary_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in portfolio_learning.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+    for venture in state.get("ventures", []):
+        if not isinstance(venture, dict):
+            continue
+        summary = summary_by_venture.get(str(venture.get("venture_id") or ""))
+        if not summary:
+            continue
+        venture["portfolio_retrospective_count"] = int(summary.get("retrospective_count", 0) or 0)
+        venture["promoted_playbook_count"] = int(summary.get("promoted_playbook_count", 0) or 0)
+        venture["shared_asset_count"] = int(summary.get("reusable_asset_count", 0) or 0)
+        venture["repeated_failure_count"] = int(summary.get("repeated_failure_count", 0) or 0)
+        venture["doctrine_ready"] = bool(summary.get("doctrine_ready") or False)
+    return state
+
+
+def _build_venture_task_packets(
+    execution: dict[str, Any],
+    customer_gtm: dict[str, Any],
+    trust_capital: dict[str, Any],
+    portfolio_learning: dict[str, Any],
+) -> list[dict[str, Any]]:
     packets: list[dict[str, Any]] = []
     gtm_by_venture = {
         str(item.get("venture_id") or ""): item
@@ -516,18 +541,28 @@ def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[st
         for item in trust_capital.get("ventures", [])
         if isinstance(item, dict) and item.get("venture_id")
     }
+    learning_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in portfolio_learning.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
     for item in execution.get("ventures", []):
         if not isinstance(item, dict):
             continue
         latest_kpi = item.get("latest_kpi_snapshot", {}) if isinstance(item.get("latest_kpi_snapshot"), dict) else {}
         gtm = gtm_by_venture.get(str(item.get("venture_id") or ""), {})
         trust = trust_by_venture.get(str(item.get("venture_id") or ""), {})
+        learning = learning_by_venture.get(str(item.get("venture_id") or ""), {})
         combined_tasks = [str(task) for task in item.get("required_tasks", [])[:5]]
         for task in gtm.get("gtm_tasks", []):
             text = str(task)
             if text and text not in combined_tasks:
                 combined_tasks.append(text)
         for task in trust.get("capital_tasks", []):
+            text = str(task)
+            if text and text not in combined_tasks:
+                combined_tasks.append(text)
+        for task in learning.get("knowledge_tasks", []):
             text = str(task)
             if text and text not in combined_tasks:
                 combined_tasks.append(text)
@@ -538,7 +573,7 @@ def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[st
                 "priority": int(item.get("priority", 0) or 0),
                 "bottleneck": str(item.get("bottleneck") or "model_gap"),
                 "next_action": str(item.get("next_action") or "ship_next_validation_commitment"),
-                "required_tasks": combined_tasks[:6],
+                "required_tasks": combined_tasks[:8],
                 "active_experiment_count": int(item.get("active_experiment_count", 0) or 0),
                 "open_build_request_count": int(item.get("open_build_request_count", 0) or 0),
                 "customer_signal_count": int(gtm.get("conversation_count", 0) or 0),
@@ -550,6 +585,10 @@ def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[st
                 "capital_readiness": bool(trust.get("capital_readiness") or False),
                 "ready_data_room_count": int(trust.get("ready_data_room_count", 0) or 0),
                 "investor_target_count": int(trust.get("open_investor_count", 0) or 0),
+                "portfolio_retrospective_count": int(learning.get("retrospective_count", 0) or 0),
+                "promoted_playbook_count": int(learning.get("promoted_playbook_count", 0) or 0),
+                "reusable_asset_count": int(learning.get("reusable_asset_count", 0) or 0),
+                "doctrine_ready": bool(learning.get("doctrine_ready") or False),
                 "latest_weekly_revenue": latest_kpi.get("weekly_revenue"),
                 "latest_pipeline_count": latest_kpi.get("pipeline_count"),
                 "latest_active_users": latest_kpi.get("active_users"),
@@ -873,6 +912,146 @@ def _trust_capital_snapshot(runtime_root: str, state: dict[str, Any]) -> dict[st
     }
 
 
+def _portfolio_learning_snapshot(runtime_root: str, state: dict[str, Any]) -> dict[str, Any]:
+    latest_retrospectives = _latest_records_by_key(read_log(runtime_root, "portfolio_retrospectives"), "retrospective_id")
+    latest_reusable_assets = _latest_records_by_key(read_log(runtime_root, "reusable_assets"), "asset_id")
+    active_ventures = [item for item in state.get("ventures", []) if isinstance(item, dict) and str(item.get("status") or "") == "active"]
+    retros_by_venture: dict[str, list[dict[str, Any]]] = {}
+    assets_by_venture: dict[str, list[dict[str, Any]]] = {}
+    failure_counts: dict[str, int] = {}
+    failure_ventures: dict[str, set[str]] = {}
+    for item in latest_retrospectives.values():
+        venture_id = str(item.get("venture_id") or "").strip()
+        if venture_id:
+            retros_by_venture.setdefault(venture_id, []).append(item)
+        failure_mode = str(item.get("failure_mode") or "").strip()
+        if failure_mode:
+            failure_counts[failure_mode] = failure_counts.get(failure_mode, 0) + 1
+            failure_ventures.setdefault(failure_mode, set()).add(venture_id or "unknown")
+    for item in latest_reusable_assets.values():
+        venture_id = str(item.get("venture_id") or "").strip()
+        if venture_id:
+            assets_by_venture.setdefault(venture_id, []).append(item)
+    reusable_assets = [
+        {
+            "asset_id": str(item.get("asset_id") or ""),
+            "venture_id": str(item.get("venture_id") or ""),
+            "label": str(item.get("label") or item.get("asset_id") or "asset"),
+            "kind": str(item.get("kind") or ""),
+            "status": str(item.get("status") or ""),
+            "reused_by_count": int(item.get("reused_by_count", 0) or 0),
+            "shared_surface": str(item.get("shared_surface") or ""),
+            "next_step": str(item.get("next_step") or ""),
+        }
+        for item in latest_reusable_assets.values()
+    ]
+    repeated_failures: list[dict[str, Any]] = []
+    for failure_mode, count in sorted(failure_counts.items(), key=lambda item: (-int(item[1]), str(item[0]))):
+        ventures_hit = sorted(name for name in failure_ventures.get(failure_mode, set()) if name and name != "unknown")
+        if count < 2 and len(ventures_hit) < 2:
+            continue
+        repeated_failures.append(
+            {
+                "failure_mode": failure_mode,
+                "count": count,
+                "venture_count": len(ventures_hit),
+                "ventures": ventures_hit,
+                "recommended_boundary": f"Do not treat `{failure_mode}` as solved until the next launch packet shows a cleaner handoff or review loop.",
+            }
+        )
+    ventures: list[dict[str, Any]] = []
+    doctrine_packets: list[dict[str, Any]] = []
+    playbook_packets: list[dict[str, Any]] = []
+    for venture in active_ventures:
+        venture_id = str(venture.get("venture_id") or "venture")
+        retros = sorted(retros_by_venture.get(venture_id, []), key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        assets = sorted(assets_by_venture.get(venture_id, []), key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        promoted_rows = [
+            item
+            for item in retros
+            if bool(item.get("promote_doctrine"))
+            and str(item.get("doctrine_claim") or "").strip()
+            and str(item.get("evidence_strength") or "medium") in {"medium", "high"}
+        ]
+        top_failures: list[str] = []
+        for row in retros:
+            failure_mode = str(row.get("failure_mode") or "").strip()
+            if failure_mode and failure_mode not in top_failures:
+                top_failures.append(failure_mode)
+        repeated_failure_count = len([mode for mode in top_failures if failure_counts.get(mode, 0) >= 2 or len(failure_ventures.get(mode, set())) >= 2])
+        latest_retro = retros[0] if retros else {}
+        knowledge_tasks: list[str] = []
+        if not retros:
+            knowledge_tasks.append("log_portfolio_retrospective")
+        if not assets:
+            knowledge_tasks.append("capture_reusable_asset")
+        if promoted_rows:
+            knowledge_tasks.append("review_doctrine_promotion")
+        if repeated_failure_count > 0:
+            knowledge_tasks.append("write_boundary_for_repeated_failure")
+        ventures.append(
+            {
+                "venture_id": venture_id,
+                "label": str(venture.get("label") or venture_id),
+                "retrospective_count": len(retros),
+                "promoted_playbook_count": len(promoted_rows),
+                "reusable_asset_count": len(assets),
+                "repeated_failure_count": repeated_failure_count,
+                "doctrine_ready": bool(promoted_rows),
+                "latest_scope": str(latest_retro.get("scope") or ""),
+                "latest_outcome": str(latest_retro.get("outcome") or ""),
+                "latest_lesson": str(latest_retro.get("lesson") or ""),
+                "top_failure_modes": top_failures[:3],
+                "knowledge_tasks": knowledge_tasks[:4],
+            }
+        )
+        if promoted_rows:
+            latest_promoted = promoted_rows[0]
+            playbook_packets.append(
+                {
+                    "venture_id": venture_id,
+                    "label": str(venture.get("label") or venture_id),
+                    "promoted_playbook_count": len(promoted_rows),
+                    "doctrine_ready": True,
+                    "top_claim": str(latest_promoted.get("doctrine_claim") or ""),
+                    "boundary": str(latest_promoted.get("boundary") or ""),
+                    "evidence_strength": str(latest_promoted.get("evidence_strength") or "medium"),
+                    "next_step": str(latest_promoted.get("next_step") or ""),
+                }
+            )
+        for row in promoted_rows[:3]:
+            doctrine_packets.append(
+                {
+                    "venture_id": venture_id,
+                    "label": str(venture.get("label") or venture_id),
+                    "scope": str(row.get("scope") or ""),
+                    "outcome": str(row.get("outcome") or ""),
+                    "doctrine_claim": str(row.get("doctrine_claim") or ""),
+                    "boundary": str(row.get("boundary") or ""),
+                    "evidence_strength": str(row.get("evidence_strength") or "medium"),
+                    "lesson": str(row.get("lesson") or ""),
+                    "next_step": str(row.get("next_step") or ""),
+                }
+            )
+    ventures.sort(key=lambda item: (-int(item.get("promoted_playbook_count", 0) or 0), -int(item.get("reusable_asset_count", 0) or 0), str(item.get("venture_id") or "")))
+    playbook_packets.sort(key=lambda item: (-int(item.get("promoted_playbook_count", 0) or 0), str(item.get("venture_id") or "")))
+    doctrine_packets.sort(key=lambda item: (str(item.get("evidence_strength") or ""), str(item.get("venture_id") or "")), reverse=True)
+    reusable_assets.sort(key=lambda item: (-int(item.get("reused_by_count", 0) or 0), str(item.get("asset_id") or "")))
+    return {
+        "generated_at": _now_iso(),
+        "retrospective_count": len(latest_retrospectives),
+        "reusable_asset_count": len(latest_reusable_assets),
+        "promoted_playbook_count": sum(int(item.get("promoted_playbook_count", 0) or 0) for item in ventures),
+        "doctrine_packet_count": len(doctrine_packets),
+        "repeated_failure_count": len(repeated_failures),
+        "ventures": ventures,
+        "doctrine_packets": doctrine_packets,
+        "repeated_failures": repeated_failures,
+        "reusable_assets": reusable_assets,
+        "playbook_packets": playbook_packets,
+    }
+
+
 def _policy(mutations: dict[str, str]) -> dict[str, str]:
     policy = dict(DEFAULT_POLICY)
     for key, value in mutations.items():
@@ -910,6 +1089,9 @@ def rebuild_queues(state: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         paid_signals = int(venture.get("paid_signals_this_week", 0) or 0)
         reuse_assets = int(venture.get("reuse_assets_count", 0) or 0)
         capital_ready = bool(venture.get("capital_readiness") or False)
+        retrospectives = int(venture.get("portfolio_retrospective_count", 0) or 0)
+        promoted_playbooks = int(venture.get("promoted_playbook_count", 0) or 0)
+        repeated_failures = int(venture.get("repeated_failure_count", 0) or 0)
         if status == "admissions":
             queues["admissions"].append({"venture_id": venture_id, "priority": "high"})
             continue
@@ -924,8 +1106,8 @@ def rebuild_queues(state: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
             queues["capital"].append({"venture_id": venture_id, "priority": "medium"})
         if trust != "green":
             queues["trust"].append({"venture_id": venture_id, "priority": "high" if trust == "red" else "medium"})
-        if reuse_assets >= 4:
-            queues["doctrine"].append({"venture_id": venture_id, "priority": "medium"})
+        if reuse_assets >= 4 or retrospectives > 0 or promoted_playbooks > 0 or repeated_failures > 0:
+            queues["doctrine"].append({"venture_id": venture_id, "priority": "high" if promoted_playbooks > 0 or repeated_failures > 0 else "medium"})
     return queues
 
 
@@ -1030,7 +1212,18 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
         0.28,
     )
     trust_base = _mean([_trust_score(str(item.get("trust_review_status") or "amber")) for item in ventures], 0.5)
-    knowledge_base = _mean([min(1.0, (float(item.get("reuse_assets_count", 0) or 0) / 5.0)) for item in ventures], 0.25)
+    knowledge_base = _mean(
+        [
+            min(
+                1.0,
+                (min(5.0, float(item.get("reuse_assets_count", 0) or 0)) / 5.0) * 0.45
+                + (min(3.0, float(item.get("portfolio_retrospective_count", 0) or 0)) / 3.0) * 0.25
+                + (min(2.0, float(item.get("promoted_playbook_count", 0) or 0)) / 2.0) * 0.30,
+            )
+            for item in ventures
+        ],
+        0.25,
+    )
     queue_penalty = min(0.25, (len(queues.get("build", [])) + len(queues.get("validation", []))) * 0.015)
     focus_base = max(0.0, 0.72 - overload * 0.17 - queue_penalty)
     founder_latency = _mean([max(0.0, 1.0 - (float(item.get("founder_update_latency_hours", 72) or 72) / 72.0)) for item in ventures], 0.4)
@@ -1096,16 +1289,19 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     state = _sync_customer_gtm_state(state, customer_gtm)
     trust_capital = _trust_capital_snapshot(runtime_root, state)
     state = _sync_trust_capital_state(state, trust_capital)
+    portfolio_learning = _portfolio_learning_snapshot(runtime_root, state)
+    state = _sync_portfolio_learning_state(state, portfolio_learning)
     state = save_state(runtime_root, state)
     priorities = _venture_priorities(state)
     execution = _execution_snapshot(runtime_root, state, priorities)
     customer_gtm = _customer_gtm_snapshot(runtime_root, state)
     scout = _scout_snapshot(runtime_root)
     trust_capital = _trust_capital_snapshot(runtime_root, state)
+    portfolio_learning = _portfolio_learning_snapshot(runtime_root, state)
     metrics = _score_state(state, effective_policy)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
-    venture_tasks = _build_venture_task_packets(execution, customer_gtm, trust_capital)
+    venture_tasks = _build_venture_task_packets(execution, customer_gtm, trust_capital, portfolio_learning)
     queue_snapshot = {
         "generated_at": _now_iso(),
         "portfolio_cap": metrics["portfolio_cap"],
@@ -1116,6 +1312,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "conversation_count": int(customer_gtm.get("conversation_count", 0) or 0),
         "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
         "capital_ready_count": int(trust_capital.get("capital_ready_count", 0) or 0),
+        "promoted_playbook_count": int(portfolio_learning.get("promoted_playbook_count", 0) or 0),
+        "repeated_failure_count": int(portfolio_learning.get("repeated_failure_count", 0) or 0),
     }
     tick = {
         "generated_at": _now_iso(),
@@ -1131,6 +1329,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
         "capital_ready_count": int(trust_capital.get("capital_ready_count", 0) or 0),
         "blocking_trust_count": int(trust_capital.get("blocking_trust_count", 0) or 0),
+        "promoted_playbook_count": int(portfolio_learning.get("promoted_playbook_count", 0) or 0),
+        "repeated_failure_count": int(portfolio_learning.get("repeated_failure_count", 0) or 0),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)
@@ -1146,6 +1346,11 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     _write_json(_path(runtime_root, "trust_capital_snapshot.json"), trust_capital)
     _write_json(_path(runtime_root, "trust_review_packets.json"), trust_capital.get("trust_packets", []))
     _write_json(_path(runtime_root, "capital_readiness_packets.json"), trust_capital.get("capital_packets", []))
+    _write_json(_path(runtime_root, "portfolio_learning_snapshot.json"), portfolio_learning)
+    _write_json(_path(runtime_root, "portfolio_doctrine_packets.json"), portfolio_learning.get("doctrine_packets", []))
+    _write_json(_path(runtime_root, "portfolio_failure_registry.json"), portfolio_learning.get("repeated_failures", []))
+    _write_json(_path(runtime_root, "reusable_asset_registry.json"), portfolio_learning.get("reusable_assets", []))
+    _write_json(_path(runtime_root, "portfolio_playbook_packets.json"), portfolio_learning.get("playbook_packets", []))
     return {
         "state": state,
         "metrics": metrics,
@@ -1158,6 +1363,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "scout": scout,
         "customer_gtm": customer_gtm,
         "trust_capital": trust_capital,
+        "portfolio_learning": portfolio_learning,
     }
 
 
@@ -1323,6 +1529,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
     scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
     customer_gtm = _read_json(_path(runtime_root, "customer_gtm_snapshot.json")) if _path(runtime_root, "customer_gtm_snapshot.json").exists() else {}
     trust_capital = _read_json(_path(runtime_root, "trust_capital_snapshot.json")) if _path(runtime_root, "trust_capital_snapshot.json").exists() else {}
+    portfolio_learning = _read_json(_path(runtime_root, "portfolio_learning_snapshot.json")) if _path(runtime_root, "portfolio_learning_snapshot.json").exists() else {}
     return [
         {
             "kind": "ops_snapshot",
@@ -1348,6 +1555,10 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
                     f"- blocking_trust_count: `{trust_capital.get('blocking_trust_count', 'n/a')}`",
                     f"- capital_ready_count: `{trust_capital.get('capital_ready_count', 'n/a')}`",
                     f"- investor_target_count: `{trust_capital.get('investor_target_count', 'n/a')}`",
+                    f"- portfolio_retrospective_count: `{portfolio_learning.get('retrospective_count', 'n/a')}`",
+                    f"- promoted_playbook_count: `{portfolio_learning.get('promoted_playbook_count', 'n/a')}`",
+                    f"- reusable_asset_count: `{portfolio_learning.get('reusable_asset_count', 'n/a')}`",
+                    f"- repeated_failure_count: `{portfolio_learning.get('repeated_failure_count', 'n/a')}`",
                     "",
                     "## Policy",
                     "",
@@ -1375,6 +1586,11 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     trust_capital = _read_json(_path(runtime_root, "trust_capital_snapshot.json")) if _path(runtime_root, "trust_capital_snapshot.json").exists() else {}
     trust_packets = _read_json(_path(runtime_root, "trust_review_packets.json")) if _path(runtime_root, "trust_review_packets.json").exists() else []
     capital_packets = _read_json(_path(runtime_root, "capital_readiness_packets.json")) if _path(runtime_root, "capital_readiness_packets.json").exists() else []
+    portfolio_learning = _read_json(_path(runtime_root, "portfolio_learning_snapshot.json")) if _path(runtime_root, "portfolio_learning_snapshot.json").exists() else {}
+    doctrine_packets = _read_json(_path(runtime_root, "portfolio_doctrine_packets.json")) if _path(runtime_root, "portfolio_doctrine_packets.json").exists() else []
+    failure_registry = _read_json(_path(runtime_root, "portfolio_failure_registry.json")) if _path(runtime_root, "portfolio_failure_registry.json").exists() else []
+    reusable_assets = _read_json(_path(runtime_root, "reusable_asset_registry.json")) if _path(runtime_root, "reusable_asset_registry.json").exists() else []
+    playbook_packets = _read_json(_path(runtime_root, "portfolio_playbook_packets.json")) if _path(runtime_root, "portfolio_playbook_packets.json").exists() else []
     admissions = read_log(runtime_root, "admissions")
     reviews = read_log(runtime_root, "reviews")
     updates = read_log(runtime_root, "weekly_updates")
@@ -1388,6 +1604,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     trust_reviews = read_log(runtime_root, "trust_reviews")
     data_room_items = read_log(runtime_root, "data_room_items")
     investor_targets = read_log(runtime_root, "investor_targets")
+    portfolio_retrospectives = read_log(runtime_root, "portfolio_retrospectives")
+    reusable_asset_events = read_log(runtime_root, "reusable_assets")
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     lines = [
@@ -1579,6 +1797,96 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 "",
             ]
         )
+    learning_lines = [
+        "# Portfolio Learning",
+        "",
+        f"- generated_at: `{portfolio_learning.get('generated_at', 'n/a')}`",
+        f"- retrospective_count: `{portfolio_learning.get('retrospective_count', 0)}`",
+        f"- promoted_playbook_count: `{portfolio_learning.get('promoted_playbook_count', 0)}`",
+        f"- doctrine_packet_count: `{portfolio_learning.get('doctrine_packet_count', 0)}`",
+        f"- reusable_asset_count: `{portfolio_learning.get('reusable_asset_count', 0)}`",
+        f"- repeated_failure_count: `{portfolio_learning.get('repeated_failure_count', 0)}`",
+        f"- portfolio_retrospectives_logged: `{len(portfolio_retrospectives)}`",
+        "",
+    ]
+    for item in playbook_packets[:5]:
+        learning_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- promoted_playbook_count: `{item.get('promoted_playbook_count', 'n/a')}`",
+                f"- doctrine_ready: `{item.get('doctrine_ready', 'n/a')}`",
+                f"- evidence_strength: `{item.get('evidence_strength', 'n/a')}`",
+                f"- top_claim: {item.get('top_claim', 'n/a')}",
+                f"- boundary: {item.get('boundary', 'n/a')}",
+                f"- next_step: `{item.get('next_step', 'n/a')}`",
+                "",
+            ]
+        )
+    if not playbook_packets:
+        learning_lines.extend(["No doctrine-ready portfolio playbooks yet.", ""])
+    elif doctrine_packets:
+        learning_lines.extend(["## Doctrine Candidates", ""])
+        for item in doctrine_packets[:5]:
+            learning_lines.extend(
+                [
+                    f"### {item.get('label', item.get('venture_id', 'venture'))}",
+                    "",
+                    f"- doctrine_claim: {item.get('doctrine_claim', 'n/a')}",
+                    f"- scope: `{item.get('scope', 'n/a')}`",
+                    f"- outcome: `{item.get('outcome', 'n/a')}`",
+                    f"- evidence_strength: `{item.get('evidence_strength', 'n/a')}`",
+                    f"- boundary: {item.get('boundary', 'n/a')}",
+                    "",
+                ]
+            )
+    asset_lines = [
+        "# Reusable Assets",
+        "",
+        f"- generated_at: `{portfolio_learning.get('generated_at', 'n/a')}`",
+        f"- reusable_asset_count: `{portfolio_learning.get('reusable_asset_count', 0)}`",
+        f"- reusable_asset_events_logged: `{len(reusable_asset_events)}`",
+        "",
+    ]
+    for item in reusable_assets[:8]:
+        asset_lines.extend(
+            [
+                f"## {item.get('label', item.get('asset_id', 'asset'))}",
+                "",
+                f"- asset_id: `{item.get('asset_id', 'n/a')}`",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- kind: `{item.get('kind', 'n/a')}`",
+                f"- status: `{item.get('status', 'n/a')}`",
+                f"- reused_by_count: `{item.get('reused_by_count', 'n/a')}`",
+                f"- shared_surface: `{item.get('shared_surface', 'n/a')}`",
+                f"- next_step: `{item.get('next_step', 'n/a')}`",
+                "",
+            ]
+        )
+    if not reusable_assets:
+        asset_lines.extend(["No reusable assets captured yet.", ""])
+    failure_lines = [
+        "# Failure Registry",
+        "",
+        f"- generated_at: `{portfolio_learning.get('generated_at', 'n/a')}`",
+        f"- repeated_failure_count: `{portfolio_learning.get('repeated_failure_count', 0)}`",
+        "",
+    ]
+    for item in failure_registry[:8]:
+        failure_lines.extend(
+            [
+                f"## {item.get('failure_mode', 'failure')}",
+                "",
+                f"- count: `{item.get('count', 'n/a')}`",
+                f"- venture_count: `{item.get('venture_count', 'n/a')}`",
+                *[f"- venture: `{entry}`" for entry in item.get('ventures', [])],
+                f"- recommended_boundary: {item.get('recommended_boundary', 'n/a')}",
+                "",
+            ]
+        )
+    if not failure_registry:
+        failure_lines.extend(["No repeated failures have cleared the registry threshold yet.", ""])
     execution_lines = [
         "# Execution Board",
         "",
@@ -1626,6 +1934,10 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 f"- capital_readiness: `{item.get('capital_readiness', 'n/a')}`",
                 f"- ready_data_room_count: `{item.get('ready_data_room_count', 'n/a')}`",
                 f"- investor_target_count: `{item.get('investor_target_count', 'n/a')}`",
+                f"- portfolio_retrospective_count: `{item.get('portfolio_retrospective_count', 'n/a')}`",
+                f"- promoted_playbook_count: `{item.get('promoted_playbook_count', 'n/a')}`",
+                f"- reusable_asset_count: `{item.get('reusable_asset_count', 'n/a')}`",
+                f"- doctrine_ready: `{item.get('doctrine_ready', 'n/a')}`",
                 f"- latest_weekly_revenue: `{item.get('latest_weekly_revenue', 'n/a')}`",
                 *[f"- top_objection: `{entry}`" for entry in item.get("top_objections", [])],
                 *[f"- task: `{entry}`" for entry in item.get("required_tasks", [])],
@@ -1701,6 +2013,9 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
         {"path": "07-Domains/Vibe Incubator/Pipeline Board.md", "content": "\n".join(pipeline_lines)},
         {"path": "07-Domains/Vibe Incubator/Trust Board.md", "content": "\n".join(trust_lines)},
         {"path": "07-Domains/Vibe Incubator/Capital Readiness.md", "content": "\n".join(capital_lines)},
+        {"path": "07-Domains/Vibe Incubator/Portfolio Learning.md", "content": "\n".join(learning_lines)},
+        {"path": "07-Domains/Vibe Incubator/Reusable Assets.md", "content": "\n".join(asset_lines)},
+        {"path": "07-Domains/Vibe Incubator/Failure Registry.md", "content": "\n".join(failure_lines)},
         {"path": "07-Domains/Vibe Incubator/Office Hours Packets.md", "content": "\n".join(office_lines)},
         {"path": "07-Domains/Vibe Incubator/Execution Board.md", "content": "\n".join(execution_lines)},
         {"path": "07-Domains/Vibe Incubator/Venture Task Packets.md", "content": "\n".join(task_lines)},

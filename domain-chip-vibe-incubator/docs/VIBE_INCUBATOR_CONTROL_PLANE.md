@@ -21,6 +21,11 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `trust_capital_snapshot.json`
 - `trust_review_packets.json`
 - `capital_readiness_packets.json`
+- `portfolio_learning_snapshot.json`
+- `portfolio_doctrine_packets.json`
+- `portfolio_failure_registry.json`
+- `reusable_asset_registry.json`
+- `portfolio_playbook_packets.json`
 - `office_hours_packets.json`
 - `decision_packets.json`
 - `execution_snapshot.json`
@@ -35,6 +40,8 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `trust_reviews.jsonl`
 - `data_room_items.jsonl`
 - `investor_targets.jsonl`
+- `portfolio_retrospectives.jsonl`
+- `reusable_assets.jsonl`
 - `experiments.jsonl`
 - `build_requests.jsonl`
 - `kpi_snapshots.jsonl`
@@ -203,6 +210,37 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
   --next-step draft_intro_packet
 ```
 
+### Log A Portfolio Retrospective
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py portfolio-retrospective `
+  --venture-id founder-backoffice-studio `
+  --retrospective-id retro-001 `
+  --scope weekly_review `
+  --outcome win `
+  --lesson "Lead with ROI packet before workflow tour." `
+  --doctrine-claim "Founder backoffice demos work better when the ROI packet comes before the product tour." `
+  --boundary "Use this only when the founder already feels painful follow-up or CRM chaos." `
+  --promote-doctrine `
+  --evidence-strength high `
+  --reusable-asset-id roi-packet-template `
+  --next-step promote_demo_sequence
+```
+
+### Capture A Reusable Asset
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py reusable-asset `
+  --venture-id founder-backoffice-studio `
+  --asset-id roi-packet-template `
+  --label "Founder ROI packet template" `
+  --kind playbook `
+  --status shared `
+  --reused-by-count 2 `
+  --shared-surface sales_demo `
+  --next-step apply_to_internal_os_spinout
+```
+
 ### Capture A KPI Snapshot
 
 ```powershell
@@ -234,5 +272,6 @@ Do not treat the control plane as a background daemon.
 - let scouting recommend, but keep admissions review explicit
 - use customer conversations and pipeline opportunities to drive validation pressure honestly
 - let trust review and capital packets prepare investor readiness, but keep actual intros and decisions human-gated
+- use portfolio retrospectives and reusable assets to promote doctrine only when evidence and boundaries are explicit
 - use experiments, build requests, and KPI snapshots to create venture task packets
 - inspect the vault pages before widening the incubator

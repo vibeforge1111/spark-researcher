@@ -40,11 +40,12 @@ The control plane also drives a venture execution layer with:
 - scout intake and admissions review
 - customer conversation and pipeline logging
 - trust review, data-room tracking, and investor targeting
+- portfolio retrospectives and reusable asset capture
 - experiment logs
 - build request logs
 - KPI snapshots
 - derived venture task packets
-- execution watchtower pages
+- doctrine and failure watchtower pages
 
 ## Candidate Unit
 
@@ -89,6 +90,8 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py trust-review --venture-id founder-backoffice-studio --review-id trust-001 --scope automation_release --status green --risk-area release_safety
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py data-room-item --venture-id founder-backoffice-studio --item-id deck-v1 --category deck --label "Investor deck" --status ready
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py investor-target --venture-id founder-backoffice-studio --target-id investor-001 --investor-label "Operator Angels" --thesis-fit high --stage targeted --status open
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py portfolio-retrospective --venture-id founder-backoffice-studio --retrospective-id retro-001 --scope weekly_review --outcome win --lesson "Lead with ROI packet before workflow tour." --doctrine-claim "Founder backoffice demos work better when the ROI packet comes before the product tour." --boundary "Use this only when the founder already feels painful follow-up or CRM chaos." --promote-doctrine --evidence-strength high --reusable-asset-id roi-packet-template
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py reusable-asset --venture-id founder-backoffice-studio --asset-id roi-packet-template --label "Founder ROI packet template" --kind playbook --status shared --reused-by-count 2 --shared-surface sales_demo
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py experiment --venture-id founder-backoffice-studio --experiment-id paid-sprint-1 --hypothesis "A direct founder pain landing page converts paid design partner calls" --status running --target-metric paid_signals
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py build-request --venture-id founder-backoffice-studio --request-id crm-automation --title "Automate founder CRM follow-up" --kind workflow --priority high
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py kpi-snapshot --venture-id founder-backoffice-studio --customer-conversations 5 --paid-signals 2 --weekly-revenue 500 --pipeline-count 7 --active-users 3 --automation-coverage 0.76

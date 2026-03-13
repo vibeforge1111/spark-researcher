@@ -82,6 +82,15 @@ def _trust_capital_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, 
     }
 
 
+def _portfolio_learning_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    portfolio_learning = refreshed.get("portfolio_learning", {}) if isinstance(refreshed.get("portfolio_learning"), dict) else {}
+    return {
+        str(item.get("venture_id") or ""): item
+        for item in portfolio_learning.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+
+
 def _latest_by_key(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -136,6 +145,8 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
     customer_gtm_by_venture = _customer_gtm_by_venture(refreshed)
     trust_capital = refreshed.get("trust_capital", {}) if isinstance(refreshed.get("trust_capital"), dict) else {}
     trust_capital_by_venture = _trust_capital_by_venture(refreshed)
+    portfolio_learning = refreshed.get("portfolio_learning", {}) if isinstance(refreshed.get("portfolio_learning"), dict) else {}
+    portfolio_learning_by_venture = _portfolio_learning_by_venture(refreshed)
     return {
         "runtime_root": runtime_root,
         "program": state.get("program", {}),
@@ -158,6 +169,12 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
             "blocking_trust_count": trust_capital.get("blocking_trust_count", 0),
             "capital_ready_count": trust_capital.get("capital_ready_count", 0),
             "investor_target_count": trust_capital.get("investor_target_count", 0),
+        },
+        "portfolio_learning": {
+            "retrospective_count": portfolio_learning.get("retrospective_count", 0),
+            "promoted_playbook_count": portfolio_learning.get("promoted_playbook_count", 0),
+            "reusable_asset_count": portfolio_learning.get("reusable_asset_count", 0),
+            "repeated_failure_count": portfolio_learning.get("repeated_failure_count", 0),
         },
         "execution": {
             "active_experiment_count": execution.get("active_experiment_count", 0),
@@ -182,6 +199,11 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
                 "capital_readiness": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("capital_readiness", False),
                 "trust_blocking": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("blocking", False),
                 "investor_target_count": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_investor_count", 0),
+                "portfolio_retrospective_count": portfolio_learning_by_venture.get(str(item.get("venture_id") or ""), {}).get("retrospective_count", 0),
+                "promoted_playbook_count": portfolio_learning_by_venture.get(str(item.get("venture_id") or ""), {}).get("promoted_playbook_count", 0),
+                "reusable_asset_count": portfolio_learning_by_venture.get(str(item.get("venture_id") or ""), {}).get("reusable_asset_count", 0),
+                "repeated_failure_count": portfolio_learning_by_venture.get(str(item.get("venture_id") or ""), {}).get("repeated_failure_count", 0),
+                "doctrine_ready": portfolio_learning_by_venture.get(str(item.get("venture_id") or ""), {}).get("doctrine_ready", False),
                 "latest_weekly_revenue": (
                     execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("latest_kpi_snapshot", {}) or {}
                 ).get("weekly_revenue"),
@@ -752,6 +774,83 @@ def _handle_investor_target(args: argparse.Namespace) -> None:
     )
 
 
+def _handle_portfolio_retrospective(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "portfolio_retrospectives",
+            {
+                "venture_id": venture["venture_id"],
+                "retrospective_id": str(args.retrospective_id),
+                "scope": str(args.scope),
+                "outcome": str(args.outcome),
+                "lesson": str(args.lesson),
+                "failure_mode": str(args.failure_mode or ""),
+                "doctrine_claim": str(args.doctrine_claim or ""),
+                "boundary": str(args.boundary or ""),
+                "promote_doctrine": bool(args.promote_doctrine),
+                "evidence_strength": str(args.evidence_strength),
+                "reusable_asset_id": str(args.reusable_asset_id or ""),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+        learning = refreshed.get("portfolio_learning", {}) if isinstance(refreshed.get("portfolio_learning"), dict) else {}
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "portfolio_retrospective_event": event,
+            "portfolio_learning": {
+                "retrospective_count": learning.get("retrospective_count", 0),
+                "promoted_playbook_count": learning.get("promoted_playbook_count", 0),
+                "repeated_failure_count": learning.get("repeated_failure_count", 0),
+            },
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_reusable_asset(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "reusable_assets",
+            {
+                "venture_id": venture["venture_id"],
+                "asset_id": str(args.asset_id),
+                "label": str(args.label),
+                "kind": str(args.kind),
+                "status": str(args.status),
+                "reused_by_count": int(args.reused_by_count),
+                "shared_surface": str(args.shared_surface or ""),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+        learning = refreshed.get("portfolio_learning", {}) if isinstance(refreshed.get("portfolio_learning"), dict) else {}
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "reusable_asset_event": event,
+            "portfolio_learning": {
+                "reusable_asset_count": learning.get("reusable_asset_count", 0),
+                "promoted_playbook_count": learning.get("promoted_playbook_count", 0),
+            },
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -940,6 +1039,32 @@ def build_parser() -> argparse.ArgumentParser:
     investor.add_argument("--next-step")
     investor.add_argument("--note")
 
+    retrospective = sub.add_parser("portfolio-retrospective")
+    retrospective.add_argument("--venture-id", required=True)
+    retrospective.add_argument("--retrospective-id", required=True)
+    retrospective.add_argument("--scope", choices=["weekly_review", "launch", "customer", "build", "trust", "capital", "shutdown"], default="weekly_review")
+    retrospective.add_argument("--outcome", choices=["win", "mixed", "loss", "blocked"], required=True)
+    retrospective.add_argument("--lesson", required=True)
+    retrospective.add_argument("--failure-mode")
+    retrospective.add_argument("--doctrine-claim")
+    retrospective.add_argument("--boundary")
+    retrospective.add_argument("--promote-doctrine", action="store_true")
+    retrospective.add_argument("--evidence-strength", choices=["low", "medium", "high"], default="medium")
+    retrospective.add_argument("--reusable-asset-id")
+    retrospective.add_argument("--next-step")
+    retrospective.add_argument("--note")
+
+    reusable_asset = sub.add_parser("reusable-asset")
+    reusable_asset.add_argument("--venture-id", required=True)
+    reusable_asset.add_argument("--asset-id", required=True)
+    reusable_asset.add_argument("--label", required=True)
+    reusable_asset.add_argument("--kind", choices=["template", "agent", "workflow", "playbook", "dataset", "content", "ops"], default="playbook")
+    reusable_asset.add_argument("--status", choices=["draft", "in_use", "shared", "retired"], required=True)
+    reusable_asset.add_argument("--reused-by-count", type=int, default=0)
+    reusable_asset.add_argument("--shared-surface")
+    reusable_asset.add_argument("--next-step")
+    reusable_asset.add_argument("--note")
+
     kpi = sub.add_parser("kpi-snapshot")
     kpi.add_argument("--venture-id", required=True)
     kpi.add_argument("--stage")
@@ -999,6 +1124,12 @@ def main() -> None:
         return
     if args.action == "investor-target":
         _handle_investor_target(args)
+        return
+    if args.action == "portfolio-retrospective":
+        _handle_portfolio_retrospective(args)
+        return
+    if args.action == "reusable-asset":
+        _handle_reusable_asset(args)
         return
     if args.action == "kpi-snapshot":
         _handle_kpi_snapshot(args)

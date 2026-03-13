@@ -37,6 +37,7 @@ The `ops` loop also emits:
 
 The control plane also drives a venture execution layer with:
 
+- scout intake and admissions review
 - experiment logs
 - build request logs
 - KPI snapshots
@@ -79,6 +80,8 @@ python -m spark_researcher.cli run --config domain-chip-vibe-incubator/spark-res
 python -m spark_researcher.cli candidates suggest --config domain-chip-vibe-incubator/spark-researcher.project.json --command research
 python -m spark_researcher.cli candidates suggest --config domain-chip-vibe-incubator/spark-researcher.project.json --command ops
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py status
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py scout-intake --application-id scout-founder-os --label "Founder OS concierge" --founder-id operator-a --entry-source referral --venture-model agentic_saas --customer-surface founder_backoffice --distribution-engine operator_content --venture-theme "founder os concierge"
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py admissions-review --application-id scout-founder-os --decision invite
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py experiment --venture-id founder-backoffice-studio --experiment-id paid-sprint-1 --hypothesis "A direct founder pain landing page converts paid design partner calls" --status running --target-metric paid_signals
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py build-request --venture-id founder-backoffice-studio --request-id crm-automation --title "Automate founder CRM follow-up" --kind workflow --priority high
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py kpi-snapshot --venture-id founder-backoffice-studio --customer-conversations 5 --paid-signals 2 --weekly-revenue 500 --pipeline-count 7 --active-users 3 --automation-coverage 0.76

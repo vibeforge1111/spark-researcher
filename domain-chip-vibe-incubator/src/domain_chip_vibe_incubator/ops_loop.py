@@ -475,6 +475,80 @@ def _build_venture_task_packets(execution: dict[str, Any]) -> list[dict[str, Any
     return packets
 
 
+def _scout_snapshot(runtime_root: str) -> dict[str, Any]:
+    latest_applications = _latest_records_by_key(read_log(runtime_root, "scout_applications"), "application_id")
+    latest_reviews = _latest_records_by_key(read_log(runtime_root, "admission_reviews"), "application_id")
+    admissions = read_log(runtime_root, "admissions")
+    admitted_venture_ids = {
+        str(item.get("venture_id") or "")
+        for item in admissions
+        if isinstance(item, dict) and str(item.get("venture_id") or "").strip()
+    }
+    applications: list[dict[str, Any]] = []
+    packets: list[dict[str, Any]] = []
+    for application in latest_applications.values():
+        application_id = str(application.get("application_id") or "").strip()
+        venture_id = str(application.get("venture_id") or "").strip()
+        review = latest_reviews.get(application_id, {})
+        review_decision = str(review.get("decision") or "").strip()
+        if venture_id and venture_id in admitted_venture_ids:
+            status = "admitted"
+        elif review_decision == "reject":
+            status = "rejected"
+        elif review_decision in {"watchlist", "invite"}:
+            status = review_decision
+        else:
+            status = "pending"
+        score = float(application.get("incubator_compound_score", 0.0) or 0.0)
+        item = {
+            "application_id": application_id,
+            "venture_id": venture_id,
+            "label": str(application.get("label") or venture_id or application_id),
+            "founder_id": str(application.get("founder_id") or ""),
+            "founder_label": str(application.get("founder_label") or application.get("founder_id") or ""),
+            "entry_source": str(application.get("entry_source") or ""),
+            "thesis_summary": str(application.get("thesis_summary") or ""),
+            "incubator_compound_score": round(score, 4),
+            "resilience_score": float(application.get("resilience_score", 0.0) or 0.0),
+            "recommended_decision": str(application.get("recommended_admission_decision") or "watchlist"),
+            "manual_review_required": bool(application.get("manual_review_required") or False),
+            "status": status,
+            "review_decision": review_decision,
+            "review_note": str(review.get("note") or ""),
+            "recommended_next_step": str(application.get("recommended_next_step") or ""),
+            "first_week_plan": [str(item) for item in application.get("first_week_plan", [])[:3]] if isinstance(application.get("first_week_plan"), list) else [],
+            "created_at": str(application.get("created_at") or ""),
+        }
+        applications.append(item)
+        if status in {"pending", "watchlist", "invite"}:
+            packets.append(
+                {
+                    "application_id": item["application_id"],
+                    "venture_id": item["venture_id"],
+                    "label": item["label"],
+                    "founder_label": item["founder_label"],
+                    "entry_source": item["entry_source"],
+                    "incubator_compound_score": item["incubator_compound_score"],
+                    "recommended_decision": item["recommended_decision"],
+                    "manual_review_required": item["manual_review_required"],
+                    "recommended_next_step": item["recommended_next_step"],
+                    "first_week_plan": list(item["first_week_plan"]),
+                    "status": item["status"],
+                }
+            )
+    applications.sort(key=lambda item: (-float(item.get("incubator_compound_score", 0.0) or 0.0), str(item.get("application_id") or "")))
+    packets.sort(key=lambda item: (-float(item.get("incubator_compound_score", 0.0) or 0.0), str(item.get("application_id") or "")))
+    return {
+        "generated_at": _now_iso(),
+        "application_count": len(applications),
+        "pending_count": len([item for item in applications if item["status"] in {"pending", "watchlist", "invite"}]),
+        "admitted_count": len([item for item in applications if item["status"] == "admitted"]),
+        "rejected_count": len([item for item in applications if item["status"] == "rejected"]),
+        "applications": applications,
+        "pending_packets": packets,
+    }
+
+
 def _policy(mutations: dict[str, str]) -> dict[str, str]:
     policy = dict(DEFAULT_POLICY)
     for key, value in mutations.items():
@@ -684,6 +758,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     state = save_state(runtime_root, state)
     priorities = _venture_priorities(state)
     execution = _execution_snapshot(runtime_root, state, priorities)
+    scout = _scout_snapshot(runtime_root)
     metrics = _score_state(state, effective_policy)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
@@ -694,6 +769,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "active_portfolio_count": metrics["active_portfolio_count"],
         "priority_ventures": priorities[:5],
         "venture_task_count": len(venture_tasks),
+        "pending_applications": int(scout.get("pending_count", 0) or 0),
     }
     tick = {
         "generated_at": _now_iso(),
@@ -704,6 +780,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "decision_count": len(decisions),
         "venture_task_count": len(venture_tasks),
         "stale_kpi_count": len(execution.get("stale_kpi_ventures", [])),
+        "pending_application_count": int(scout.get("pending_count", 0) or 0),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)
@@ -711,6 +788,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     _write_json(_path(runtime_root, "decision_packets.json"), decisions)
     _write_json(_path(runtime_root, "execution_snapshot.json"), execution)
     _write_json(_path(runtime_root, "venture_task_packets.json"), venture_tasks)
+    _write_json(_path(runtime_root, "scout_snapshot.json"), scout)
+    _write_json(_path(runtime_root, "admissions_packets.json"), scout.get("pending_packets", []))
     return {
         "state": state,
         "metrics": metrics,
@@ -720,6 +799,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "decisions": decisions,
         "execution": execution,
         "venture_tasks": venture_tasks,
+        "scout": scout,
     }
 
 
@@ -882,6 +962,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
+    scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
     return [
         {
             "kind": "ops_snapshot",
@@ -900,6 +981,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
                     f"- open_build_request_count: `{execution.get('open_build_request_count', 'n/a')}`",
                     f"- active_experiment_count: `{execution.get('active_experiment_count', 'n/a')}`",
                     f"- stale_kpi_ventures: `{len(execution.get('stale_kpi_ventures', []))}`",
+                    f"- pending_application_count: `{scout.get('pending_count', 'n/a')}`",
                     "",
                     "## Policy",
                     "",
@@ -919,12 +1001,16 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     office_hours = _read_json(_path(runtime_root, "office_hours_packets.json")) if _path(runtime_root, "office_hours_packets.json").exists() else []
     execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
     venture_tasks = _read_json(_path(runtime_root, "venture_task_packets.json")) if _path(runtime_root, "venture_task_packets.json").exists() else []
+    scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
+    admissions_packets = _read_json(_path(runtime_root, "admissions_packets.json")) if _path(runtime_root, "admissions_packets.json").exists() else []
     admissions = read_log(runtime_root, "admissions")
     reviews = read_log(runtime_root, "reviews")
     updates = read_log(runtime_root, "weekly_updates")
     experiments = read_log(runtime_root, "experiments")
     build_requests = read_log(runtime_root, "build_requests")
     kpi_snapshots = read_log(runtime_root, "kpi_snapshots")
+    scout_applications = read_log(runtime_root, "scout_applications")
+    admission_reviews = read_log(runtime_root, "admission_reviews")
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     lines = [
@@ -968,6 +1054,52 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 "",
                 *[f"- {entry}" for entry in item.get("agenda", [])],
                 f"- commitment: `{item.get('commitment', 'n/a')}`",
+                "",
+            ]
+        )
+    scout_lines = [
+        "# Scout Intake",
+        "",
+        f"- generated_at: `{scout.get('generated_at', 'n/a')}`",
+        f"- applications: `{scout.get('application_count', 0)}`",
+        f"- pending: `{scout.get('pending_count', 0)}`",
+        f"- admitted: `{scout.get('admitted_count', 0)}`",
+        f"- rejected: `{scout.get('rejected_count', 0)}`",
+        f"- scout_applications_logged: `{len(scout_applications)}`",
+        f"- admission_reviews_logged: `{len(admission_reviews)}`",
+        "",
+        "## Latest Candidates",
+        "",
+    ]
+    for item in scout.get("applications", [])[:5]:
+        scout_lines.extend(
+            [
+                f"### {item.get('label', item.get('application_id', 'application'))}",
+                "",
+                f"- application_id: `{item.get('application_id', 'n/a')}`",
+                f"- founder: `{item.get('founder_label', item.get('founder_id', 'n/a'))}`",
+                f"- entry_source: `{item.get('entry_source', 'n/a')}`",
+                f"- incubator_compound_score: `{item.get('incubator_compound_score', 'n/a')}`",
+                f"- recommended_decision: `{item.get('recommended_decision', 'n/a')}`",
+                f"- status: `{item.get('status', 'n/a')}`",
+                f"- recommended_next_step: `{item.get('recommended_next_step', 'n/a')}`",
+                "",
+            ]
+        )
+    admissions_lines = ["# Admissions Queue", ""]
+    for item in admissions_packets[:5]:
+        admissions_lines.extend(
+            [
+                f"## {item.get('label', item.get('application_id', 'application'))}",
+                "",
+                f"- application_id: `{item.get('application_id', 'n/a')}`",
+                f"- founder: `{item.get('founder_label', 'n/a')}`",
+                f"- entry_source: `{item.get('entry_source', 'n/a')}`",
+                f"- incubator_compound_score: `{item.get('incubator_compound_score', 'n/a')}`",
+                f"- recommended_decision: `{item.get('recommended_decision', 'n/a')}`",
+                f"- manual_review_required: `{item.get('manual_review_required', 'n/a')}`",
+                f"- recommended_next_step: `{item.get('recommended_next_step', 'n/a')}`",
+                *[f"- first_week_plan: {entry}" for entry in item.get("first_week_plan", [])],
                 "",
             ]
         )
@@ -1079,6 +1211,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     return [
         {"path": "07-Domains/Vibe Incubator/Ops Flywheel.md", "content": "\n".join(lines)},
         {"path": "07-Domains/Vibe Incubator/Ops Queue.md", "content": "\n".join(queue_lines)},
+        {"path": "07-Domains/Vibe Incubator/Scout Intake.md", "content": "\n".join(scout_lines)},
+        {"path": "07-Domains/Vibe Incubator/Admissions Queue.md", "content": "\n".join(admissions_lines)},
         {"path": "07-Domains/Vibe Incubator/Office Hours Packets.md", "content": "\n".join(office_lines)},
         {"path": "07-Domains/Vibe Incubator/Execution Board.md", "content": "\n".join(execution_lines)},
         {"path": "07-Domains/Vibe Incubator/Venture Task Packets.md", "content": "\n".join(task_lines)},

@@ -70,6 +70,7 @@ Rules:
 - omitting `--path` creates the chip on the Desktop
 - relative `--path` values are also resolved under the Desktop instead of inside `spark-researcher`
 - use an absolute `--path` only when you intentionally want a different external location
+- absolute or relative targets inside `spark-researcher` are refused
 
 Create the experimental crypto-trading starter with:
 

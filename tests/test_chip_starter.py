@@ -52,3 +52,23 @@ def test_init_chip_writes_readme_with_resolved_root(tmp_path: Path) -> None:
     assert result["chip_root"] == str(chip_root.resolve())
     assert f"cd {chip_root.resolve()}" in readme
     assert result["chip_name"] == "domain-chip-marketing"
+
+
+def test_init_chip_refuses_targets_inside_spark_repo(monkeypatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "spark-researcher"
+    repo_root.mkdir()
+    monkeypatch.setattr(chip_starter, "_spark_repo_root", lambda: repo_root)
+
+    blocked_target = repo_root / "domain-chip-marketing"
+
+    try:
+        chip_starter.init_chip(
+            blocked_target,
+            chip_name="domain-chip-marketing",
+            domain="marketing",
+            metric_name="marketing_score",
+        )
+    except ValueError as exc:
+        assert "outside spark-researcher" in str(exc)
+    else:
+        raise AssertionError("Expected init_chip to refuse a target inside spark-researcher")

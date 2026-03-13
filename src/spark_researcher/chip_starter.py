@@ -29,6 +29,10 @@ def _desktop_root() -> Path:
     return desktop if desktop.exists() else Path.home()
 
 
+def _spark_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
     if target_dir is None:
         return (_desktop_root() / chip_name).resolve()
@@ -36,6 +40,16 @@ def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
     if candidate.is_absolute():
         return candidate.resolve()
     return (_desktop_root() / candidate).resolve()
+
+
+def ensure_external_chip_target(target_dir: Path) -> Path:
+    resolved = target_dir.resolve()
+    repo_root = _spark_repo_root()
+    if resolved == repo_root or resolved.is_relative_to(repo_root):
+        raise ValueError(
+            f"Chip targets must live outside spark-researcher. Refusing to create chip inside `{repo_root}`."
+        )
+    return resolved
 
 
 def _write(path: Path, content: str) -> None:
@@ -1099,7 +1113,7 @@ def init_chip(
     package_name: str | None = None,
     preset: str = "generic",
 ) -> dict[str, str]:
-    root = target_dir.resolve()
+    root = ensure_external_chip_target(target_dir)
     root.mkdir(parents=True, exist_ok=True)
     package = package_name or _package_name(chip_name)
     if preset == "crypto-trading":

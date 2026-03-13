@@ -195,7 +195,7 @@ Spark still owns the loop, ledger, memory index, self-edit policy, and collectiv
 
 Use `docs/CHIP_VALIDATION.md` as the standard pass/fail protocol for validating any chip against the current core.
 
-New chips should usually start from `spark-researcher chips init`, which now defaults to creating a standalone Desktop sibling folder like `C:\Users\USER\Desktop\domain-chip-foo`. Relative `--path` values are also resolved under Desktop. Then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.
+New chips should usually start from `spark-researcher chips init`, which now defaults to creating a standalone Desktop sibling folder like `C:\Users\USER\Desktop\domain-chip-foo`. Relative `--path` values are also resolved under Desktop, and chip targets inside `spark-researcher` are refused. Then replace the deterministic placeholder logic with real domain logic instead of copying an old chip repo by hand.
 
 ## Advisory Path
 

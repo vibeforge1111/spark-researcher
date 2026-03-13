@@ -1,0 +1,258 @@
+{
+  "domain": "vibe-incubator",
+  "chip_worthiness": {
+    "decision": "chip",
+    "why": [
+      "The incubator has domain-specific evaluation logic around venture selection, validation speed, leverage, and resilience.",
+      "The incubator benefits from domain-specific suggestions because the next best move depends on current bottleneck type.",
+      "The incubator needs packets and watchtower pages that separate exploratory ideas from operator-credible doctrine.",
+      "Real-world usefulness can be defined through live validation, reusable assets, trust discipline, and portfolio learning."
+    ],
+    "risks_if_forced_into_chip": [
+      "If the portfolio remains too broad, the chip can become startup theater scoring instead of a real operating system.",
+      "If human gates are removed, the chip can create reputational and trust damage faster than it creates leverage."
+    ]
+  },
+  "mission": {
+    "goal": "Run a narrow, high-output incubator for vibe-coded startups with one operator plus agentic systems.",
+    "realworld_outcome": "Launch and validate ventures faster while preserving trust, auditability, and reusable portfolio learning.",
+    "success_criteria": [
+      "Ventures reach live customer validation faster than an ad hoc founder workflow.",
+      "The incubator reuses prompts, code, workflows, and doctrine across ventures.",
+      "Weekly reviews produce clear continue, narrow, pivot, or stop decisions.",
+      "Investor-facing and sensitive workflows have reviewable audit trails.",
+      "The operator can manage the active portfolio without hidden staffing assumptions."
+    ]
+  },
+  "chip_boundary": {
+    "owns": [
+      "venture scoring",
+      "bottleneck diagnosis",
+      "next-step suggestion logic",
+      "incubator doctrine packets",
+      "portfolio watchtower generation",
+      "real-world validation gating"
+    ],
+    "must_not_own": [
+      "legal execution",
+      "equity decisions",
+      "final admissions authority",
+      "final investor introductions",
+      "sensitive trust signoff"
+    ],
+    "why_external_chip": "The incubator needs domain-local evaluation and operating doctrine that should not leak into Spark core."
+  },
+  "hook_contract": {
+    "evaluate": {
+      "inputs": [
+        "candidate venture mutations",
+        "current portfolio context",
+        "baseline context if present"
+      ],
+      "outputs": [
+        "incubator_compound_score",
+        "supporting metrics",
+        "bottleneck label",
+        "promotion status",
+        "next probe"
+      ],
+      "must_not_do": [
+        "claim live market proof without live evidence",
+        "auto-promote heuristic results into real-world validated doctrine"
+      ]
+    },
+    "suggest": {
+      "inputs": [
+        "historical run ledger",
+        "best current venture",
+        "current bottleneck patterns"
+      ],
+      "outputs": [
+        "candidate ventures",
+        "repair probes",
+        "reason list"
+      ],
+      "must_not_do": [
+        "open random new venture lanes without portfolio-cap awareness"
+      ]
+    },
+    "packets": {
+      "inputs": [
+        "scored runs",
+        "promotion status",
+        "best and weakest venture evidence"
+      ],
+      "outputs": [
+        "benchmark_evidence",
+        "grounded_doctrine",
+        "grounded_boundary",
+        "exploratory_frontier"
+      ],
+      "must_not_do": [
+        "collapse evidence lanes together",
+        "hide boundary conditions"
+      ]
+    },
+    "watchtower": {
+      "inputs": [
+        "run ledger",
+        "memory documents",
+        "best venture state",
+        "frontier and failure patterns"
+      ],
+      "outputs": [
+        "home page",
+        "doctrine page",
+        "boundaries page",
+        "benchmark evidence page",
+        "frontier probes page",
+        "why-it-lost page",
+        "coverage map",
+        "real-world validation page"
+      ],
+      "must_not_do": [
+        "present stale or invented portfolio state as truth"
+      ]
+    }
+  },
+  "governing_loop": {
+    "always_on_stages": [
+      "refresh venture state",
+      "ingest weekly updates and KPI snapshots",
+      "classify bottleneck",
+      "route build, research, GTM, or trust tasks",
+      "emit decision packet",
+      "refresh packets and watchtower"
+    ],
+    "conditional_stages": [
+      "admissions review",
+      "paid validation push",
+      "trust escalation",
+      "investor readiness",
+      "portfolio doctrine promotion"
+    ],
+    "gap_labels": [
+      "model_gap",
+      "distribution_gap",
+      "automation_gap",
+      "learning_gap",
+      "revenue_gap",
+      "resilience_gap"
+    ],
+    "routing_notes": [
+      "Do not add more active ventures when the portfolio has unresolved resilience or learning gaps.",
+      "Prioritize fixing the strongest venture's current bottleneck before opening unrelated new themes.",
+      "Investor readiness only activates after validation and trust thresholds are met."
+    ]
+  },
+  "evidence_system": {
+    "source_registry": [
+      "official accelerator mechanics from Y Combinator, Techstars, and Antler",
+      "venture weekly updates",
+      "customer conversations",
+      "product and usage metrics",
+      "trust reviews",
+      "investor readiness artifacts",
+      "post-launch reviews"
+    ],
+    "packet_schema_notes": [
+      "Every promoted lesson should state mechanism, boundary, evidence lane, and next recommended use.",
+      "Every failure review should capture the bottleneck, missed assumptions, and reusable correction."
+    ],
+    "evidence_lanes": [
+      "exploratory_frontier",
+      "benchmark_evidence",
+      "grounded_doctrine",
+      "grounded_boundary",
+      "realworld_validated"
+    ],
+    "promotion_statuses": [
+      "advisory",
+      "candidate_doctrine",
+      "needs_live_validation",
+      "realworld_validated"
+    ],
+    "contradiction_policy": [
+      "Prefer live customer and operator outcomes over heuristic scores.",
+      "When two ventures disagree, keep both visible until the evidence lane breaks the tie.",
+      "Security or trust failures override growth-positive signals."
+    ],
+    "benchmark_bridge": "planned",
+    "realworld_validation_surface": [
+      "paid pilot",
+      "signed design partner",
+      "active usage from a real operator team",
+      "measurable time saved, revenue created, or reliability improved",
+      "clear proof the loop can run with one operator plus agentic support"
+    ]
+  },
+  "autoloop_mastery_policy": {
+    "mastery_definition": "The incubator reliably turns venture ideas into validated, reusable, and trust-worthy operating assets with one operator plus agentic systems.",
+    "focus_pressure": "High. Keep the portfolio narrow and force weekly bottleneck resolution.",
+    "expansion_pressure": "Low until at least one venture is clearly validated and one more is repeatably near-best.",
+    "pressure_test_pressure": "High on willingness-to-pay, trust risk, and founder throughput assumptions.",
+    "usefulness_pressure": "Maximum. No doctrine promotion without evidence that changes a real venture outcome.",
+    "queue_policy": [
+      "Cap active ventures at a number the operator can review honestly.",
+      "Prefer deepening the best venture over scattering effort across new themes.",
+      "Archive stalled ventures explicitly instead of leaving them in the active queue."
+    ]
+  },
+  "guardrails": {
+    "human_gates": [
+      "admissions",
+      "kill or continue decisions",
+      "security-sensitive releases",
+      "legal and equity decisions",
+      "reputation-sensitive investor intros",
+      "trust incident escalation"
+    ],
+    "anti_drift_risks": [
+      "startup theater scoring",
+      "too many concurrent venture lanes",
+      "mistaking prototype velocity for company creation",
+      "premature investor optimization",
+      "promotion of residue into doctrine"
+    ],
+    "portability_notes": [
+      "General venture lessons should stay chip-local until they transfer across multiple ventures.",
+      "Trust and capital workflows should remain human-supervised even if tooling becomes shared."
+    ],
+    "rollback_or_containment": [
+      "freeze new admissions if resilience gaps accumulate",
+      "drop a venture to advisory-only if trust review fails",
+      "revert doctrine promotion if later live evidence contradicts it"
+    ]
+  },
+  "validation_plan": {
+    "required_commands": [
+      "python -m spark_researcher.cli chips validate --config domain-chip-vibe-incubator/spark-researcher.project.json",
+      "python -m spark_researcher.cli run --config domain-chip-vibe-incubator/spark-researcher.project.json --command research --candidate-id global-baseline",
+      "python -m spark_researcher.cli run --config domain-chip-vibe-incubator/spark-researcher.project.json --command research --candidate-id founder-backoffice-studio",
+      "python -m spark_researcher.cli candidates suggest --config domain-chip-vibe-incubator/spark-researcher.project.json --command research",
+      "python -m spark_researcher.cli memory sync --config domain-chip-vibe-incubator/spark-researcher.project.json",
+      "python -m spark_researcher.cli obsidian build --config domain-chip-vibe-incubator/spark-researcher.project.json",
+      "python -m spark_researcher.cli summary --config domain-chip-vibe-incubator/spark-researcher.project.json"
+    ],
+    "required_outputs": [
+      "valid chip manifest and project config",
+      "stable supporting metrics and bottleneck labels",
+      "memory documents for evidence, doctrine, boundary, and frontier",
+      "watchtower pages for the domain",
+      "clear difference between exploratory and stronger evidence lanes"
+    ],
+    "failure_conditions": [
+      "The chip implies live proof from heuristic-only runs.",
+      "Watchtower pages disagree with ledger state.",
+      "The system opens more ventures than the operator can govern.",
+      "Investor workflows activate before customer validation and trust review."
+    ]
+  },
+  "next_build_steps": [
+    "Build the program control plane with venture registry, weekly update ingestion, and decision packets.",
+    "Add venture execution primitives: experiments, artifacts, KPI snapshots, and bottleneck routing.",
+    "Add customer and GTM workflows before deep investor automation.",
+    "Add trust review and data-room scaffolding before scaling external ventures.",
+    "Promote repeated cross-venture lessons into doctrine only after live evidence."
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "project_name": "domain-chip-vibe-incubator",
+  "project_root": ".",
+  "eval_metric": "incubator_compound_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "ops": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-vibe-incubator-ops.log"
+    },
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-vibe-incubator.log"
+    }
+  },
+  "metrics": {
+    "incubator_compound_score": {
+      "kind": "float",
+      "pattern": "^incubator_compound_score:\\s+([0-9.]+)$"
+    },
+    "solo_operator_fit_score": {
+      "kind": "float",
+      "pattern": "^solo_operator_fit_score:\\s+([0-9.]+)$"
+    },
+    "distribution_leverage_score": {
+      "kind": "float",
+      "pattern": "^distribution_leverage_score:\\s+([0-9.]+)$"
+    },
+    "automation_leverage_score": {
+      "kind": "float",
+      "pattern": "^automation_leverage_score:\\s+([0-9.]+)$"
+    },
+    "ops_automation_coverage_score": {
+      "kind": "float",
+      "pattern": "^ops_automation_coverage_score:\\s+([0-9.]+)$"
+    },
+    "ops_knowledge_capture_score": {
+      "kind": "float",
+      "pattern": "^ops_knowledge_capture_score:\\s+([0-9.]+)$"
+    },
+    "ops_portfolio_focus_score": {
+      "kind": "float",
+      "pattern": "^ops_portfolio_focus_score:\\s+([0-9.]+)$"
+    },
+    "ops_review_hygiene_score": {
+      "kind": "float",
+      "pattern": "^ops_review_hygiene_score:\\s+([0-9.]+)$"
+    },
+    "ops_trust_hygiene_score": {
+      "kind": "float",
+      "pattern": "^ops_trust_hygiene_score:\\s+([0-9.]+)$"
+    },
+    "ops_validation_velocity_score": {
+      "kind": "float",
+      "pattern": "^ops_validation_velocity_score:\\s+([0-9.]+)$"
+    },
+    "portfolio_learning_score": {
+      "kind": "float",
+      "pattern": "^portfolio_learning_score:\\s+([0-9.]+)$"
+    },
+    "revenue_readiness_score": {
+      "kind": "float",
+      "pattern": "^revenue_readiness_score:\\s+([0-9.]+)$"
+    },
+    "resilience_score": {
+      "kind": "float",
+      "pattern": "^resilience_score:\\s+([0-9.]+)$"
+    },
+    "verdict_confidence": {
+      "kind": "float",
+      "pattern": "^verdict_confidence:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the floor before trusting any incubator play, venture lane, or agentic workflow thesis.",
+      "commands": [
+        "research"
+      ],
+      "hypothesis": "Without a concrete venture model, distribution engine, trust model, and validation motion, the incubator should not pretend it has compounding leverage.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "founder-backoffice-studio",
+      "candidate_summary": "Agentic founder backoffice SaaS with operator-content distribution, template factory delivery, paid pilots, and audit-trail trust.",
+      "commands": [
+        "research"
+      ],
+      "hypothesis": "Founder backoffice tooling can compound when distribution, reusable templates, and trust visibility reinforce each other.",
+      "mutations": {
+        "venture_model": "agentic_saas",
+        "customer_surface": "founder_backoffice",
+        "distribution_engine": "operator_content",
+        "build_stack": "template_factory",
+        "validation_motion": "paid_pilot",
+        "trust_model": "audit_trails",
+        "operating_cadence": "daily_ship",
+        "venture_theme": "founder backoffice command center"
+      }
+    },
+    {
+      "candidate_id": "agency-ops-rollup",
+      "candidate_summary": "Service-to-software play for agency operators using design-partner distribution, agent workflows, and concierge validation with manual review.",
+      "commands": [
+        "research"
+      ],
+      "hypothesis": "Agency operators pay faster when workflow pain is already visible and the incubator can bridge concierge delivery into reusable software.",
+      "mutations": {
+        "venture_model": "service_to_software",
+        "customer_surface": "agency_operators",
+        "distribution_engine": "design_partner_network",
+        "build_stack": "agent_workflows",
+        "validation_motion": "concierge",
+        "trust_model": "manual_review_first",
+        "operating_cadence": "weekly_release",
+        "venture_theme": "agency operations autopilot"
+      }
+    },
+    {
+      "candidate_id": "internal-os-spinout",
+      "candidate_summary": "Internal incubator OS spinout using portfolio cross-sell, internal-tools-first build stack, dogfood validation, and audit-trail trust.",
+      "commands": [
+        "research"
+      ],
+      "hypothesis": "An incubator can turn its own operating stack into a compounding asset when dogfood creates real leverage before externalization.",
+      "mutations": {
+        "venture_model": "internal_tool_spinout",
+        "customer_surface": "founder_backoffice",
+        "distribution_engine": "portfolio_crosssell",
+        "build_stack": "internal_tools_first",
+        "validation_motion": "dogfood_first",
+        "trust_model": "audit_trails",
+        "operating_cadence": "daily_ship",
+        "venture_theme": "incubator operating system"
+      }
+    },
+    {
+      "candidate_id": "creator-toolchain-funnel",
+      "candidate_summary": "Media-to-tools play for creators using operator-content distribution, template factory build stack, presell validation, and self-serve low-risk onboarding.",
+      "commands": [
+        "research"
+      ],
+      "hypothesis": "Audience-first startup tooling can launch quickly, but only if the toolchain actually compounds into reusable assets rather than one-off content spikes.",
+      "mutations": {
+        "venture_model": "media_to_tools",
+        "customer_surface": "creators",
+        "distribution_engine": "operator_content",
+        "build_stack": "template_factory",
+        "validation_motion": "audience_presell",
+        "trust_model": "self_serve_low_risk",
+        "operating_cadence": "weekly_release",
+        "venture_theme": "creator workflow foundry"
+      }
+    },
+    {
+      "candidate_id": "ops-baseline",
+      "candidate_summary": "Measure the current incubator operating loop before trusting any automation policy.",
+      "commands": [
+        "ops"
+      ],
+      "hypothesis": "The incubator needs a control-plane baseline before it should trust tighter ops mutations or autoloop policy changes.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "ops-tight-three-lane",
+      "candidate_summary": "Three-lane portfolio, weekly review cadence, template-first build routing, and every-review knowledge capture.",
+      "commands": [
+        "ops"
+      ],
+      "hypothesis": "A narrow active portfolio with explicit review, validation, and doctrine capture loops should make the incubator more self-running.",
+      "mutations": {
+        "portfolio_cap": "3",
+        "review_cadence": "weekly",
+        "admissions_mode": "thesis_gate",
+        "build_routing": "template_first",
+        "validation_pressure": "paid_every_week",
+        "trust_gate": "balanced",
+        "capital_mode": "after_validation",
+        "knowledge_capture": "every_review",
+        "founder_update_sla": "48h"
+      }
+    },
+    {
+      "candidate_id": "ops-two-lane-trust-first",
+      "candidate_summary": "Two active ventures, manual admissions gate, and strict trust review for sensitive startup operations.",
+      "commands": [
+        "ops"
+      ],
+      "hypothesis": "A tighter portfolio and stronger trust gate should improve control when the operator system is still rebuilding.",
+      "mutations": {
+        "portfolio_cap": "2",
+        "review_cadence": "twice_weekly",
+        "admissions_mode": "manual_gate",
+        "build_routing": "template_first",
+        "validation_pressure": "design_partner_first",
+        "trust_gate": "strict",
+        "capital_mode": "after_validation",
+        "knowledge_capture": "every_review",
+        "founder_update_sla": "24h"
+      }
+    },
+    {
+      "candidate_id": "ops-validation-sprint",
+      "candidate_summary": "Validation-first operating mode with weekly review, agent workflows, and capital turned off until customer proof is stronger.",
+      "commands": [
+        "ops"
+      ],
+      "hypothesis": "The incubator should optimize for paid validation and weekly review pressure before widening investor choreography.",
+      "mutations": {
+        "portfolio_cap": "3",
+        "review_cadence": "weekly",
+        "admissions_mode": "thesis_gate",
+        "build_routing": "agent_workflows",
+        "validation_pressure": "paid_every_week",
+        "trust_gate": "balanced",
+        "capital_mode": "off",
+        "knowledge_capture": "every_review",
+        "founder_update_sla": "24h"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "self_edit": {
+    "command": [],
+    "git_mode": "manual",
+    "auto_push": false,
+    "branch_prefix": "self-edit/",
+    "main_branch": "main",
+    "commit_message_template": "Apply self-edit proposal {proposal_id}",
+    "mutable_targets": [
+      "src/domain_chip_vibe_incubator",
+      "docs",
+      "README.md",
+      "spark-chip.json",
+      "spark-researcher.project.json",
+      "pyproject.toml"
+    ],
+    "prompt_preamble": "Keep the incubator chip honest about solo-operator constraints, agentic leverage, real-world validation, and resilience after operational failure."
+  },
+  "guardrails": {
+    "max_loop_iterations": 8,
+    "consecutive_discard_limit": 3,
+    "require_clean_git_for_self_edit": true,
+    "require_human_approval_for_self_edit": true,
+    "blocked_command_fragments": [
+      "shutdown",
+      "format",
+      "reg delete",
+      "Remove-Item",
+      "del /f",
+      "rm -rf"
+    ]
+  },
+  "mutable_parameters": [],
+  "mutable_targets": [
+    "src/domain_chip_vibe_incubator",
+    "docs",
+    "README.md",
+    "spark-chip.json",
+    "spark-researcher.project.json",
+    "pyproject.toml"
+  ],
+  "trainers": []
+}

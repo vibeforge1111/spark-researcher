@@ -1,0 +1,13 @@
+{
+  "belief_count": 0,
+  "beliefs": [],
+  "contradiction_count": 0,
+  "durable_belief_count": 0,
+  "promotion_policy": [
+    "Promote repeated improvements for the same mutation signature as durable only when no active contradiction remains.",
+    "Allow a single-run promotion only when it is the current best observed candidate with no regressions for that signature, and keep it provisional by default.",
+    "If two promoted lessons for the same command disagree on a shared mutation value, mark both as provisional until more evidence resolves the contradiction."
+  ],
+  "provisional_belief_count": 0,
+  "skipped_improved_runs": 0
+}

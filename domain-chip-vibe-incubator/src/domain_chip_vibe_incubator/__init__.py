@@ -1,0 +1,1 @@
+"""Vibe incubator Spark chip."""

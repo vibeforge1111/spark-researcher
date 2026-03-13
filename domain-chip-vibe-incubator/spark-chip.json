@@ -1,0 +1,116 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-vibe-incubator",
+  "domain": "vibe-incubator",
+  "version": "0.1.0",
+  "description": "Agentic incubator chip for selecting, pressure-testing, and compounding vibe-coded startup plays under solo-operator constraints.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_vibe_incubator/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_vibe_incubator/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_vibe_incubator/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_vibe_incubator/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "venture_model": [
+        "agentic_saas",
+        "service_to_software",
+        "internal_tool_spinout",
+        "media_to_tools",
+        "studio_shared_services"
+      ],
+      "customer_surface": [
+        "founder_backoffice",
+        "agency_operators",
+        "local_services",
+        "ecommerce_ops",
+        "creators"
+      ],
+      "distribution_engine": [
+        "operator_content",
+        "warm_outbound",
+        "design_partner_network",
+        "community_loops",
+        "portfolio_crosssell"
+      ],
+      "build_stack": [
+        "template_factory",
+        "agent_workflows",
+        "custom_apps",
+        "human_in_loop_ops",
+        "internal_tools_first"
+      ],
+      "validation_motion": [
+        "paid_pilot",
+        "concierge",
+        "design_partner",
+        "audience_presell",
+        "dogfood_first"
+      ],
+      "trust_model": [
+        "manual_review_first",
+        "audit_trails",
+        "self_serve_low_risk",
+        "human_in_loop_sensitive"
+      ],
+      "operating_cadence": [
+        "daily_ship",
+        "weekly_release",
+        "twoweek_sprints"
+      ],
+      "venture_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "venture_theme"
+    ],
+    "field_patterns": {
+      "venture_model": "^(agentic_saas|service_to_software|internal_tool_spinout|media_to_tools|studio_shared_services)$",
+      "customer_surface": "^(founder_backoffice|agency_operators|local_services|ecommerce_ops|creators)$",
+      "distribution_engine": "^(operator_content|warm_outbound|design_partner_network|community_loops|portfolio_crosssell)$",
+      "build_stack": "^(template_factory|agent_workflows|custom_apps|human_in_loop_ops|internal_tools_first)$",
+      "validation_motion": "^(paid_pilot|concierge|design_partner|audience_presell|dogfood_first)$",
+      "trust_model": "^(manual_review_first|audit_trails|self_serve_low_risk|human_in_loop_sensitive)$",
+      "operating_cadence": "^(daily_ship|weekly_release|twoweek_sprints)$",
+      "venture_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "prompt_hints": [
+      "Optimize for a solo operator rebuilding an incubator with agentic frameworks instead of a large human team.",
+      "Reward startup plays that compound distribution, reusable assets, and post-launch learning across a portfolio rather than one-off excitement.",
+      "Penalize venture motions that require hidden team size, long sales cycles without leverage, or brittle trust assumptions.",
+      "Treat resilience, auditability, and human review as first-class for sensitive workflows after a serious operational failure."
+    ],
+    "required_fields": [
+      "venture_model",
+      "customer_surface",
+      "distribution_engine"
+    ]
+  }
+}

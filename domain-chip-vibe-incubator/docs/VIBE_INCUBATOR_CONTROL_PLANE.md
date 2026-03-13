@@ -15,9 +15,14 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `queue_snapshot.json`
 - `office_hours_packets.json`
 - `decision_packets.json`
+- `execution_snapshot.json`
+- `venture_task_packets.json`
 - `admissions.jsonl`
 - `weekly_updates.jsonl`
 - `reviews.jsonl`
+- `experiments.jsonl`
+- `build_requests.jsonl`
+- `kpi_snapshots.jsonl`
 - `time_passage.jsonl`
 
 ## Commands
@@ -65,6 +70,46 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
   --note "Keep pressure on paid distribution"
 ```
 
+### Log An Experiment
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py experiment `
+  --venture-id founder-backoffice-studio `
+  --experiment-id paid-sprint-1 `
+  --focus acquisition `
+  --hypothesis "A direct founder pain landing page converts paid design partner calls" `
+  --status running `
+  --target-metric paid_signals `
+  --next-step review_copy_and_calls
+```
+
+### Queue A Build Request
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py build-request `
+  --venture-id founder-backoffice-studio `
+  --request-id crm-automation `
+  --title "Automate founder CRM follow-up" `
+  --kind workflow `
+  --priority high `
+  --status open `
+  --linked-experiment-id paid-sprint-1
+```
+
+### Capture A KPI Snapshot
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py kpi-snapshot `
+  --venture-id founder-backoffice-studio `
+  --customer-conversations 5 `
+  --paid-signals 2 `
+  --weekly-revenue 500 `
+  --pipeline-count 7 `
+  --active-users 3 `
+  --automation-coverage 0.76 `
+  --note "Weekly KPI closeout"
+```
+
 ### Age The System
 
 ```powershell
@@ -79,4 +124,5 @@ Do not treat the control plane as a background daemon.
 
 - write inputs explicitly
 - let the `ops` loop score and route them
+- use experiments, build requests, and KPI snapshots to create venture task packets
 - inspect the vault pages before widening the incubator

@@ -45,18 +45,34 @@ def _queue_counts(state: dict[str, Any]) -> dict[str, int]:
     return {name: len(items) for name, items in sorted(queues.items()) if isinstance(items, list)}
 
 
+def _execution_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    execution = refreshed.get("execution", {}) if isinstance(refreshed.get("execution"), dict) else {}
+    return {
+        str(item.get("venture_id") or ""): item
+        for item in execution.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+
+
 def _status_payload(runtime_root: str) -> dict[str, Any]:
     with ops_write_lock(runtime_root):
         refreshed = refresh_ops_artifacts(runtime_root)
     state = refreshed["state"]
     tick = refreshed["tick"]
     ventures = [item for item in state.get("ventures", []) if isinstance(item, dict)]
+    execution = refreshed.get("execution", {}) if isinstance(refreshed.get("execution"), dict) else {}
+    execution_by_venture = _execution_by_venture(refreshed)
     return {
         "runtime_root": runtime_root,
         "program": state.get("program", {}),
         "queue_counts": _queue_counts(state),
         "founder_count": len(state.get("founders", [])),
         "venture_count": len(ventures),
+        "execution": {
+            "active_experiment_count": execution.get("active_experiment_count", 0),
+            "open_build_request_count": execution.get("open_build_request_count", 0),
+            "stale_kpi_ventures": execution.get("stale_kpi_ventures", []),
+        },
         "active_ventures": [
             {
                 "venture_id": item.get("venture_id"),
@@ -67,6 +83,11 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
                 "trust_review_status": item.get("trust_review_status"),
                 "paid_signals_this_week": item.get("paid_signals_this_week"),
                 "customer_conversations_this_week": item.get("customer_conversations_this_week"),
+                "active_experiment_count": execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("active_experiment_count", 0),
+                "open_build_request_count": execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_build_request_count", 0),
+                "latest_weekly_revenue": (
+                    execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("latest_kpi_snapshot", {}) or {}
+                ).get("weekly_revenue"),
             }
             for item in ventures
             if str(item.get("status") or "") not in {"archived", "stopped"}
@@ -127,10 +148,11 @@ def _handle_admit(args: argparse.Namespace) -> None:
             },
         )
         refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture_id)
     _print(
         {
             "runtime_root": args.runtime_root,
-            "admitted_venture": venture,
+            "admitted_venture": refreshed_venture,
             "admission_event": event,
             "queue_counts": _queue_counts(refreshed["state"]),
             "latest_tick": refreshed["tick"],
@@ -171,10 +193,11 @@ def _handle_weekly_update(args: argparse.Namespace) -> None:
             },
         )
         refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
     _print(
         {
             "runtime_root": args.runtime_root,
-            "venture": venture,
+            "venture": refreshed_venture,
             "weekly_update_event": event,
             "latest_tick": refreshed["tick"],
         }
@@ -213,11 +236,110 @@ def _handle_review(args: argparse.Namespace) -> None:
             },
         )
         refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
     _print(
         {
             "runtime_root": args.runtime_root,
-            "venture": venture,
+            "venture": refreshed_venture,
             "review_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_experiment(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "experiments",
+            {
+                "venture_id": venture["venture_id"],
+                "experiment_id": str(args.experiment_id),
+                "focus": str(args.focus or ""),
+                "hypothesis": str(args.hypothesis),
+                "status": str(args.status),
+                "target_metric": str(args.target_metric or ""),
+                "result_signal": str(args.result_signal or ""),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "experiment_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_build_request(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "build_requests",
+            {
+                "venture_id": venture["venture_id"],
+                "request_id": str(args.request_id),
+                "title": str(args.title),
+                "kind": str(args.kind),
+                "priority": str(args.priority),
+                "status": str(args.status),
+                "linked_experiment_id": str(args.linked_experiment_id or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "build_request_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_kpi_snapshot(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        snapshot = {
+            "venture_id": venture["venture_id"],
+            "stage": str(args.stage or venture.get("stage") or ""),
+            "customer_conversations_this_week": int(args.customer_conversations),
+            "paid_signals_this_week": int(args.paid_signals),
+            "weekly_revenue": float(args.weekly_revenue),
+            "pipeline_count": int(args.pipeline_count),
+            "active_users": int(args.active_users),
+            "automation_coverage": float(args.automation_coverage),
+            "note": str(args.note or ""),
+        }
+        venture["stage"] = snapshot["stage"]
+        venture["customer_conversations_this_week"] = snapshot["customer_conversations_this_week"]
+        venture["paid_signals_this_week"] = snapshot["paid_signals_this_week"]
+        venture["automation_coverage"] = snapshot["automation_coverage"]
+        venture["weekly_revenue"] = snapshot["weekly_revenue"]
+        venture["pipeline_count"] = snapshot["pipeline_count"]
+        venture["active_users"] = snapshot["active_users"]
+        venture["weekly_update_freshness_days"] = 0
+        save_state(args.runtime_root, state)
+        event = append_log(args.runtime_root, "kpi_snapshots", snapshot)
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "kpi_snapshot_event": event,
             "latest_tick": refreshed["tick"],
         }
     )
@@ -310,6 +432,38 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--next-step")
     review.add_argument("--note")
 
+    experiment = sub.add_parser("experiment")
+    experiment.add_argument("--venture-id", required=True)
+    experiment.add_argument("--experiment-id", required=True)
+    experiment.add_argument("--focus")
+    experiment.add_argument("--hypothesis", required=True)
+    experiment.add_argument("--status", choices=["proposed", "running", "won", "lost", "blocked", "cancelled"], default="proposed")
+    experiment.add_argument("--target-metric")
+    experiment.add_argument("--result-signal")
+    experiment.add_argument("--next-step")
+    experiment.add_argument("--note")
+
+    build_request = sub.add_parser("build-request")
+    build_request.add_argument("--venture-id", required=True)
+    build_request.add_argument("--request-id", required=True)
+    build_request.add_argument("--title", required=True)
+    build_request.add_argument("--kind", choices=["workflow", "agent", "product", "integration", "ops", "content"], default="workflow")
+    build_request.add_argument("--priority", choices=["high", "medium", "low"], default="medium")
+    build_request.add_argument("--status", choices=["open", "in_progress", "blocked", "shipped", "cancelled"], default="open")
+    build_request.add_argument("--linked-experiment-id")
+    build_request.add_argument("--note")
+
+    kpi = sub.add_parser("kpi-snapshot")
+    kpi.add_argument("--venture-id", required=True)
+    kpi.add_argument("--stage")
+    kpi.add_argument("--customer-conversations", type=int, default=0)
+    kpi.add_argument("--paid-signals", type=int, default=0)
+    kpi.add_argument("--weekly-revenue", type=float, default=0.0)
+    kpi.add_argument("--pipeline-count", type=int, default=0)
+    kpi.add_argument("--active-users", type=int, default=0)
+    kpi.add_argument("--automation-coverage", type=float, default=0.0)
+    kpi.add_argument("--note")
+
     age = sub.add_parser("age")
     age.add_argument("--days", type=int, default=1)
     age.add_argument("--venture-id")
@@ -331,6 +485,15 @@ def main() -> None:
         return
     if args.action == "review":
         _handle_review(args)
+        return
+    if args.action == "experiment":
+        _handle_experiment(args)
+        return
+    if args.action == "build-request":
+        _handle_build_request(args)
+        return
+    if args.action == "kpi-snapshot":
+        _handle_kpi_snapshot(args)
         return
     if args.action == "age":
         _handle_age(args)

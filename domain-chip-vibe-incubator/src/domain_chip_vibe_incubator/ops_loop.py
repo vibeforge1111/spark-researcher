@@ -297,6 +297,184 @@ def append_log(runtime_root: str, name: str, payload: dict[str, Any]) -> dict[st
     return record
 
 
+def _latest_records_by_key(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        value = str(row.get(key) or "").strip()
+        if value:
+            latest[value] = row
+    return latest
+
+
+def _priority_value(priority: str) -> int:
+    return {"high": 0, "medium": 1, "low": 2}.get(str(priority or "medium"), 3)
+
+
+def _execution_snapshot(runtime_root: str, state: dict[str, Any], priorities: list[dict[str, Any]]) -> dict[str, Any]:
+    active_ventures = [item for item in state.get("ventures", []) if isinstance(item, dict) and str(item.get("status") or "") == "active"]
+    priority_lookup = {str(item.get("venture_id") or ""): item for item in priorities if isinstance(item, dict)}
+    latest_experiments = _latest_records_by_key(read_log(runtime_root, "experiments"), "experiment_id")
+    latest_build_requests = _latest_records_by_key(read_log(runtime_root, "build_requests"), "request_id")
+    latest_kpis: dict[str, dict[str, Any]] = {}
+    for row in read_log(runtime_root, "kpi_snapshots"):
+        if not isinstance(row, dict):
+            continue
+        venture_id = str(row.get("venture_id") or "").strip()
+        if venture_id:
+            latest_kpis[venture_id] = row
+    active_experiments: list[dict[str, Any]] = []
+    open_build_requests: list[dict[str, Any]] = []
+    experiments_by_venture: dict[str, list[dict[str, Any]]] = {}
+    requests_by_venture: dict[str, list[dict[str, Any]]] = {}
+    experiment_seen: set[str] = set()
+    build_request_seen: set[str] = set()
+    for row in latest_experiments.values():
+        venture_id = str(row.get("venture_id") or "").strip()
+        if not venture_id:
+            continue
+        experiment_seen.add(venture_id)
+        status = str(row.get("status") or "proposed")
+        if status in {"won", "lost", "cancelled", "archived"}:
+            continue
+        compact = {
+            "venture_id": venture_id,
+            "experiment_id": str(row.get("experiment_id") or ""),
+            "focus": str(row.get("focus") or ""),
+            "status": status,
+            "target_metric": str(row.get("target_metric") or ""),
+            "next_step": str(row.get("next_step") or ""),
+        }
+        active_experiments.append(compact)
+        experiments_by_venture.setdefault(venture_id, []).append(compact)
+    for row in latest_build_requests.values():
+        venture_id = str(row.get("venture_id") or "").strip()
+        if not venture_id:
+            continue
+        build_request_seen.add(venture_id)
+        status = str(row.get("status") or "open")
+        if status in {"shipped", "cancelled", "archived"}:
+            continue
+        compact = {
+            "venture_id": venture_id,
+            "request_id": str(row.get("request_id") or ""),
+            "title": str(row.get("title") or ""),
+            "kind": str(row.get("kind") or ""),
+            "priority": str(row.get("priority") or "medium"),
+            "status": status,
+            "linked_experiment_id": str(row.get("linked_experiment_id") or ""),
+        }
+        open_build_requests.append(compact)
+        requests_by_venture.setdefault(venture_id, []).append(compact)
+    active_experiments.sort(key=lambda item: (str(item.get("venture_id") or ""), str(item.get("experiment_id") or "")))
+    open_build_requests.sort(key=lambda item: (_priority_value(str(item.get("priority") or "medium")), str(item.get("venture_id") or ""), str(item.get("request_id") or "")))
+    ventures: list[dict[str, Any]] = []
+    stale_kpi_ventures: list[str] = []
+    for venture in active_ventures:
+        venture_id = str(venture.get("venture_id") or "venture")
+        priority_meta = priority_lookup.get(venture_id, {})
+        venture_experiments = experiments_by_venture.get(venture_id, [])
+        venture_requests = requests_by_venture.get(venture_id, [])
+        latest_kpi = latest_kpis.get(venture_id, {})
+        required_tasks: list[str] = []
+        if not venture_experiments:
+            required_tasks.append("open_or_refresh_validation_experiment")
+        if not latest_kpi:
+            required_tasks.append("capture_kpi_snapshot")
+            stale_kpi_ventures.append(venture_id)
+        if venture_requests:
+            required_tasks.append("collapse_build_backlog_to_one_shippable_slice" if len(venture_requests) >= 4 else "ship_highest_priority_build_request")
+        revenue = float(latest_kpi.get("weekly_revenue", 0.0) or 0.0) if latest_kpi else 0.0
+        if int(venture.get("paid_signals_this_week", 0) or 0) <= 0 and revenue <= 0.0:
+            required_tasks.append("force_paid_signal_test")
+        if str(venture.get("trust_review_status") or "amber") != "green":
+            required_tasks.append("run_trust_review")
+        if int(venture.get("weekly_update_freshness_days", 0) or 0) >= 5:
+            required_tasks.append("capture_founder_update")
+        if not required_tasks:
+            required_tasks.append(str(priority_meta.get("next_action") or "ship_next_validation_commitment"))
+        ventures.append(
+            {
+                "venture_id": venture_id,
+                "label": str(venture.get("label") or venture_id),
+                "priority": int(priority_meta.get("priority", 0) or 0),
+                "bottleneck": str(venture.get("bottleneck") or priority_meta.get("bottleneck") or "model_gap"),
+                "next_action": str(priority_meta.get("next_action") or "ship_next_validation_commitment"),
+                "active_experiment_count": len(venture_experiments),
+                "open_build_request_count": len(venture_requests),
+                "experiment_seen": venture_id in experiment_seen,
+                "build_request_seen": venture_id in build_request_seen,
+                "kpi_seen": bool(latest_kpi),
+                "active_experiments": venture_experiments[:3],
+                "open_build_requests": venture_requests[:3],
+                "latest_kpi_snapshot": latest_kpi if isinstance(latest_kpi, dict) else {},
+                "required_tasks": required_tasks,
+            }
+        )
+    ventures.sort(key=lambda item: (-int(item.get("priority", 0) or 0), str(item.get("venture_id") or "")))
+    return {
+        "generated_at": _now_iso(),
+        "active_experiment_count": len(active_experiments),
+        "open_build_request_count": len(open_build_requests),
+        "stale_kpi_ventures": stale_kpi_ventures,
+        "active_experiments": active_experiments,
+        "open_build_requests": open_build_requests,
+        "ventures": ventures,
+    }
+
+
+def _sync_execution_state(state: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    summary_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in execution.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+    for venture in state.get("ventures", []):
+        if not isinstance(venture, dict):
+            continue
+        venture_id = str(venture.get("venture_id") or "")
+        summary = summary_by_venture.get(venture_id)
+        if not summary:
+            continue
+        venture["active_experiment_count"] = int(summary.get("active_experiment_count", 0) or 0)
+        venture["open_build_request_count"] = int(summary.get("open_build_request_count", 0) or 0)
+        if summary.get("build_request_seen"):
+            venture["build_backlog_count"] = int(summary.get("open_build_request_count", 0) or 0)
+        latest_kpi = summary.get("latest_kpi_snapshot", {})
+        if not isinstance(latest_kpi, dict) or not summary.get("kpi_seen"):
+            continue
+        venture["latest_kpi_snapshot_at"] = str(latest_kpi.get("created_at") or venture.get("latest_kpi_snapshot_at") or "")
+        for key in ("stage", "customer_conversations_this_week", "paid_signals_this_week", "automation_coverage", "weekly_revenue", "pipeline_count", "active_users"):
+            if latest_kpi.get(key) is not None:
+                venture[key] = latest_kpi[key]
+    return state
+
+
+def _build_venture_task_packets(execution: dict[str, Any]) -> list[dict[str, Any]]:
+    packets: list[dict[str, Any]] = []
+    for item in execution.get("ventures", []):
+        if not isinstance(item, dict):
+            continue
+        latest_kpi = item.get("latest_kpi_snapshot", {}) if isinstance(item.get("latest_kpi_snapshot"), dict) else {}
+        packets.append(
+            {
+                "venture_id": str(item.get("venture_id") or "venture"),
+                "label": str(item.get("label") or item.get("venture_id") or "venture"),
+                "priority": int(item.get("priority", 0) or 0),
+                "bottleneck": str(item.get("bottleneck") or "model_gap"),
+                "next_action": str(item.get("next_action") or "ship_next_validation_commitment"),
+                "required_tasks": [str(task) for task in item.get("required_tasks", [])[:5]],
+                "active_experiment_count": int(item.get("active_experiment_count", 0) or 0),
+                "open_build_request_count": int(item.get("open_build_request_count", 0) or 0),
+                "latest_weekly_revenue": latest_kpi.get("weekly_revenue"),
+                "latest_pipeline_count": latest_kpi.get("pipeline_count"),
+                "latest_active_users": latest_kpi.get("active_users"),
+            }
+        )
+    return packets
+
+
 def _policy(mutations: dict[str, str]) -> dict[str, str]:
     policy = dict(DEFAULT_POLICY)
     for key, value in mutations.items():
@@ -499,17 +677,23 @@ def _latest_tick(runtime_root: str) -> dict[str, Any]:
 
 def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = None) -> dict[str, Any]:
     state = ensure_state(runtime_root)
-    save_state(runtime_root, state)
     effective_policy = dict(policy or (_latest_tick(runtime_root).get("policy") if _latest_tick(runtime_root) else {}) or DEFAULT_POLICY)
-    metrics = _score_state(state, effective_policy)
     priorities = _venture_priorities(state)
+    execution = _execution_snapshot(runtime_root, state, priorities)
+    state = _sync_execution_state(state, execution)
+    state = save_state(runtime_root, state)
+    priorities = _venture_priorities(state)
+    execution = _execution_snapshot(runtime_root, state, priorities)
+    metrics = _score_state(state, effective_policy)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
+    venture_tasks = _build_venture_task_packets(execution)
     queue_snapshot = {
         "generated_at": _now_iso(),
         "portfolio_cap": metrics["portfolio_cap"],
         "active_portfolio_count": metrics["active_portfolio_count"],
         "priority_ventures": priorities[:5],
+        "venture_task_count": len(venture_tasks),
     }
     tick = {
         "generated_at": _now_iso(),
@@ -518,11 +702,15 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "priority_ventures": priorities[:5],
         "office_hours_count": len(office_hours),
         "decision_count": len(decisions),
+        "venture_task_count": len(venture_tasks),
+        "stale_kpi_count": len(execution.get("stale_kpi_ventures", [])),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)
     _write_json(_path(runtime_root, "office_hours_packets.json"), office_hours)
     _write_json(_path(runtime_root, "decision_packets.json"), decisions)
+    _write_json(_path(runtime_root, "execution_snapshot.json"), execution)
+    _write_json(_path(runtime_root, "venture_task_packets.json"), venture_tasks)
     return {
         "state": state,
         "metrics": metrics,
@@ -530,6 +718,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "queue_snapshot": queue_snapshot,
         "office_hours": office_hours,
         "decisions": decisions,
+        "execution": execution,
+        "venture_tasks": venture_tasks,
     }
 
 
@@ -691,6 +881,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
         return []
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
+    execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
     return [
         {
             "kind": "ops_snapshot",
@@ -706,6 +897,9 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
                     f"- ops_portfolio_focus_score: `{metrics.get('ops_portfolio_focus_score', 'n/a')}`",
                     f"- ops_validation_velocity_score: `{metrics.get('ops_validation_velocity_score', 'n/a')}`",
                     f"- ops_trust_hygiene_score: `{metrics.get('ops_trust_hygiene_score', 'n/a')}`",
+                    f"- open_build_request_count: `{execution.get('open_build_request_count', 'n/a')}`",
+                    f"- active_experiment_count: `{execution.get('active_experiment_count', 'n/a')}`",
+                    f"- stale_kpi_ventures: `{len(execution.get('stale_kpi_ventures', []))}`",
                     "",
                     "## Policy",
                     "",
@@ -723,9 +917,14 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     state = load_state(runtime_root)
     queue_snapshot = _read_json(_path(runtime_root, "queue_snapshot.json")) if _path(runtime_root, "queue_snapshot.json").exists() else {}
     office_hours = _read_json(_path(runtime_root, "office_hours_packets.json")) if _path(runtime_root, "office_hours_packets.json").exists() else []
+    execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
+    venture_tasks = _read_json(_path(runtime_root, "venture_task_packets.json")) if _path(runtime_root, "venture_task_packets.json").exists() else []
     admissions = read_log(runtime_root, "admissions")
     reviews = read_log(runtime_root, "reviews")
     updates = read_log(runtime_root, "weekly_updates")
+    experiments = read_log(runtime_root, "experiments")
+    build_requests = read_log(runtime_root, "build_requests")
+    kpi_snapshots = read_log(runtime_root, "kpi_snapshots")
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     lines = [
@@ -769,6 +968,51 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 "",
                 *[f"- {entry}" for entry in item.get("agenda", [])],
                 f"- commitment: `{item.get('commitment', 'n/a')}`",
+                "",
+            ]
+        )
+    execution_lines = [
+        "# Execution Board",
+        "",
+        f"- generated_at: `{execution.get('generated_at', 'n/a')}`",
+        f"- active_experiment_count: `{execution.get('active_experiment_count', 'n/a')}`",
+        f"- open_build_request_count: `{execution.get('open_build_request_count', 'n/a')}`",
+        f"- stale_kpi_count: `{len(execution.get('stale_kpi_ventures', []))}`",
+        f"- experiments_logged: `{len(experiments)}`",
+        f"- build_requests_logged: `{len(build_requests)}`",
+        f"- kpi_snapshots_logged: `{len(kpi_snapshots)}`",
+        "",
+        "## Venture Execution",
+        "",
+    ]
+    for item in execution.get("ventures", [])[:5]:
+        latest_kpi = item.get("latest_kpi_snapshot", {}) if isinstance(item.get("latest_kpi_snapshot"), dict) else {}
+        execution_lines.extend(
+            [
+                f"### {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- active_experiment_count: `{item.get('active_experiment_count', 'n/a')}`",
+                f"- open_build_request_count: `{item.get('open_build_request_count', 'n/a')}`",
+                f"- latest_weekly_revenue: `{latest_kpi.get('weekly_revenue', 'n/a')}`",
+                f"- latest_pipeline_count: `{latest_kpi.get('pipeline_count', 'n/a')}`",
+                f"- latest_active_users: `{latest_kpi.get('active_users', 'n/a')}`",
+                "",
+            ]
+        )
+    task_lines = ["# Venture Task Packets", ""]
+    for item in venture_tasks[:5]:
+        task_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- bottleneck: `{item.get('bottleneck', 'n/a')}`",
+                f"- next_action: `{item.get('next_action', 'n/a')}`",
+                f"- active_experiment_count: `{item.get('active_experiment_count', 'n/a')}`",
+                f"- open_build_request_count: `{item.get('open_build_request_count', 'n/a')}`",
+                f"- latest_weekly_revenue: `{item.get('latest_weekly_revenue', 'n/a')}`",
+                *[f"- task: `{entry}`" for entry in item.get("required_tasks", [])],
                 "",
             ]
         )
@@ -836,6 +1080,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
         {"path": "07-Domains/Vibe Incubator/Ops Flywheel.md", "content": "\n".join(lines)},
         {"path": "07-Domains/Vibe Incubator/Ops Queue.md", "content": "\n".join(queue_lines)},
         {"path": "07-Domains/Vibe Incubator/Office Hours Packets.md", "content": "\n".join(office_lines)},
+        {"path": "07-Domains/Vibe Incubator/Execution Board.md", "content": "\n".join(execution_lines)},
+        {"path": "07-Domains/Vibe Incubator/Venture Task Packets.md", "content": "\n".join(task_lines)},
         {"path": "07-Domains/Vibe Incubator/Program State.md", "content": "\n".join(program_lines)},
         {"path": "07-Domains/Vibe Incubator/Decision Log.md", "content": "\n".join(decision_lines)},
     ]

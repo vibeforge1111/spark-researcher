@@ -1,0 +1,148 @@
+{
+  "domain": "web-design",
+  "updated_at": "2026-03-13",
+  "sources": [
+    {
+      "source_id": "awwwards",
+      "name": "Awwwards",
+      "kind": "awards",
+      "base_url": "https://www.awwwards.com/",
+      "why_it_matters": "Tracks judged website craft and exposes current high-signal creative directions.",
+      "use_for": [
+        "interaction inspiration",
+        "visual benchmarking",
+        "trend scanning"
+      ],
+      "avoid_for": [
+        "standalone usability truth",
+        "conversion proof"
+      ]
+    },
+    {
+      "source_id": "the-fwa",
+      "name": "The FWA",
+      "kind": "awards",
+      "base_url": "https://thefwa.com/",
+      "why_it_matters": "Strong signal for ambitious digital experience work and experimental campaign design.",
+      "use_for": [
+        "interactive concept scanning",
+        "experience benchmarking"
+      ],
+      "avoid_for": [
+        "default dashboard doctrine"
+      ]
+    },
+    {
+      "source_id": "css-design-awards",
+      "name": "CSS Design Awards",
+      "kind": "awards",
+      "base_url": "https://www.cssdesignawards.com/",
+      "why_it_matters": "Judges websites across UX, UI, and innovation, which makes it useful for balanced design review.",
+      "use_for": [
+        "craft comparisons",
+        "style direction research"
+      ],
+      "avoid_for": [
+        "proof of live business outcomes"
+      ]
+    },
+    {
+      "source_id": "siteinspire",
+      "name": "SiteInspire",
+      "kind": "curation",
+      "base_url": "https://www.siteinspire.com/",
+      "why_it_matters": "Useful for clustering patterns by type, style, and industry instead of only by winner status.",
+      "use_for": [
+        "reference clustering",
+        "pattern tagging"
+      ],
+      "avoid_for": [
+        "award substitution"
+      ]
+    },
+    {
+      "source_id": "godly",
+      "name": "Godly",
+      "kind": "curation",
+      "base_url": "https://godly.website/",
+      "why_it_matters": "Good modern reference set for strong site packaging, hero treatment, and layout energy.",
+      "use_for": [
+        "landing page inspiration",
+        "layout comparison"
+      ],
+      "avoid_for": [
+        "usability-only decisions"
+      ]
+    },
+    {
+      "source_id": "land-book",
+      "name": "Land-book",
+      "kind": "curation",
+      "base_url": "https://land-book.com/",
+      "why_it_matters": "Useful for scanning conversion surfaces, hero composition, and product marketing patterns.",
+      "use_for": [
+        "landing page research",
+        "CTA surface analysis"
+      ],
+      "avoid_for": [
+        "deep product UX doctrine"
+      ]
+    },
+    {
+      "source_id": "wcag-2-2",
+      "name": "WCAG 2.2",
+      "kind": "ux-foundation",
+      "base_url": "https://www.w3.org/WAI/standards-guidelines/wcag/",
+      "why_it_matters": "Baseline accessibility contract for inclusive website and dashboard design.",
+      "use_for": [
+        "accessibility gates",
+        "motion and interaction safety"
+      ],
+      "avoid_for": [
+        "visual taste direction"
+      ]
+    },
+    {
+      "source_id": "nng",
+      "name": "Nielsen Norman Group",
+      "kind": "ux-foundation",
+      "base_url": "https://www.nngroup.com/",
+      "why_it_matters": "Durable heuristics for usability, task clarity, and interaction quality.",
+      "use_for": [
+        "heuristics",
+        "dashboard UX review"
+      ],
+      "avoid_for": [
+        "visual trend scouting"
+      ]
+    },
+    {
+      "source_id": "apple-hig",
+      "name": "Apple Human Interface Guidelines",
+      "kind": "ux-foundation",
+      "base_url": "https://developer.apple.com/design/human-interface-guidelines/",
+      "why_it_matters": "Strong reference for interface discipline, spatial clarity, and interaction polish.",
+      "use_for": [
+        "interaction system design",
+        "interface consistency"
+      ],
+      "avoid_for": [
+        "brand-style mimicry"
+      ]
+    },
+    {
+      "source_id": "material-design",
+      "name": "Material Design",
+      "kind": "ux-foundation",
+      "base_url": "https://m3.material.io/",
+      "why_it_matters": "Useful structured reference for components, layout systems, and app-like surfaces.",
+      "use_for": [
+        "dashboard patterns",
+        "component logic"
+      ],
+      "avoid_for": [
+        "award-style differentiation by itself"
+      ]
+    }
+  ]
+}

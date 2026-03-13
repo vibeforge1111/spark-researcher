@@ -1,0 +1,41 @@
+{
+  "domain": "web-design",
+  "updated_at": "2026-03-13",
+  "objective": "Increase web_design_score while preserving accessibility safety and conversion clarity.",
+  "mutation_axes": [
+    "site_type",
+    "design_direction",
+    "narrative_model",
+    "interaction_model",
+    "proof_surface",
+    "conversion_strategy",
+    "accessibility_mode"
+  ],
+  "guardrails": {
+    "human_gate": true,
+    "reject_if_accessibility_drops_below": 0.54,
+    "reject_if_ux_drops_below": 0.56,
+    "reject_if_change_is_style_only": true,
+    "require_counterfactual": true
+  },
+  "promotion_gates": {
+    "candidate": {
+      "web_design_score_min": 0.66,
+      "ux_system_score_min": 0.56,
+      "accessibility_safety_score_min": 0.54
+    },
+    "validated": {
+      "web_design_score_min": 0.8,
+      "ux_system_score_min": 0.68,
+      "conversion_clarity_score_min": 0.62,
+      "accessibility_safety_score_min": 0.7
+    }
+  },
+  "anti_patterns": [
+    "style-copying without mechanism extraction",
+    "motion theater",
+    "award-score inflation with poor task flow",
+    "dashboard ornament without decision speed",
+    "accessibility debt hidden behind experimentation"
+  ]
+}

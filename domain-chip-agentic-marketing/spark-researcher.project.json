@@ -1,0 +1,131 @@
+{
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the disconnected baseline before any marketing automation system is trusted.",
+      "hypothesis": "The baseline defines the floor before a closed-loop distribution system is compared.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "founder-led-x-teardown",
+      "candidate_summary": "Founder-led X distribution with teardown offer, n8n orchestration, and Typebot capture.",
+      "hypothesis": "A tight founder proof loop on X should outperform an unfocused baseline for early startup distribution.",
+      "mutations": {
+        "conversion_surface": "typebot",
+        "feedback_loop": "posthog_twenty",
+        "motion_id": "founder_led_content",
+        "offer_type": "teardown",
+        "orchestration_layer": "n8n_core",
+        "primary_channel": "x"
+      }
+    },
+    {
+      "candidate_id": "seo-comparison-flywheel",
+      "candidate_summary": "Programmatic SEO around comparison pages with full-flywheel instrumentation and microsite conversion.",
+      "hypothesis": "A comparison-page SEO system with analytics and CRM closure should create compounding inbound demand.",
+      "mutations": {
+        "conversion_surface": "microsite",
+        "feedback_loop": "full_flywheel",
+        "motion_id": "programmatic_seo",
+        "offer_type": "comparison_page",
+        "orchestration_layer": "hybrid_agent_stack",
+        "primary_channel": "seo"
+      }
+    },
+    {
+      "candidate_id": "signal-outbound-benchmark-report",
+      "candidate_summary": "Signal-based outbound using benchmark reports, Mautic sequences, and Chatwoot handoff.",
+      "hypothesis": "Outbound works better when signal-triggered, benchmark-backed, and closed by a human-visible inbox.",
+      "mutations": {
+        "conversion_surface": "chatwoot",
+        "feedback_loop": "formbricks_chatwoot",
+        "motion_id": "signal_based_outbound",
+        "offer_type": "benchmark_report",
+        "orchestration_layer": "mautic_campaigns",
+        "primary_channel": "email"
+      }
+    }
+  ],
+  "chip": {
+    "manifest": "spark-chip.json",
+    "path": "."
+  },
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-agentic-marketing.log"
+    }
+  },
+  "eval_goal": "maximize",
+  "eval_metric": "distribution_system_score",
+  "guardrails": {
+    "blocked_command_fragments": [
+      "shutdown",
+      "format",
+      "reg delete",
+      "Remove-Item",
+      "del /f",
+      "rm -rf"
+    ],
+    "consecutive_discard_limit": 3,
+    "max_loop_iterations": 8,
+    "require_clean_git_for_self_edit": true,
+    "require_human_approval_for_self_edit": true
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "metrics": {
+    "automation_coverage_score": {
+      "kind": "float",
+      "pattern": "^automation_coverage_score:\\s+([0-9.]+)$"
+    },
+    "distribution_system_score": {
+      "kind": "float",
+      "pattern": "^distribution_system_score:\\s+([0-9.]+)$"
+    },
+    "feedback_closure_score": {
+      "kind": "float",
+      "pattern": "^feedback_closure_score:\\s+([0-9.]+)$"
+    },
+    "signal_coverage_score": {
+      "kind": "float",
+      "pattern": "^signal_coverage_score:\\s+([0-9.]+)$"
+    },
+    "verdict_confidence": {
+      "kind": "float",
+      "pattern": "^verdict_confidence:\\s+([0-9.]+)$"
+    }
+  },
+  "mutable_parameters": [],
+  "mutable_targets": [
+    "src/domain_chip_agentic_marketing",
+    "docs",
+    "README.md",
+    "spark-chip.json",
+    "pyproject.toml",
+    "spark-researcher.project.json"
+  ],
+  "project_name": "domain-chip-agentic-marketing",
+  "project_root": ".",
+  "self_edit": {
+    "auto_push": false,
+    "branch_prefix": "self-edit/",
+    "command": [],
+    "commit_message_template": "Apply self-edit proposal {proposal_id}",
+    "git_mode": "manual",
+    "main_branch": "main",
+    "mutable_targets": [
+      "src/domain_chip_agentic_marketing",
+      "docs",
+      "README.md",
+      "spark-chip.json",
+      "pyproject.toml",
+      "spark-researcher.project.json"
+    ],
+    "prompt_preamble": "Keep the chip benchmark-first, honest about synthetic vs real-world evidence, and focused on closed-loop startup distribution systems."
+  },
+  "trainers": []
+}

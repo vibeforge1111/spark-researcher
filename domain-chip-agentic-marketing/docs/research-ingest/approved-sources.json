@@ -1,0 +1,58 @@
+[
+  {
+    "source_id": "n8n",
+    "name": "n8n official repository",
+    "url": "https://github.com/n8n-io/n8n",
+    "category": "orchestration",
+    "reason": "Workflow automation and AI-native orchestration."
+  },
+  {
+    "source_id": "posthog",
+    "name": "PostHog official repository",
+    "url": "https://github.com/PostHog/posthog",
+    "category": "analytics",
+    "reason": "Product analytics, web analytics, experimentation, and CDP surfaces."
+  },
+  {
+    "source_id": "twenty",
+    "name": "Twenty official repository",
+    "url": "https://github.com/twentyhq/twenty",
+    "category": "crm",
+    "reason": "Open-source CRM for account memory and pipeline operations."
+  },
+  {
+    "source_id": "mautic",
+    "name": "Mautic official repository",
+    "url": "https://github.com/mautic/mautic",
+    "category": "campaigns",
+    "reason": "Open-source marketing automation and campaign execution."
+  },
+  {
+    "source_id": "chatwoot",
+    "name": "Chatwoot official repository",
+    "url": "https://github.com/chatwoot/chatwoot",
+    "category": "support",
+    "reason": "Inbox, support, and human-in-the-loop customer conversations."
+  },
+  {
+    "source_id": "typebot",
+    "name": "Typebot official repository",
+    "url": "https://github.com/baptisteArno/typebot.io",
+    "category": "capture",
+    "reason": "Conversational lead capture and routing."
+  },
+  {
+    "source_id": "formbricks",
+    "name": "Formbricks official repository",
+    "url": "https://github.com/formbricks/formbricks",
+    "category": "feedback",
+    "reason": "Survey-based voice-of-customer and feedback collection."
+  },
+  {
+    "source_id": "dub",
+    "name": "Dub official repository",
+    "url": "https://github.com/dubinc/dub",
+    "category": "attribution",
+    "reason": "Link infrastructure, routing, and attribution."
+  }
+]

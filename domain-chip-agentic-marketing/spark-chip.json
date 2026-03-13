@@ -1,0 +1,112 @@
+{
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "chip_name": "domain-chip-agentic-marketing",
+  "commands": {
+    "evaluate": [
+      "python",
+      "-m",
+      "domain_chip_agentic_marketing.cli",
+      "evaluate"
+    ],
+    "packets": [
+      "python",
+      "-m",
+      "domain_chip_agentic_marketing.cli",
+      "packets"
+    ],
+    "suggest": [
+      "python",
+      "-m",
+      "domain_chip_agentic_marketing.cli",
+      "suggest"
+    ],
+    "watchtower": [
+      "python",
+      "-m",
+      "domain_chip_agentic_marketing.cli",
+      "watchtower"
+    ]
+  },
+  "description": "Agentic marketing and distribution chip for startup growth systems built from automations, agents, LLMs, and open-source tooling.",
+  "domain": "agentic-marketing",
+  "frontier": {
+    "allowed_mutations": {
+      "conversion_surface": [
+        "typebot",
+        "chatwoot",
+        "microsite",
+        "calendar_router"
+      ],
+      "feedback_loop": [
+        "posthog_twenty",
+        "formbricks_chatwoot",
+        "full_flywheel"
+      ],
+      "motion_id": [
+        "founder_led_content",
+        "programmatic_seo",
+        "signal_based_outbound",
+        "community_embeds",
+        "partner_distribution"
+      ],
+      "offer_type": [
+        "teardown",
+        "comparison_page",
+        "template_pack",
+        "benchmark_report",
+        "roi_calculator"
+      ],
+      "orchestration_layer": [
+        "n8n_core",
+        "mautic_campaigns",
+        "hybrid_agent_stack"
+      ],
+      "primary_channel": [
+        "x",
+        "linkedin",
+        "seo",
+        "email",
+        "communities",
+        "partner_ecosystem"
+      ],
+      "tool_stack": [
+        "n8n+posthog+twenty",
+        "mautic+chatwoot+formbricks",
+        "hybrid+seo+crm"
+      ]
+    },
+    "enabled": true,
+    "field_patterns": {
+      "conversion_surface": "^(typebot|chatwoot|microsite|calendar_router)$",
+      "feedback_loop": "^(posthog_twenty|formbricks_chatwoot|full_flywheel)$",
+      "motion_id": "^(founder_led_content|programmatic_seo|signal_based_outbound|community_embeds|partner_distribution)$",
+      "offer_type": "^(teardown|comparison_page|template_pack|benchmark_report|roi_calculator)$",
+      "orchestration_layer": "^(n8n_core|mautic_campaigns|hybrid_agent_stack)$",
+      "primary_channel": "^(x|linkedin|seo|email|communities|partner_ecosystem)$",
+      "tool_stack": "^[a-z0-9+,_-]{3,120}$"
+    },
+    "model": "generic",
+    "open_mutation_fields": [
+      "tool_stack"
+    ],
+    "prompt_hints": [
+      "Prefer closed-loop systems that connect research, messaging, distribution, capture, CRM, and analytics.",
+      "Do not propose content volume without a measurement and feedback loop.",
+      "Prefer one strong motion-channel-offer system over fragmented multi-channel activity.",
+      "Reward systems that let a small startup run fast with n8n, CRM, surveys, support, attribution, and LLM-assisted content operations."
+    ],
+    "required_fields": [
+      "motion_id",
+      "primary_channel"
+    ],
+    "web_search": true
+  },
+  "io_protocol": "spark-hook-io.v1",
+  "schema_version": "spark-chip.v1",
+  "version": "0.1.0"
+}

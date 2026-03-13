@@ -1,0 +1,26 @@
+[
+  {
+    "seed_id": "motion-channel-offer-map",
+    "prompt": "Find strong startup marketing systems where one motion, one channel, and one offer compound instead of fragmenting effort."
+  },
+  {
+    "seed_id": "tool-stack-closure",
+    "prompt": "Find open-source stacks that connect orchestration, analytics, CRM, support, and feedback into one startup distribution loop."
+  },
+  {
+    "seed_id": "signal-based-outbound",
+    "prompt": "Find examples and operator lessons for outbound systems triggered by buying or product-intent signals."
+  },
+  {
+    "seed_id": "programmatic-seo",
+    "prompt": "Find startup-grade programmatic SEO systems that connect topic maps, page generation, attribution, and conversion routing."
+  },
+  {
+    "seed_id": "community-distribution",
+    "prompt": "Find repeatable systems for community-native distribution that preserve contribution quality and measurable capture."
+  },
+  {
+    "seed_id": "trendshift-agentic-growth-stack",
+    "prompt": "Use Trendshift to discover rising open-source repos relevant to agentic marketing, startup distribution, workflow orchestration, CRM, analytics, attribution, and capture."
+  }
+]

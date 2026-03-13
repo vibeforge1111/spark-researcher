@@ -451,12 +451,52 @@ def _sync_execution_state(state: dict[str, Any], execution: dict[str, Any]) -> d
     return state
 
 
-def _build_venture_task_packets(execution: dict[str, Any]) -> list[dict[str, Any]]:
+def _sync_customer_gtm_state(state: dict[str, Any], customer_gtm: dict[str, Any]) -> dict[str, Any]:
+    summary_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in customer_gtm.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+    for venture in state.get("ventures", []):
+        if not isinstance(venture, dict):
+            continue
+        summary = summary_by_venture.get(str(venture.get("venture_id") or ""))
+        if not summary:
+            continue
+        venture["customer_signal_count"] = int(summary.get("conversation_count", 0) or 0)
+        venture["willingness_signal_count"] = int(summary.get("willingness_signal_count", 0) or 0)
+        venture["open_pipeline_count"] = int(summary.get("open_pipeline_count", 0) or 0)
+        venture["open_pipeline_value"] = float(summary.get("open_pipeline_value", 0.0) or 0.0)
+        if summary.get("top_objections"):
+            venture["top_objection"] = str(summary["top_objections"][0])
+        venture["customer_conversations_this_week"] = max(
+            int(venture.get("customer_conversations_this_week", 0) or 0),
+            int(summary.get("conversation_count", 0) or 0),
+        )
+        venture["pipeline_count"] = max(
+            int(venture.get("pipeline_count", 0) or 0),
+            int(summary.get("open_pipeline_count", 0) or 0),
+        )
+    return state
+
+
+def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[str, Any]) -> list[dict[str, Any]]:
     packets: list[dict[str, Any]] = []
+    gtm_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in customer_gtm.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
     for item in execution.get("ventures", []):
         if not isinstance(item, dict):
             continue
         latest_kpi = item.get("latest_kpi_snapshot", {}) if isinstance(item.get("latest_kpi_snapshot"), dict) else {}
+        gtm = gtm_by_venture.get(str(item.get("venture_id") or ""), {})
+        combined_tasks = [str(task) for task in item.get("required_tasks", [])[:5]]
+        for task in gtm.get("gtm_tasks", []):
+            text = str(task)
+            if text and text not in combined_tasks:
+                combined_tasks.append(text)
         packets.append(
             {
                 "venture_id": str(item.get("venture_id") or "venture"),
@@ -464,9 +504,14 @@ def _build_venture_task_packets(execution: dict[str, Any]) -> list[dict[str, Any
                 "priority": int(item.get("priority", 0) or 0),
                 "bottleneck": str(item.get("bottleneck") or "model_gap"),
                 "next_action": str(item.get("next_action") or "ship_next_validation_commitment"),
-                "required_tasks": [str(task) for task in item.get("required_tasks", [])[:5]],
+                "required_tasks": combined_tasks[:6],
                 "active_experiment_count": int(item.get("active_experiment_count", 0) or 0),
                 "open_build_request_count": int(item.get("open_build_request_count", 0) or 0),
+                "customer_signal_count": int(gtm.get("conversation_count", 0) or 0),
+                "willingness_signal_count": int(gtm.get("willingness_signal_count", 0) or 0),
+                "open_pipeline_count": int(gtm.get("open_pipeline_count", 0) or 0),
+                "open_pipeline_value": float(gtm.get("open_pipeline_value", 0.0) or 0.0),
+                "top_objections": [str(entry) for entry in gtm.get("top_objections", [])[:3]],
                 "latest_weekly_revenue": latest_kpi.get("weekly_revenue"),
                 "latest_pipeline_count": latest_kpi.get("pipeline_count"),
                 "latest_active_users": latest_kpi.get("active_users"),
@@ -546,6 +591,139 @@ def _scout_snapshot(runtime_root: str) -> dict[str, Any]:
         "rejected_count": len([item for item in applications if item["status"] == "rejected"]),
         "applications": applications,
         "pending_packets": packets,
+    }
+
+
+def _customer_gtm_snapshot(runtime_root: str, state: dict[str, Any]) -> dict[str, Any]:
+    latest_conversations = _latest_records_by_key(read_log(runtime_root, "customer_conversations"), "conversation_id")
+    latest_opportunities = _latest_records_by_key(read_log(runtime_root, "pipeline_opportunities"), "opportunity_id")
+    conversations_by_venture: dict[str, list[dict[str, Any]]] = {}
+    open_pipeline_by_venture: dict[str, list[dict[str, Any]]] = {}
+    objection_counts_by_venture: dict[str, dict[str, int]] = {}
+    willingness_counts_by_venture: dict[str, int] = {}
+    for row in latest_conversations.values():
+        venture_id = str(row.get("venture_id") or "").strip()
+        if not venture_id:
+            continue
+        compact = {
+            "conversation_id": str(row.get("conversation_id") or ""),
+            "venture_id": venture_id,
+            "customer_label": str(row.get("customer_label") or row.get("customer_id") or ""),
+            "channel": str(row.get("channel") or ""),
+            "stage": str(row.get("stage") or ""),
+            "willingness_to_pay": str(row.get("willingness_to_pay") or ""),
+            "objection": str(row.get("objection") or ""),
+            "outcome": str(row.get("outcome") or ""),
+            "next_step": str(row.get("next_step") or ""),
+            "created_at": str(row.get("created_at") or ""),
+        }
+        conversations_by_venture.setdefault(venture_id, []).append(compact)
+        objection = compact["objection"].strip()
+        if objection:
+            objection_counts_by_venture.setdefault(venture_id, {})
+            objection_counts_by_venture[venture_id][objection] = objection_counts_by_venture[venture_id].get(objection, 0) + 1
+        if compact["willingness_to_pay"] in {"yes", "strong_yes"}:
+            willingness_counts_by_venture[venture_id] = willingness_counts_by_venture.get(venture_id, 0) + 1
+    for row in latest_opportunities.values():
+        venture_id = str(row.get("venture_id") or "").strip()
+        if not venture_id:
+            continue
+        status = str(row.get("status") or "open")
+        compact = {
+            "opportunity_id": str(row.get("opportunity_id") or ""),
+            "venture_id": venture_id,
+            "customer_label": str(row.get("customer_label") or row.get("customer_id") or ""),
+            "stage": str(row.get("stage") or ""),
+            "value": float(row.get("value", 0.0) or 0.0),
+            "confidence": float(row.get("confidence", 0.0) or 0.0),
+            "status": status,
+            "source": str(row.get("source") or ""),
+            "next_step": str(row.get("next_step") or ""),
+            "created_at": str(row.get("created_at") or ""),
+        }
+        if status not in {"lost", "closed", "archived"}:
+            open_pipeline_by_venture.setdefault(venture_id, []).append(compact)
+    ventures: list[dict[str, Any]] = []
+    customer_signal_packets: list[dict[str, Any]] = []
+    pipeline_board: list[dict[str, Any]] = []
+    active_ventures = [item for item in state.get("ventures", []) if isinstance(item, dict) and str(item.get("status") or "") == "active"]
+    for venture in active_ventures:
+        venture_id = str(venture.get("venture_id") or "venture")
+        conversations = sorted(
+            conversations_by_venture.get(venture_id, []),
+            key=lambda item: (str(item.get("created_at") or ""), str(item.get("conversation_id") or "")),
+            reverse=True,
+        )
+        opportunities = sorted(
+            open_pipeline_by_venture.get(venture_id, []),
+            key=lambda item: (-float(item.get("confidence", 0.0) or 0.0), -float(item.get("value", 0.0) or 0.0), str(item.get("opportunity_id") or "")),
+        )
+        top_objections = [
+            item[0]
+            for item in sorted(
+                objection_counts_by_venture.get(venture_id, {}).items(),
+                key=lambda entry: (-entry[1], entry[0]),
+            )[:3]
+        ]
+        willingness_signals = willingness_counts_by_venture.get(venture_id, 0)
+        open_pipeline_value = round(sum(float(item.get("value", 0.0) or 0.0) for item in opportunities), 2)
+        gtm_tasks: list[str] = []
+        if len(conversations) < 3:
+            gtm_tasks.append("run_three_customer_conversations")
+        if not opportunities:
+            gtm_tasks.append("build_outbound_or_referral_pipeline")
+        elif open_pipeline_value < 1000.0:
+            gtm_tasks.append("increase_pipeline_value_density")
+        if willingness_signals <= 0 and int(venture.get("paid_signals_this_week", 0) or 0) <= 0:
+            gtm_tasks.append("test_pricing_or_paid_pilot")
+        if top_objections:
+            gtm_tasks.append(f"address_top_objection_{_slug(top_objections[0])}")
+        if not gtm_tasks:
+            gtm_tasks.append("push_highest_confidence_opportunity_to_close")
+        venture_summary = {
+            "venture_id": venture_id,
+            "label": str(venture.get("label") or venture_id),
+            "conversation_count": len(conversations),
+            "willingness_signal_count": willingness_signals,
+            "top_objections": top_objections,
+            "open_pipeline_count": len(opportunities),
+            "open_pipeline_value": open_pipeline_value,
+            "gtm_tasks": gtm_tasks,
+            "recent_conversations": conversations[:5],
+            "open_pipeline": opportunities[:5],
+        }
+        ventures.append(venture_summary)
+        customer_signal_packets.append(
+            {
+                "venture_id": venture_id,
+                "label": venture_summary["label"],
+                "conversation_count": venture_summary["conversation_count"],
+                "willingness_signal_count": venture_summary["willingness_signal_count"],
+                "top_objections": list(top_objections),
+                "gtm_tasks": list(gtm_tasks[:4]),
+            }
+        )
+        pipeline_board.append(
+            {
+                "venture_id": venture_id,
+                "label": venture_summary["label"],
+                "open_pipeline_count": venture_summary["open_pipeline_count"],
+                "open_pipeline_value": venture_summary["open_pipeline_value"],
+                "opportunities": opportunities[:5],
+            }
+        )
+    ventures.sort(key=lambda item: (-int(item.get("open_pipeline_count", 0) or 0), str(item.get("venture_id") or "")))
+    customer_signal_packets.sort(key=lambda item: (-int(item.get("conversation_count", 0) or 0), str(item.get("venture_id") or "")))
+    pipeline_board.sort(key=lambda item: (-float(item.get("open_pipeline_value", 0.0) or 0.0), str(item.get("venture_id") or "")))
+    return {
+        "generated_at": _now_iso(),
+        "conversation_count": sum(int(item.get("conversation_count", 0) or 0) for item in ventures),
+        "willingness_signal_count": sum(int(item.get("willingness_signal_count", 0) or 0) for item in ventures),
+        "open_pipeline_count": sum(int(item.get("open_pipeline_count", 0) or 0) for item in ventures),
+        "open_pipeline_value": round(sum(float(item.get("open_pipeline_value", 0.0) or 0.0) for item in ventures), 2),
+        "ventures": ventures,
+        "customer_signal_packets": customer_signal_packets,
+        "pipeline_board": pipeline_board,
     }
 
 
@@ -691,7 +869,19 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     update_freshness = _mean([max(0.0, 1.0 - (float(item.get("weekly_update_freshness_days", 7) or 7) / 7.0)) for item in ventures], 0.35)
     review_freshness = _mean([max(0.0, 1.0 - (float(item.get("last_review_days", 7) or 7) / 7.0)) for item in ventures], 0.35)
     automation_base = _mean([float(item.get("automation_coverage", 0.45) or 0.45) for item in ventures], 0.42)
-    validation_base = _mean([min(1.0, (float(item.get("customer_conversations_this_week", 0) or 0) / 4.0) + (float(item.get("paid_signals_this_week", 0) or 0) * 0.2)) for item in ventures], 0.28)
+    validation_base = _mean(
+        [
+            min(
+                1.0,
+                (float(item.get("customer_conversations_this_week", 0) or 0) / 4.0)
+                + (float(item.get("paid_signals_this_week", 0) or 0) * 0.2)
+                + (min(5.0, float(item.get("open_pipeline_count", 0) or 0)) * 0.05)
+                + (min(3.0, float(item.get("willingness_signal_count", 0) or 0)) * 0.08),
+            )
+            for item in ventures
+        ],
+        0.28,
+    )
     trust_base = _mean([_trust_score(str(item.get("trust_review_status") or "amber")) for item in ventures], 0.5)
     knowledge_base = _mean([min(1.0, (float(item.get("reuse_assets_count", 0) or 0) / 5.0)) for item in ventures], 0.25)
     queue_penalty = min(0.25, (len(queues.get("build", [])) + len(queues.get("validation", []))) * 0.015)
@@ -755,14 +945,17 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     priorities = _venture_priorities(state)
     execution = _execution_snapshot(runtime_root, state, priorities)
     state = _sync_execution_state(state, execution)
+    customer_gtm = _customer_gtm_snapshot(runtime_root, state)
+    state = _sync_customer_gtm_state(state, customer_gtm)
     state = save_state(runtime_root, state)
     priorities = _venture_priorities(state)
     execution = _execution_snapshot(runtime_root, state, priorities)
+    customer_gtm = _customer_gtm_snapshot(runtime_root, state)
     scout = _scout_snapshot(runtime_root)
     metrics = _score_state(state, effective_policy)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
-    venture_tasks = _build_venture_task_packets(execution)
+    venture_tasks = _build_venture_task_packets(execution, customer_gtm)
     queue_snapshot = {
         "generated_at": _now_iso(),
         "portfolio_cap": metrics["portfolio_cap"],
@@ -770,6 +963,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "priority_ventures": priorities[:5],
         "venture_task_count": len(venture_tasks),
         "pending_applications": int(scout.get("pending_count", 0) or 0),
+        "conversation_count": int(customer_gtm.get("conversation_count", 0) or 0),
+        "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
     }
     tick = {
         "generated_at": _now_iso(),
@@ -781,6 +976,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "venture_task_count": len(venture_tasks),
         "stale_kpi_count": len(execution.get("stale_kpi_ventures", [])),
         "pending_application_count": int(scout.get("pending_count", 0) or 0),
+        "conversation_count": int(customer_gtm.get("conversation_count", 0) or 0),
+        "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)
@@ -790,6 +987,9 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     _write_json(_path(runtime_root, "venture_task_packets.json"), venture_tasks)
     _write_json(_path(runtime_root, "scout_snapshot.json"), scout)
     _write_json(_path(runtime_root, "admissions_packets.json"), scout.get("pending_packets", []))
+    _write_json(_path(runtime_root, "customer_gtm_snapshot.json"), customer_gtm)
+    _write_json(_path(runtime_root, "customer_signal_packets.json"), customer_gtm.get("customer_signal_packets", []))
+    _write_json(_path(runtime_root, "pipeline_board.json"), customer_gtm.get("pipeline_board", []))
     return {
         "state": state,
         "metrics": metrics,
@@ -800,6 +1000,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "execution": execution,
         "venture_tasks": venture_tasks,
         "scout": scout,
+        "customer_gtm": customer_gtm,
     }
 
 
@@ -963,6 +1164,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
     scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
+    customer_gtm = _read_json(_path(runtime_root, "customer_gtm_snapshot.json")) if _path(runtime_root, "customer_gtm_snapshot.json").exists() else {}
     return [
         {
             "kind": "ops_snapshot",
@@ -982,6 +1184,9 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
                     f"- active_experiment_count: `{execution.get('active_experiment_count', 'n/a')}`",
                     f"- stale_kpi_ventures: `{len(execution.get('stale_kpi_ventures', []))}`",
                     f"- pending_application_count: `{scout.get('pending_count', 'n/a')}`",
+                    f"- customer_conversation_count: `{customer_gtm.get('conversation_count', 'n/a')}`",
+                    f"- open_pipeline_count: `{customer_gtm.get('open_pipeline_count', 'n/a')}`",
+                    f"- open_pipeline_value: `{customer_gtm.get('open_pipeline_value', 'n/a')}`",
                     "",
                     "## Policy",
                     "",
@@ -1003,6 +1208,9 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     venture_tasks = _read_json(_path(runtime_root, "venture_task_packets.json")) if _path(runtime_root, "venture_task_packets.json").exists() else []
     scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
     admissions_packets = _read_json(_path(runtime_root, "admissions_packets.json")) if _path(runtime_root, "admissions_packets.json").exists() else []
+    customer_gtm = _read_json(_path(runtime_root, "customer_gtm_snapshot.json")) if _path(runtime_root, "customer_gtm_snapshot.json").exists() else {}
+    customer_signal_packets = _read_json(_path(runtime_root, "customer_signal_packets.json")) if _path(runtime_root, "customer_signal_packets.json").exists() else []
+    pipeline_board = _read_json(_path(runtime_root, "pipeline_board.json")) if _path(runtime_root, "pipeline_board.json").exists() else []
     admissions = read_log(runtime_root, "admissions")
     reviews = read_log(runtime_root, "reviews")
     updates = read_log(runtime_root, "weekly_updates")
@@ -1011,6 +1219,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     kpi_snapshots = read_log(runtime_root, "kpi_snapshots")
     scout_applications = read_log(runtime_root, "scout_applications")
     admission_reviews = read_log(runtime_root, "admission_reviews")
+    customer_conversations = read_log(runtime_root, "customer_conversations")
+    pipeline_opportunities = read_log(runtime_root, "pipeline_opportunities")
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     lines = [
@@ -1103,6 +1313,58 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 "",
             ]
         )
+    customer_lines = [
+        "# Customer Signals",
+        "",
+        f"- generated_at: `{customer_gtm.get('generated_at', 'n/a')}`",
+        f"- conversation_count: `{customer_gtm.get('conversation_count', 0)}`",
+        f"- willingness_signal_count: `{customer_gtm.get('willingness_signal_count', 0)}`",
+        f"- customer_conversations_logged: `{len(customer_conversations)}`",
+        "",
+    ]
+    for item in customer_signal_packets[:5]:
+        customer_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- conversation_count: `{item.get('conversation_count', 'n/a')}`",
+                f"- willingness_signal_count: `{item.get('willingness_signal_count', 'n/a')}`",
+                *[f"- top_objection: `{entry}`" for entry in item.get("top_objections", [])],
+                *[f"- gtm_task: `{entry}`" for entry in item.get("gtm_tasks", [])],
+                "",
+            ]
+        )
+    pipeline_lines = [
+        "# Pipeline Board",
+        "",
+        f"- generated_at: `{customer_gtm.get('generated_at', 'n/a')}`",
+        f"- open_pipeline_count: `{customer_gtm.get('open_pipeline_count', 0)}`",
+        f"- open_pipeline_value: `{customer_gtm.get('open_pipeline_value', 0)}`",
+        f"- pipeline_opportunities_logged: `{len(pipeline_opportunities)}`",
+        "",
+    ]
+    for item in pipeline_board[:5]:
+        pipeline_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- open_pipeline_count: `{item.get('open_pipeline_count', 'n/a')}`",
+                f"- open_pipeline_value: `{item.get('open_pipeline_value', 'n/a')}`",
+                "",
+            ]
+        )
+        for opportunity in item.get("opportunities", [])[:3]:
+            pipeline_lines.extend(
+                [
+                    f"- opportunity: `{opportunity.get('customer_label', opportunity.get('opportunity_id', 'opportunity'))}`",
+                    f"- stage: `{opportunity.get('stage', 'n/a')}`",
+                    f"- value: `{opportunity.get('value', 'n/a')}`",
+                    f"- confidence: `{opportunity.get('confidence', 'n/a')}`",
+                ]
+            )
+        pipeline_lines.append("")
     execution_lines = [
         "# Execution Board",
         "",
@@ -1143,7 +1405,11 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 f"- next_action: `{item.get('next_action', 'n/a')}`",
                 f"- active_experiment_count: `{item.get('active_experiment_count', 'n/a')}`",
                 f"- open_build_request_count: `{item.get('open_build_request_count', 'n/a')}`",
+                f"- customer_signal_count: `{item.get('customer_signal_count', 'n/a')}`",
+                f"- open_pipeline_count: `{item.get('open_pipeline_count', 'n/a')}`",
+                f"- open_pipeline_value: `{item.get('open_pipeline_value', 'n/a')}`",
                 f"- latest_weekly_revenue: `{item.get('latest_weekly_revenue', 'n/a')}`",
+                *[f"- top_objection: `{entry}`" for entry in item.get("top_objections", [])],
                 *[f"- task: `{entry}`" for entry in item.get("required_tasks", [])],
                 "",
             ]
@@ -1213,6 +1479,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
         {"path": "07-Domains/Vibe Incubator/Ops Queue.md", "content": "\n".join(queue_lines)},
         {"path": "07-Domains/Vibe Incubator/Scout Intake.md", "content": "\n".join(scout_lines)},
         {"path": "07-Domains/Vibe Incubator/Admissions Queue.md", "content": "\n".join(admissions_lines)},
+        {"path": "07-Domains/Vibe Incubator/Customer Signals.md", "content": "\n".join(customer_lines)},
+        {"path": "07-Domains/Vibe Incubator/Pipeline Board.md", "content": "\n".join(pipeline_lines)},
         {"path": "07-Domains/Vibe Incubator/Office Hours Packets.md", "content": "\n".join(office_lines)},
         {"path": "07-Domains/Vibe Incubator/Execution Board.md", "content": "\n".join(execution_lines)},
         {"path": "07-Domains/Vibe Incubator/Venture Task Packets.md", "content": "\n".join(task_lines)},

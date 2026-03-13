@@ -15,6 +15,9 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `queue_snapshot.json`
 - `scout_snapshot.json`
 - `admissions_packets.json`
+- `customer_gtm_snapshot.json`
+- `customer_signal_packets.json`
+- `pipeline_board.json`
 - `office_hours_packets.json`
 - `decision_packets.json`
 - `execution_snapshot.json`
@@ -24,6 +27,8 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `admission_reviews.jsonl`
 - `weekly_updates.jsonl`
 - `reviews.jsonl`
+- `customer_conversations.jsonl`
+- `pipeline_opportunities.jsonl`
 - `experiments.jsonl`
 - `build_requests.jsonl`
 - `kpi_snapshots.jsonl`
@@ -128,6 +133,33 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
   --linked-experiment-id paid-sprint-1
 ```
 
+### Log A Customer Conversation
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py customer-conversation `
+  --venture-id founder-backoffice-studio `
+  --conversation-id call-001 `
+  --customer-label "Founder A" `
+  --channel call `
+  --stage discovery `
+  --willingness-to-pay maybe `
+  --objection "Needs deeper CRM automation"
+```
+
+### Log A Pipeline Opportunity
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py pipeline-opportunity `
+  --venture-id founder-backoffice-studio `
+  --opportunity-id opp-001 `
+  --customer-label "Founder A" `
+  --source referral `
+  --stage qualified `
+  --status open `
+  --value 1200 `
+  --confidence 0.7
+```
+
 ### Capture A KPI Snapshot
 
 ```powershell
@@ -157,5 +189,6 @@ Do not treat the control plane as a background daemon.
 - write inputs explicitly
 - let the `ops` loop score and route them
 - let scouting recommend, but keep admissions review explicit
+- use customer conversations and pipeline opportunities to drive validation pressure honestly
 - use experiments, build requests, and KPI snapshots to create venture task packets
 - inspect the vault pages before widening the incubator

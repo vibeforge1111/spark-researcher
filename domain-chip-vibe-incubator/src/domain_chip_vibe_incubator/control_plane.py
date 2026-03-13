@@ -64,6 +64,15 @@ def _execution_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, Any]
     }
 
 
+def _customer_gtm_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    customer_gtm = refreshed.get("customer_gtm", {}) if isinstance(refreshed.get("customer_gtm"), dict) else {}
+    return {
+        str(item.get("venture_id") or ""): item
+        for item in customer_gtm.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+
+
 def _latest_by_key(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -114,6 +123,8 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
     execution = refreshed.get("execution", {}) if isinstance(refreshed.get("execution"), dict) else {}
     execution_by_venture = _execution_by_venture(refreshed)
     scout = refreshed.get("scout", {}) if isinstance(refreshed.get("scout"), dict) else {}
+    customer_gtm = refreshed.get("customer_gtm", {}) if isinstance(refreshed.get("customer_gtm"), dict) else {}
+    customer_gtm_by_venture = _customer_gtm_by_venture(refreshed)
     return {
         "runtime_root": runtime_root,
         "program": state.get("program", {}),
@@ -125,6 +136,12 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
             "pending_count": scout.get("pending_count", 0),
             "admitted_count": scout.get("admitted_count", 0),
             "rejected_count": scout.get("rejected_count", 0),
+        },
+        "customer_gtm": {
+            "conversation_count": customer_gtm.get("conversation_count", 0),
+            "willingness_signal_count": customer_gtm.get("willingness_signal_count", 0),
+            "open_pipeline_count": customer_gtm.get("open_pipeline_count", 0),
+            "open_pipeline_value": customer_gtm.get("open_pipeline_value", 0.0),
         },
         "execution": {
             "active_experiment_count": execution.get("active_experiment_count", 0),
@@ -143,6 +160,9 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
                 "customer_conversations_this_week": item.get("customer_conversations_this_week"),
                 "active_experiment_count": execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("active_experiment_count", 0),
                 "open_build_request_count": execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_build_request_count", 0),
+                "customer_signal_count": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("conversation_count", 0),
+                "open_pipeline_count": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_pipeline_count", 0),
+                "open_pipeline_value": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_pipeline_value", 0.0),
                 "latest_weekly_revenue": (
                     execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("latest_kpi_snapshot", {}) or {}
                 ).get("weekly_revenue"),
@@ -558,6 +578,72 @@ def _handle_kpi_snapshot(args: argparse.Namespace) -> None:
     )
 
 
+def _handle_customer_conversation(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "customer_conversations",
+            {
+                "venture_id": venture["venture_id"],
+                "conversation_id": str(args.conversation_id),
+                "customer_id": str(args.customer_id or ""),
+                "customer_label": str(args.customer_label or args.customer_id or ""),
+                "channel": str(args.channel),
+                "stage": str(args.stage),
+                "willingness_to_pay": str(args.willingness_to_pay),
+                "objection": str(args.objection or ""),
+                "outcome": str(args.outcome or ""),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "customer_conversation_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_pipeline_opportunity(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "pipeline_opportunities",
+            {
+                "venture_id": venture["venture_id"],
+                "opportunity_id": str(args.opportunity_id),
+                "customer_id": str(args.customer_id or ""),
+                "customer_label": str(args.customer_label or args.customer_id or ""),
+                "source": str(args.source),
+                "stage": str(args.stage),
+                "status": str(args.status),
+                "value": float(args.value),
+                "confidence": float(args.confidence),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "pipeline_opportunity_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -691,6 +777,32 @@ def build_parser() -> argparse.ArgumentParser:
     build_request.add_argument("--linked-experiment-id")
     build_request.add_argument("--note")
 
+    conversation = sub.add_parser("customer-conversation")
+    conversation.add_argument("--venture-id", required=True)
+    conversation.add_argument("--conversation-id", required=True)
+    conversation.add_argument("--customer-id")
+    conversation.add_argument("--customer-label")
+    conversation.add_argument("--channel", choices=["call", "email", "chat", "demo", "meeting"], default="call")
+    conversation.add_argument("--stage", choices=["discovery", "demo", "proposal", "followup", "close"], default="discovery")
+    conversation.add_argument("--willingness-to-pay", choices=["unknown", "no", "maybe", "yes", "strong_yes"], default="unknown")
+    conversation.add_argument("--objection")
+    conversation.add_argument("--outcome")
+    conversation.add_argument("--next-step")
+    conversation.add_argument("--note")
+
+    pipeline = sub.add_parser("pipeline-opportunity")
+    pipeline.add_argument("--venture-id", required=True)
+    pipeline.add_argument("--opportunity-id", required=True)
+    pipeline.add_argument("--customer-id")
+    pipeline.add_argument("--customer-label")
+    pipeline.add_argument("--source", choices=["outbound", "referral", "inbound", "content", "community"], default="outbound")
+    pipeline.add_argument("--stage", choices=["new", "qualified", "proposal", "verbal", "won", "lost"], default="new")
+    pipeline.add_argument("--status", choices=["open", "active", "won", "lost", "closed"], default="open")
+    pipeline.add_argument("--value", type=float, default=0.0)
+    pipeline.add_argument("--confidence", type=float, default=0.5)
+    pipeline.add_argument("--next-step")
+    pipeline.add_argument("--note")
+
     kpi = sub.add_parser("kpi-snapshot")
     kpi.add_argument("--venture-id", required=True)
     kpi.add_argument("--stage")
@@ -735,6 +847,12 @@ def main() -> None:
         return
     if args.action == "build-request":
         _handle_build_request(args)
+        return
+    if args.action == "customer-conversation":
+        _handle_customer_conversation(args)
+        return
+    if args.action == "pipeline-opportunity":
+        _handle_pipeline_opportunity(args)
         return
     if args.action == "kpi-snapshot":
         _handle_kpi_snapshot(args)

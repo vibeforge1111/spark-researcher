@@ -480,11 +480,40 @@ def _sync_customer_gtm_state(state: dict[str, Any], customer_gtm: dict[str, Any]
     return state
 
 
-def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[str, Any]) -> list[dict[str, Any]]:
+def _sync_trust_capital_state(state: dict[str, Any], trust_capital: dict[str, Any]) -> dict[str, Any]:
+    summary_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in trust_capital.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+    for venture in state.get("ventures", []):
+        if not isinstance(venture, dict):
+            continue
+        summary = summary_by_venture.get(str(venture.get("venture_id") or ""))
+        if not summary:
+            continue
+        venture["trust_review_status"] = str(summary.get("trust_status") or venture.get("trust_review_status") or "amber")
+        venture["capital_readiness"] = bool(summary.get("capital_readiness") or False)
+        venture["blocking_trust_review"] = bool(summary.get("blocking") or False)
+        venture["ready_data_room_count"] = int(summary.get("ready_data_room_count", 0) or 0)
+        venture["total_data_room_count"] = int(summary.get("total_data_room_count", 0) or 0)
+        venture["investor_target_count"] = int(summary.get("open_investor_count", 0) or 0)
+        venture["interested_investor_count"] = int(summary.get("interested_investor_count", 0) or 0)
+        if summary.get("risk_area"):
+            venture["trust_risk_area"] = str(summary.get("risk_area"))
+    return state
+
+
+def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[str, Any], trust_capital: dict[str, Any]) -> list[dict[str, Any]]:
     packets: list[dict[str, Any]] = []
     gtm_by_venture = {
         str(item.get("venture_id") or ""): item
         for item in customer_gtm.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+    trust_by_venture = {
+        str(item.get("venture_id") or ""): item
+        for item in trust_capital.get("ventures", [])
         if isinstance(item, dict) and item.get("venture_id")
     }
     for item in execution.get("ventures", []):
@@ -492,8 +521,13 @@ def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[st
             continue
         latest_kpi = item.get("latest_kpi_snapshot", {}) if isinstance(item.get("latest_kpi_snapshot"), dict) else {}
         gtm = gtm_by_venture.get(str(item.get("venture_id") or ""), {})
+        trust = trust_by_venture.get(str(item.get("venture_id") or ""), {})
         combined_tasks = [str(task) for task in item.get("required_tasks", [])[:5]]
         for task in gtm.get("gtm_tasks", []):
+            text = str(task)
+            if text and text not in combined_tasks:
+                combined_tasks.append(text)
+        for task in trust.get("capital_tasks", []):
             text = str(task)
             if text and text not in combined_tasks:
                 combined_tasks.append(text)
@@ -512,6 +546,10 @@ def _build_venture_task_packets(execution: dict[str, Any], customer_gtm: dict[st
                 "open_pipeline_count": int(gtm.get("open_pipeline_count", 0) or 0),
                 "open_pipeline_value": float(gtm.get("open_pipeline_value", 0.0) or 0.0),
                 "top_objections": [str(entry) for entry in gtm.get("top_objections", [])[:3]],
+                "trust_status": str(trust.get("trust_status") or ""),
+                "capital_readiness": bool(trust.get("capital_readiness") or False),
+                "ready_data_room_count": int(trust.get("ready_data_room_count", 0) or 0),
+                "investor_target_count": int(trust.get("open_investor_count", 0) or 0),
                 "latest_weekly_revenue": latest_kpi.get("weekly_revenue"),
                 "latest_pipeline_count": latest_kpi.get("pipeline_count"),
                 "latest_active_users": latest_kpi.get("active_users"),
@@ -727,6 +765,114 @@ def _customer_gtm_snapshot(runtime_root: str, state: dict[str, Any]) -> dict[str
     }
 
 
+def _trust_capital_snapshot(runtime_root: str, state: dict[str, Any]) -> dict[str, Any]:
+    latest_trust_reviews = _latest_records_by_key(read_log(runtime_root, "trust_reviews"), "venture_id")
+    latest_data_room_items = _latest_records_by_key(read_log(runtime_root, "data_room_items"), "item_id")
+    latest_investor_targets = _latest_records_by_key(read_log(runtime_root, "investor_targets"), "target_id")
+    active_ventures = [item for item in state.get("ventures", []) if isinstance(item, dict) and str(item.get("status") or "") == "active"]
+    data_room_by_venture: dict[str, list[dict[str, Any]]] = {}
+    investor_by_venture: dict[str, list[dict[str, Any]]] = {}
+    for item in latest_data_room_items.values():
+        venture_id = str(item.get("venture_id") or "").strip()
+        if venture_id:
+            data_room_by_venture.setdefault(venture_id, []).append(item)
+    for item in latest_investor_targets.values():
+        venture_id = str(item.get("venture_id") or "").strip()
+        if venture_id:
+            investor_by_venture.setdefault(venture_id, []).append(item)
+    ventures: list[dict[str, Any]] = []
+    trust_packets: list[dict[str, Any]] = []
+    capital_packets: list[dict[str, Any]] = []
+    for venture in active_ventures:
+        venture_id = str(venture.get("venture_id") or "venture")
+        trust_review = latest_trust_reviews.get(venture_id, {})
+        trust_status = str(trust_review.get("status") or venture.get("trust_review_status") or "amber")
+        risk_area = str(trust_review.get("risk_area") or "")
+        blocking = bool(trust_review.get("blocking")) or trust_status == "red"
+        data_items = data_room_by_venture.get(venture_id, [])
+        ready_items = [item for item in data_items if str(item.get("status") or "") in {"ready", "approved"}]
+        missing_items = [item for item in data_items if str(item.get("status") or "") in {"missing", "draft"}]
+        investors = investor_by_venture.get(venture_id, [])
+        open_investors = [item for item in investors if str(item.get("status") or "") not in {"passed", "archived"}]
+        interested_investors = [item for item in investors if str(item.get("status") or "") in {"interested", "diligence"}]
+        intro_ready = (
+            trust_status == "green"
+            and not blocking
+            and len(ready_items) >= 2
+            and (
+                float(venture.get("weekly_revenue", 0.0) or 0.0) > 0.0
+                or int(venture.get("paid_signals_this_week", 0) or 0) > 0
+                or int(venture.get("willingness_signal_count", 0) or 0) > 0
+            )
+        )
+        capital_tasks: list[str] = []
+        if trust_status != "green" or blocking:
+            capital_tasks.append("clear_trust_blockers")
+        if len(ready_items) < 2:
+            capital_tasks.append("complete_core_data_room_items")
+        if not open_investors:
+            capital_tasks.append("build_investor_target_list")
+        elif not interested_investors:
+            capital_tasks.append("advance_best_fit_investor_conversation")
+        if intro_ready:
+            capital_tasks.append("prepare_investor_brief")
+        trust_packets.append(
+            {
+                "venture_id": venture_id,
+                "label": str(venture.get("label") or venture_id),
+                "trust_status": trust_status,
+                "risk_area": risk_area,
+                "blocking": blocking,
+                "next_step": str(trust_review.get("next_step") or ""),
+            }
+        )
+        capital_packets.append(
+            {
+                "venture_id": venture_id,
+                "label": str(venture.get("label") or venture_id),
+                "capital_readiness": intro_ready,
+                "ready_data_room_count": len(ready_items),
+                "total_data_room_count": len(data_items),
+                "open_investor_count": len(open_investors),
+                "interested_investor_count": len(interested_investors),
+                "capital_tasks": capital_tasks[:4],
+                "brief_claim": f"{venture.get('label') or venture_id} is {'ready' if intro_ready else 'not yet ready'} for investor-facing packaging.",
+            }
+        )
+        ventures.append(
+            {
+                "venture_id": venture_id,
+                "label": str(venture.get("label") or venture_id),
+                "trust_status": trust_status,
+                "risk_area": risk_area,
+                "blocking": blocking,
+                "latest_trust_scope": str(trust_review.get("scope") or ""),
+                "latest_trust_review_at": str(trust_review.get("created_at") or ""),
+                "ready_data_room_count": len(ready_items),
+                "total_data_room_count": len(data_items),
+                "missing_data_room_count": len(missing_items),
+                "open_investor_count": len(open_investors),
+                "interested_investor_count": len(interested_investors),
+                "capital_readiness": intro_ready,
+                "capital_tasks": capital_tasks,
+            }
+        )
+    ventures.sort(key=lambda item: (not bool(item.get("blocking")), not bool(item.get("capital_readiness")), str(item.get("venture_id") or "")))
+    trust_packets.sort(key=lambda item: (str(item.get("trust_status") or ""), str(item.get("venture_id") or "")))
+    capital_packets.sort(key=lambda item: (not bool(item.get("capital_readiness")), str(item.get("venture_id") or "")))
+    return {
+        "generated_at": _now_iso(),
+        "trust_review_count": len(latest_trust_reviews),
+        "data_room_item_count": len(latest_data_room_items),
+        "investor_target_count": len(latest_investor_targets),
+        "blocking_trust_count": len([item for item in ventures if item["blocking"]]),
+        "capital_ready_count": len([item for item in ventures if item["capital_readiness"]]),
+        "ventures": ventures,
+        "trust_packets": trust_packets,
+        "capital_packets": capital_packets,
+    }
+
+
 def _policy(mutations: dict[str, str]) -> dict[str, str]:
     policy = dict(DEFAULT_POLICY)
     for key, value in mutations.items():
@@ -763,6 +909,7 @@ def rebuild_queues(state: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
         backlog = int(venture.get("build_backlog_count", 0) or 0)
         paid_signals = int(venture.get("paid_signals_this_week", 0) or 0)
         reuse_assets = int(venture.get("reuse_assets_count", 0) or 0)
+        capital_ready = bool(venture.get("capital_readiness") or False)
         if status == "admissions":
             queues["admissions"].append({"venture_id": venture_id, "priority": "high"})
             continue
@@ -773,7 +920,7 @@ def rebuild_queues(state: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
             queues["build"].append({"venture_id": venture_id, "priority": "high" if backlog >= 5 else "medium"})
         if stage in {"qualification", "validation", "go_to_market"}:
             queues["validation"].append({"venture_id": venture_id, "priority": "high" if paid_signals <= 0 else "medium"})
-        if stage in {"go_to_market", "capital_readiness"} and paid_signals > 0:
+        if (stage in {"go_to_market", "capital_readiness"} and paid_signals > 0) or capital_ready:
             queues["capital"].append({"venture_id": venture_id, "priority": "medium"})
         if trust != "green":
             queues["trust"].append({"venture_id": venture_id, "priority": "high" if trust == "red" else "medium"})
@@ -947,15 +1094,18 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     state = _sync_execution_state(state, execution)
     customer_gtm = _customer_gtm_snapshot(runtime_root, state)
     state = _sync_customer_gtm_state(state, customer_gtm)
+    trust_capital = _trust_capital_snapshot(runtime_root, state)
+    state = _sync_trust_capital_state(state, trust_capital)
     state = save_state(runtime_root, state)
     priorities = _venture_priorities(state)
     execution = _execution_snapshot(runtime_root, state, priorities)
     customer_gtm = _customer_gtm_snapshot(runtime_root, state)
     scout = _scout_snapshot(runtime_root)
+    trust_capital = _trust_capital_snapshot(runtime_root, state)
     metrics = _score_state(state, effective_policy)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
-    venture_tasks = _build_venture_task_packets(execution, customer_gtm)
+    venture_tasks = _build_venture_task_packets(execution, customer_gtm, trust_capital)
     queue_snapshot = {
         "generated_at": _now_iso(),
         "portfolio_cap": metrics["portfolio_cap"],
@@ -965,6 +1115,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "pending_applications": int(scout.get("pending_count", 0) or 0),
         "conversation_count": int(customer_gtm.get("conversation_count", 0) or 0),
         "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
+        "capital_ready_count": int(trust_capital.get("capital_ready_count", 0) or 0),
     }
     tick = {
         "generated_at": _now_iso(),
@@ -978,6 +1129,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "pending_application_count": int(scout.get("pending_count", 0) or 0),
         "conversation_count": int(customer_gtm.get("conversation_count", 0) or 0),
         "open_pipeline_count": int(customer_gtm.get("open_pipeline_count", 0) or 0),
+        "capital_ready_count": int(trust_capital.get("capital_ready_count", 0) or 0),
+        "blocking_trust_count": int(trust_capital.get("blocking_trust_count", 0) or 0),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)
@@ -990,6 +1143,9 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     _write_json(_path(runtime_root, "customer_gtm_snapshot.json"), customer_gtm)
     _write_json(_path(runtime_root, "customer_signal_packets.json"), customer_gtm.get("customer_signal_packets", []))
     _write_json(_path(runtime_root, "pipeline_board.json"), customer_gtm.get("pipeline_board", []))
+    _write_json(_path(runtime_root, "trust_capital_snapshot.json"), trust_capital)
+    _write_json(_path(runtime_root, "trust_review_packets.json"), trust_capital.get("trust_packets", []))
+    _write_json(_path(runtime_root, "capital_readiness_packets.json"), trust_capital.get("capital_packets", []))
     return {
         "state": state,
         "metrics": metrics,
@@ -1001,6 +1157,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "venture_tasks": venture_tasks,
         "scout": scout,
         "customer_gtm": customer_gtm,
+        "trust_capital": trust_capital,
     }
 
 
@@ -1165,6 +1322,7 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
     execution = _read_json(_path(runtime_root, "execution_snapshot.json")) if _path(runtime_root, "execution_snapshot.json").exists() else {}
     scout = _read_json(_path(runtime_root, "scout_snapshot.json")) if _path(runtime_root, "scout_snapshot.json").exists() else {}
     customer_gtm = _read_json(_path(runtime_root, "customer_gtm_snapshot.json")) if _path(runtime_root, "customer_gtm_snapshot.json").exists() else {}
+    trust_capital = _read_json(_path(runtime_root, "trust_capital_snapshot.json")) if _path(runtime_root, "trust_capital_snapshot.json").exists() else {}
     return [
         {
             "kind": "ops_snapshot",
@@ -1187,6 +1345,9 @@ def ops_packet_documents(runtime_root: str) -> list[dict[str, Any]]:
                     f"- customer_conversation_count: `{customer_gtm.get('conversation_count', 'n/a')}`",
                     f"- open_pipeline_count: `{customer_gtm.get('open_pipeline_count', 'n/a')}`",
                     f"- open_pipeline_value: `{customer_gtm.get('open_pipeline_value', 'n/a')}`",
+                    f"- blocking_trust_count: `{trust_capital.get('blocking_trust_count', 'n/a')}`",
+                    f"- capital_ready_count: `{trust_capital.get('capital_ready_count', 'n/a')}`",
+                    f"- investor_target_count: `{trust_capital.get('investor_target_count', 'n/a')}`",
                     "",
                     "## Policy",
                     "",
@@ -1211,6 +1372,9 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     customer_gtm = _read_json(_path(runtime_root, "customer_gtm_snapshot.json")) if _path(runtime_root, "customer_gtm_snapshot.json").exists() else {}
     customer_signal_packets = _read_json(_path(runtime_root, "customer_signal_packets.json")) if _path(runtime_root, "customer_signal_packets.json").exists() else []
     pipeline_board = _read_json(_path(runtime_root, "pipeline_board.json")) if _path(runtime_root, "pipeline_board.json").exists() else []
+    trust_capital = _read_json(_path(runtime_root, "trust_capital_snapshot.json")) if _path(runtime_root, "trust_capital_snapshot.json").exists() else {}
+    trust_packets = _read_json(_path(runtime_root, "trust_review_packets.json")) if _path(runtime_root, "trust_review_packets.json").exists() else []
+    capital_packets = _read_json(_path(runtime_root, "capital_readiness_packets.json")) if _path(runtime_root, "capital_readiness_packets.json").exists() else []
     admissions = read_log(runtime_root, "admissions")
     reviews = read_log(runtime_root, "reviews")
     updates = read_log(runtime_root, "weekly_updates")
@@ -1221,6 +1385,9 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
     admission_reviews = read_log(runtime_root, "admission_reviews")
     customer_conversations = read_log(runtime_root, "customer_conversations")
     pipeline_opportunities = read_log(runtime_root, "pipeline_opportunities")
+    trust_reviews = read_log(runtime_root, "trust_reviews")
+    data_room_items = read_log(runtime_root, "data_room_items")
+    investor_targets = read_log(runtime_root, "investor_targets")
     metrics = latest.get("metrics", {}) if isinstance(latest.get("metrics"), dict) else {}
     policy = latest.get("policy", {}) if isinstance(latest.get("policy"), dict) else {}
     lines = [
@@ -1363,8 +1530,55 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                     f"- value: `{opportunity.get('value', 'n/a')}`",
                     f"- confidence: `{opportunity.get('confidence', 'n/a')}`",
                 ]
-            )
+        )
         pipeline_lines.append("")
+    trust_lines = [
+        "# Trust Board",
+        "",
+        f"- generated_at: `{trust_capital.get('generated_at', 'n/a')}`",
+        f"- blocking_trust_count: `{trust_capital.get('blocking_trust_count', 0)}`",
+        f"- trust_reviews_logged: `{len(trust_reviews)}`",
+        f"- data_room_items_logged: `{len(data_room_items)}`",
+        "",
+    ]
+    for item in trust_packets[:5]:
+        trust_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- trust_status: `{item.get('trust_status', 'n/a')}`",
+                f"- risk_area: `{item.get('risk_area', 'n/a')}`",
+                f"- blocking: `{item.get('blocking', 'n/a')}`",
+                f"- next_step: `{item.get('next_step', 'n/a')}`",
+                "",
+            ]
+        )
+    capital_lines = [
+        "# Capital Readiness",
+        "",
+        f"- generated_at: `{trust_capital.get('generated_at', 'n/a')}`",
+        f"- capital_ready_count: `{trust_capital.get('capital_ready_count', 0)}`",
+        f"- investor_target_count: `{trust_capital.get('investor_target_count', 0)}`",
+        f"- investor_targets_logged: `{len(investor_targets)}`",
+        "",
+    ]
+    for item in capital_packets[:5]:
+        capital_lines.extend(
+            [
+                f"## {item.get('label', item.get('venture_id', 'venture'))}",
+                "",
+                f"- venture_id: `{item.get('venture_id', 'n/a')}`",
+                f"- capital_readiness: `{item.get('capital_readiness', 'n/a')}`",
+                f"- ready_data_room_count: `{item.get('ready_data_room_count', 'n/a')}`",
+                f"- total_data_room_count: `{item.get('total_data_room_count', 'n/a')}`",
+                f"- open_investor_count: `{item.get('open_investor_count', 'n/a')}`",
+                f"- interested_investor_count: `{item.get('interested_investor_count', 'n/a')}`",
+                f"- brief_claim: {item.get('brief_claim', 'n/a')}",
+                *[f"- capital_task: `{entry}`" for entry in item.get("capital_tasks", [])],
+                "",
+            ]
+        )
     execution_lines = [
         "# Execution Board",
         "",
@@ -1408,6 +1622,10 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
                 f"- customer_signal_count: `{item.get('customer_signal_count', 'n/a')}`",
                 f"- open_pipeline_count: `{item.get('open_pipeline_count', 'n/a')}`",
                 f"- open_pipeline_value: `{item.get('open_pipeline_value', 'n/a')}`",
+                f"- trust_status: `{item.get('trust_status', 'n/a')}`",
+                f"- capital_readiness: `{item.get('capital_readiness', 'n/a')}`",
+                f"- ready_data_room_count: `{item.get('ready_data_room_count', 'n/a')}`",
+                f"- investor_target_count: `{item.get('investor_target_count', 'n/a')}`",
                 f"- latest_weekly_revenue: `{item.get('latest_weekly_revenue', 'n/a')}`",
                 *[f"- top_objection: `{entry}`" for entry in item.get("top_objections", [])],
                 *[f"- task: `{entry}`" for entry in item.get("required_tasks", [])],
@@ -1481,6 +1699,8 @@ def ops_watchtower_pages(runtime_root: str) -> list[dict[str, Any]]:
         {"path": "07-Domains/Vibe Incubator/Admissions Queue.md", "content": "\n".join(admissions_lines)},
         {"path": "07-Domains/Vibe Incubator/Customer Signals.md", "content": "\n".join(customer_lines)},
         {"path": "07-Domains/Vibe Incubator/Pipeline Board.md", "content": "\n".join(pipeline_lines)},
+        {"path": "07-Domains/Vibe Incubator/Trust Board.md", "content": "\n".join(trust_lines)},
+        {"path": "07-Domains/Vibe Incubator/Capital Readiness.md", "content": "\n".join(capital_lines)},
         {"path": "07-Domains/Vibe Incubator/Office Hours Packets.md", "content": "\n".join(office_lines)},
         {"path": "07-Domains/Vibe Incubator/Execution Board.md", "content": "\n".join(execution_lines)},
         {"path": "07-Domains/Vibe Incubator/Venture Task Packets.md", "content": "\n".join(task_lines)},

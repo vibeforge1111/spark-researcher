@@ -39,6 +39,7 @@ The control plane also drives a venture execution layer with:
 
 - scout intake and admissions review
 - customer conversation and pipeline logging
+- trust review, data-room tracking, and investor targeting
 - experiment logs
 - build request logs
 - KPI snapshots
@@ -85,6 +86,9 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py admissions-review --application-id scout-founder-os --decision invite
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py customer-conversation --venture-id founder-backoffice-studio --conversation-id call-001 --customer-label "Founder A" --channel call --stage discovery --willingness-to-pay maybe --objection "Needs deeper CRM automation"
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py pipeline-opportunity --venture-id founder-backoffice-studio --opportunity-id opp-001 --customer-label "Founder A" --source referral --stage qualified --status open --value 1200 --confidence 0.7
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py trust-review --venture-id founder-backoffice-studio --review-id trust-001 --scope automation_release --status green --risk-area release_safety
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py data-room-item --venture-id founder-backoffice-studio --item-id deck-v1 --category deck --label "Investor deck" --status ready
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py investor-target --venture-id founder-backoffice-studio --target-id investor-001 --investor-label "Operator Angels" --thesis-fit high --stage targeted --status open
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py experiment --venture-id founder-backoffice-studio --experiment-id paid-sprint-1 --hypothesis "A direct founder pain landing page converts paid design partner calls" --status running --target-metric paid_signals
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py build-request --venture-id founder-backoffice-studio --request-id crm-automation --title "Automate founder CRM follow-up" --kind workflow --priority high
 python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py kpi-snapshot --venture-id founder-backoffice-studio --customer-conversations 5 --paid-signals 2 --weekly-revenue 500 --pipeline-count 7 --active-users 3 --automation-coverage 0.76

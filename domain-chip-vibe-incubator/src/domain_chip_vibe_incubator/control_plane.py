@@ -73,6 +73,15 @@ def _customer_gtm_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, A
     }
 
 
+def _trust_capital_by_venture(refreshed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    trust_capital = refreshed.get("trust_capital", {}) if isinstance(refreshed.get("trust_capital"), dict) else {}
+    return {
+        str(item.get("venture_id") or ""): item
+        for item in trust_capital.get("ventures", [])
+        if isinstance(item, dict) and item.get("venture_id")
+    }
+
+
 def _latest_by_key(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -125,6 +134,8 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
     scout = refreshed.get("scout", {}) if isinstance(refreshed.get("scout"), dict) else {}
     customer_gtm = refreshed.get("customer_gtm", {}) if isinstance(refreshed.get("customer_gtm"), dict) else {}
     customer_gtm_by_venture = _customer_gtm_by_venture(refreshed)
+    trust_capital = refreshed.get("trust_capital", {}) if isinstance(refreshed.get("trust_capital"), dict) else {}
+    trust_capital_by_venture = _trust_capital_by_venture(refreshed)
     return {
         "runtime_root": runtime_root,
         "program": state.get("program", {}),
@@ -142,6 +153,11 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
             "willingness_signal_count": customer_gtm.get("willingness_signal_count", 0),
             "open_pipeline_count": customer_gtm.get("open_pipeline_count", 0),
             "open_pipeline_value": customer_gtm.get("open_pipeline_value", 0.0),
+        },
+        "trust_capital": {
+            "blocking_trust_count": trust_capital.get("blocking_trust_count", 0),
+            "capital_ready_count": trust_capital.get("capital_ready_count", 0),
+            "investor_target_count": trust_capital.get("investor_target_count", 0),
         },
         "execution": {
             "active_experiment_count": execution.get("active_experiment_count", 0),
@@ -163,6 +179,9 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
                 "customer_signal_count": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("conversation_count", 0),
                 "open_pipeline_count": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_pipeline_count", 0),
                 "open_pipeline_value": customer_gtm_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_pipeline_value", 0.0),
+                "capital_readiness": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("capital_readiness", False),
+                "trust_blocking": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("blocking", False),
+                "investor_target_count": trust_capital_by_venture.get(str(item.get("venture_id") or ""), {}).get("open_investor_count", 0),
                 "latest_weekly_revenue": (
                     execution_by_venture.get(str(item.get("venture_id") or ""), {}).get("latest_kpi_snapshot", {}) or {}
                 ).get("weekly_revenue"),
@@ -644,6 +663,95 @@ def _handle_pipeline_opportunity(args: argparse.Namespace) -> None:
     )
 
 
+def _handle_trust_review(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "trust_reviews",
+            {
+                "venture_id": venture["venture_id"],
+                "review_id": str(args.review_id),
+                "scope": str(args.scope),
+                "status": str(args.status),
+                "risk_area": str(args.risk_area or ""),
+                "blocking": bool(args.blocking),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "trust_review_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_data_room_item(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "data_room_items",
+            {
+                "venture_id": venture["venture_id"],
+                "item_id": str(args.item_id),
+                "category": str(args.category),
+                "label": str(args.label),
+                "status": str(args.status),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "data_room_item_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
+def _handle_investor_target(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "investor_targets",
+            {
+                "venture_id": venture["venture_id"],
+                "target_id": str(args.target_id),
+                "investor_label": str(args.investor_label),
+                "thesis_fit": str(args.thesis_fit),
+                "stage": str(args.stage),
+                "status": str(args.status),
+                "check_size": str(args.check_size or ""),
+                "next_step": str(args.next_step or ""),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print(
+        {
+            "runtime_root": args.runtime_root,
+            "venture": refreshed_venture,
+            "investor_target_event": event,
+            "latest_tick": refreshed["tick"],
+        }
+    )
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -803,6 +911,35 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--next-step")
     pipeline.add_argument("--note")
 
+    trust = sub.add_parser("trust-review")
+    trust.add_argument("--venture-id", required=True)
+    trust.add_argument("--review-id", required=True)
+    trust.add_argument("--scope", choices=["security", "data_access", "automation_release", "customer_delivery", "capital_readiness"], default="security")
+    trust.add_argument("--status", choices=["green", "amber", "red"], required=True)
+    trust.add_argument("--risk-area")
+    trust.add_argument("--blocking", action="store_true")
+    trust.add_argument("--next-step")
+    trust.add_argument("--note")
+
+    data_room = sub.add_parser("data-room-item")
+    data_room.add_argument("--venture-id", required=True)
+    data_room.add_argument("--item-id", required=True)
+    data_room.add_argument("--category", choices=["deck", "kpi", "customer_evidence", "legal", "security", "financial", "product"], default="deck")
+    data_room.add_argument("--label", required=True)
+    data_room.add_argument("--status", choices=["missing", "draft", "ready", "approved"], required=True)
+    data_room.add_argument("--note")
+
+    investor = sub.add_parser("investor-target")
+    investor.add_argument("--venture-id", required=True)
+    investor.add_argument("--target-id", required=True)
+    investor.add_argument("--investor-label", required=True)
+    investor.add_argument("--thesis-fit", choices=["low", "medium", "high"], default="medium")
+    investor.add_argument("--stage", choices=["targeted", "drafting", "introduced", "followup", "diligence", "passed"], default="targeted")
+    investor.add_argument("--status", choices=["open", "interested", "passed", "archived"], default="open")
+    investor.add_argument("--check-size")
+    investor.add_argument("--next-step")
+    investor.add_argument("--note")
+
     kpi = sub.add_parser("kpi-snapshot")
     kpi.add_argument("--venture-id", required=True)
     kpi.add_argument("--stage")
@@ -853,6 +990,15 @@ def main() -> None:
         return
     if args.action == "pipeline-opportunity":
         _handle_pipeline_opportunity(args)
+        return
+    if args.action == "trust-review":
+        _handle_trust_review(args)
+        return
+    if args.action == "data-room-item":
+        _handle_data_room_item(args)
+        return
+    if args.action == "investor-target":
+        _handle_investor_target(args)
         return
     if args.action == "kpi-snapshot":
         _handle_kpi_snapshot(args)

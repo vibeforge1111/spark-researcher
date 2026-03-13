@@ -18,6 +18,9 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `customer_gtm_snapshot.json`
 - `customer_signal_packets.json`
 - `pipeline_board.json`
+- `trust_capital_snapshot.json`
+- `trust_review_packets.json`
+- `capital_readiness_packets.json`
 - `office_hours_packets.json`
 - `decision_packets.json`
 - `execution_snapshot.json`
@@ -29,6 +32,9 @@ The control plane writes runtime artifacts under `artifacts/incubator_os/`:
 - `reviews.jsonl`
 - `customer_conversations.jsonl`
 - `pipeline_opportunities.jsonl`
+- `trust_reviews.jsonl`
+- `data_room_items.jsonl`
+- `investor_targets.jsonl`
 - `experiments.jsonl`
 - `build_requests.jsonl`
 - `kpi_snapshots.jsonl`
@@ -160,6 +166,43 @@ python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.p
   --confidence 0.7
 ```
 
+### Log A Trust Review
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py trust-review `
+  --venture-id founder-backoffice-studio `
+  --review-id trust-001 `
+  --scope automation_release `
+  --status green `
+  --risk-area release_safety `
+  --next-step keep_audit_trail_current
+```
+
+### Update A Data-Room Item
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py data-room-item `
+  --venture-id founder-backoffice-studio `
+  --item-id deck-v1 `
+  --category deck `
+  --label "Investor deck" `
+  --status ready
+```
+
+### Track An Investor Target
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/control_plane.py investor-target `
+  --venture-id founder-backoffice-studio `
+  --target-id investor-001 `
+  --investor-label "Operator Angels" `
+  --thesis-fit high `
+  --stage targeted `
+  --status open `
+  --check-size 100k-250k `
+  --next-step draft_intro_packet
+```
+
 ### Capture A KPI Snapshot
 
 ```powershell
@@ -190,5 +233,6 @@ Do not treat the control plane as a background daemon.
 - let the `ops` loop score and route them
 - let scouting recommend, but keep admissions review explicit
 - use customer conversations and pipeline opportunities to drive validation pressure honestly
+- let trust review and capital packets prepare investor readiness, but keep actual intros and decisions human-gated
 - use experiments, build requests, and KPI snapshots to create venture task packets
 - inspect the vault pages before widening the incubator

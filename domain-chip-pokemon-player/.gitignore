@@ -1,0 +1,11 @@
+artifacts/
+obsidian-vault/
+docs/beliefs/
+__pycache__/
+*.pyc
+*.egg-info/
+*.gb
+*.gbc
+*.gba
+*.state
+*.sav

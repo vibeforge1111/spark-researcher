@@ -1,0 +1,47 @@
+[
+  {
+    "title": "Pokemon Red/Blue - Speedrun.com",
+    "author": "Speedrun.com",
+    "source_type": "leaderboard",
+    "style_family": "speedrun_leaderboard",
+    "url": "https://www.speedrun.com/pkmnredblue",
+    "why_relevant": "Primary leaderboard, category, rules, and community hub for modern Pokemon Red/Blue speedrunning.",
+    "doctrine_tags": ["speedrun_route", "benchmark_truth", "category_rules"]
+  },
+  {
+    "title": "Pokemon Red/Blue - Guides - Speedrun.com",
+    "author": "Speedrun.com Community",
+    "source_type": "guide_hub",
+    "style_family": "speedrun_guides",
+    "url": "https://www.speedrun.com/pkmnredblue/guides",
+    "why_relevant": "Guide surface for route, menuing, and beginner-to-advanced speedrun knowledge.",
+    "doctrine_tags": ["speedrun_route", "menuing", "beginner_route"]
+  },
+  {
+    "title": "pret/pokered",
+    "author": "pret",
+    "source_type": "codebase",
+    "style_family": "disassembly",
+    "url": "https://github.com/pret/pokered",
+    "why_relevant": "Disassembly-level source for maps, scripts, text flow, and game logic that can ground repeatable task extraction.",
+    "doctrine_tags": ["map_logic", "script_logic", "game_mechanics"]
+  },
+  {
+    "title": "Gen 1 Classic DV Calculator",
+    "author": "Pokemon Speedrunning",
+    "source_type": "tool",
+    "style_family": "speedrun_tooling",
+    "url": "https://pokemon-speedrunning.github.io/Gen1ClassicDVCalculator/index.html",
+    "why_relevant": "Shows how the speedrunning community encodes and reasons about key route-critical manipulations and stats.",
+    "doctrine_tags": ["manipulation", "route_planning", "speedrun_tooling"]
+  },
+  {
+    "title": "PyBoy",
+    "author": "Baekalfen",
+    "source_type": "emulator_codebase",
+    "style_family": "automation",
+    "url": "https://github.com/Baekalfen/PyBoy",
+    "why_relevant": "Primary emulator automation surface used by this chip for replayable state seeding and benchmark execution.",
+    "doctrine_tags": ["emulator_control", "benchmark_execution", "state_seeding"]
+  }
+]

@@ -1,0 +1,94 @@
+{
+  "frontier": {
+    "allowed_mutations": {
+      "benchmark_profile": [
+        "speedrun_intro",
+        "speedrun_menuing",
+        "speedrun_route"
+      ],
+      "policy_id": [
+        "wander",
+        "right_scout",
+        "menu_mash",
+        "edge_scan",
+        "start_then_wander"
+      ],
+      "task_id": [
+        "intro_boot",
+        "leave_bedroom",
+        "oak_lab_entry",
+        "text_mash",
+        "menu_fastpath"
+      ],
+      "startup_action": [
+        "none",
+        "start",
+        "a",
+        "b"
+      ],
+      "tick_stride": [
+        "12",
+        "24",
+        "36"
+      ]
+    },
+    "enabled": true,
+    "field_patterns": {
+      "benchmark_profile": "^speedrun_[a-z]+$",
+      "policy_id": "^[a-z_]+$",
+      "task_id": "^[a-z_]+$",
+      "startup_action": "^(none|start|a|b)$",
+      "tick_stride": "^(12|24|36)$"
+    },
+    "model": "generic",
+    "open_mutation_fields": [],
+    "prompt_hints": [
+      "Prefer emulator-connected policies over pure heuristic drift.",
+      "Treat cold-boot wandering as exploratory until save-state-backed speedrun tasks exist.",
+      "Prefer named speedrun tasks such as intro boot, text mash, menu fastpath, and opening route fragments.",
+      "Propose movement and menu probes that can later become repeatable speedrun task benchmarks."
+    ],
+    "required_fields": [
+      "policy_id"
+    ],
+    "web_search": false
+  },
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "chip_name": "domain-chip-pokemon-player",
+  "commands": {
+    "evaluate": [
+      "python",
+      "-m",
+      "domain_chip_pokemon_player.cli",
+      "evaluate"
+    ],
+    "packets": [
+      "python",
+      "-m",
+      "domain_chip_pokemon_player.cli",
+      "packets"
+    ],
+    "suggest": [
+      "python",
+      "-m",
+      "domain_chip_pokemon_player.cli",
+      "suggest"
+    ],
+    "watchtower": [
+      "python",
+      "-m",
+      "domain_chip_pokemon_player.cli",
+      "watchtower"
+    ]
+  },
+  "description": "Pokemon player chip with PyBoy emulator integration and benchmark-first promotion discipline.",
+  "domain": "pokemon",
+  "io_protocol": "spark-hook-io.v1",
+  "schema_version": "spark-chip.v1",
+  "version": "0.1.0"
+}

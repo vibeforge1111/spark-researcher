@@ -33,6 +33,17 @@ def _spark_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _next_steps(chip_root: Path) -> list[str]:
+    return [
+        f"cd {chip_root}",
+        "git init",
+        "git branch -m main",
+        "python -m pip install -e .",
+        f"python -m pip install -e {_spark_repo_root()}",
+        f"python -m spark_researcher.cli chips validate --config {chip_root / 'spark-researcher.project.json'}",
+    ]
+
+
 def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
     if target_dir is None:
         return (_desktop_root() / chip_name).resolve()
@@ -1171,4 +1182,5 @@ def init_chip(
         "manifest_path": str(root / "spark-chip.json"),
         "config_path": str(root / "spark-researcher.project.json"),
         "preset": preset,
+        "next_steps": _next_steps(root),
     }

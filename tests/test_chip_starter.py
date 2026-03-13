@@ -54,6 +54,9 @@ def test_init_chip_writes_readme_with_resolved_root(tmp_path: Path) -> None:
     assert result["chip_root"] == str(chip_root.resolve())
     assert f"cd {chip_root.resolve()}" in readme
     assert result["chip_name"] == "domain-chip-marketing"
+    assert result["next_steps"][0] == f"cd {chip_root.resolve()}"
+    assert "git init" in result["next_steps"]
+    assert any("chips validate --config" in step for step in result["next_steps"])
 
 
 def test_init_chip_refuses_targets_inside_spark_repo(monkeypatch, tmp_path: Path) -> None:

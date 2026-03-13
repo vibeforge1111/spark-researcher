@@ -87,6 +87,13 @@ The starter writes only the minimum valid repo:
 - `src/<package>/__init__.py`
 - `src/<package>/cli.py`
 
+The init command also returns a `next_steps` list for the standalone repo bootstrap flow, including:
+
+- `git init`
+- `git branch -m main`
+- editable install commands
+- a `chips validate` command pointed at the new chip config
+
 The experimental `crypto-trading` preset also writes:
 
 - `docs/CRYPTO_TRADING_ONE_LOOP_SPEC.md`

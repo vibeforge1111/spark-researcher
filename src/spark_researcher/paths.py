@@ -14,6 +14,7 @@ IGNORED_NAMES = {
     "obsidian-vault",
     "node_modules",
     ".pytest_cache",
+    "nul",
 }
 
 

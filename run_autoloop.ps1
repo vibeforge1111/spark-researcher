@@ -18,4 +18,4 @@ Write-Host "LOCAL_FRONTIER: $env:SPARK_STARTUP_YC_LOCAL_FRONTIER"
 Write-Host "====================================="
 
 Set-Location "C:\Users\USER\Desktop\domain-chip-startup-yc"
-& python -u -m spark_researcher.cli autoloop --command research --rounds 1 --suggest-limit 3
+& python -u -m spark_researcher.cli autoloop --command research --continuous --rounds 6 --suggest-limit 3 --pause-seconds 300

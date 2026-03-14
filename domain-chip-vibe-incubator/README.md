@@ -1,6 +1,6 @@
 # domain-chip-vibe-incubator
 
-`domain-chip-vibe-incubator` is a Spark domain chip for running a lean incubator that launches and compounds vibe-coded startups with agentic workflows.
+`domain-chip-vibe-incubator` is the Spark domain chip for `Vibe Vibe`, a lean cohort-based incubator that launches and compounds vibe-coded startups with agentic workflows.
 
 This chip is designed for the constraint set where:
 
@@ -12,6 +12,12 @@ This chip is designed for the constraint set where:
 
 The current version is an honest fixed-evaluator scaffold, not a live benchmark.
 It is meant to help choose and pressure-test venture operating motions before those motions graduate into real launches, paying pilots, and portfolio doctrine.
+
+Visible product name:
+
+- `Vibe Vibe`
+
+Current repo and package paths still use the legacy `vibe-incubator` label and can be renamed in a later mechanical pass.
 
 ## What It Scores
 
@@ -102,6 +108,24 @@ python -m spark_researcher.cli summary --config domain-chip-vibe-incubator/spark
 
 ## Real-World Validation
 
+## Dashboard
+
+The chip now includes an ARC-style frontend shell under `dashboard/`.
+
+From `domain-chip-vibe-incubator/dashboard`:
+
+```powershell
+npm install
+npm run dev
+npm run build
+```
+
+The dashboard compiles a frontend snapshot from `artifacts/incubator_os/*` into:
+
+- `dashboard/src/generated/incubator-dashboard.json`
+
+The visible product language is `Vibe Vibe`, while the runtime chip paths still use the legacy `vibe-incubator` folder/package name.
+
 The chip should only earn stronger trust when it proves:
 
 - faster launch cycles without hidden chaos
@@ -118,3 +142,13 @@ See:
 - `docs/VIBE_INCUBATOR_ARCHITECTURE_PACKET.json`
 - `docs/VIBE_INCUBATOR_AUTOLOOP.md`
 - `docs/VIBE_INCUBATOR_CONTROL_PLANE.md`
+- `docs/VIBE_INCUBATOR_TOKEN_STACK.md`
+- `docs/VIBE_INCUBATOR_FUTARCHY_AND_GOVERNANCE.md`
+- `docs/VIBE_INCUBATOR_GENESIS_CONTRIBUTION_SYSTEM.md`
+- `docs/VIBE_INCUBATOR_CLEAN_TOKEN_PRODUCT_PLAN.md`
+- `docs/VIBE_VIBE_DESIGN_REFERENCE.md`
+- `docs/VIBE_VIBE_AUTORESEARCH_COLLECTIVE_MIRROR.md`
+- `docs/VIBE_VIBE_IMPLEMENTATION_ROADMAP.md`
+- `docs/VIBE_VIBE_DATA_AND_CONTRACT_MAP.md`
+- `docs/VIBE_VIBE_PRODUCT_SURFACES.md`
+- `docs/VIBE_VIBE_RECURSIVE_PROGRESS_AUDIT_2026-03-15.md`

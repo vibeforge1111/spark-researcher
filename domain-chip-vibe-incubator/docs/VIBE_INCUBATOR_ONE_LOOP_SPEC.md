@@ -1,4 +1,4 @@
-# Vibe Incubator One-Loop Spec
+# Vibe Vibe One-Loop Spec
 
 Use this chip when the incubator needs one governing loop instead of disconnected startup picking, content posting, and product building motions.
 

@@ -1,6 +1,6 @@
-# Vibe Incubator Control Plane
+# Vibe Vibe Control Plane
 
-Use the control plane to write real operating inputs into the incubator state contract.
+Use the control plane to write real operating inputs into the Vibe Vibe state contract.
 
 Run commands from anywhere:
 

@@ -1,4 +1,4 @@
-# Vibe Incubator OS Architecture
+# Vibe Vibe OS Architecture
 
 This is not a plan to copy Y Combinator's brand surface.
 It is a plan to copy the strongest operating mechanics from serious accelerators and rebuild them for a solo operator using agentic systems.

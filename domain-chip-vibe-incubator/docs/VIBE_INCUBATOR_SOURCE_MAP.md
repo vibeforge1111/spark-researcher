@@ -1,4 +1,4 @@
-# Vibe Incubator Source Map
+# Vibe Vibe Source Map
 
 This chip should learn from source families that improve real incubator judgment rather than generic startup residue.
 

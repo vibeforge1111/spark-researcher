@@ -1,4 +1,4 @@
-# Vibe Incubator Autoloop
+# Vibe Vibe Autoloop
 
 This chip now has two bounded loop surfaces.
 

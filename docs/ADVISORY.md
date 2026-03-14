@@ -135,3 +135,5 @@ $env:SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND='powershell -NoProfile -ExecutionPo
 ```
 
 This keeps provider execution outside the core logic while still letting Spark prepare the right request shape for each model family.
+
+For `codex`, Spark also supports a zero-config local path: if `SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND` is unset, it falls back to `scripts/codex_frontier_wrapper.ps1`. That wrapper uses the locally installed Codex CLI and its existing OAuth/device authentication, so frontier and advisory calls can reuse the same signed-in session instead of introducing a separate provider SDK.

@@ -225,6 +225,8 @@ $env:SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND='codex exec --system-prompt-file {sy
 $env:SPARK_RESEARCHER_ADAPTER_OPENCLAW_COMMAND='openclaw run --system {system_prompt_path} --prompt {user_prompt_path} --output {response_path}'
 ```
 
+If `SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND` is unset, Spark falls back to `scripts/codex_frontier_wrapper.ps1`, which uses the locally authenticated Codex CLI. That is the preferred path when you already have Codex signed in through its OAuth/device flow and do not want a separate API-key integration.
+
 Use `spark-researcher advisory providers` to check whether a provider command is configured and whether its executable is present.
 
 ## Checkloop

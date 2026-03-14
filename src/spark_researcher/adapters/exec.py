@@ -25,6 +25,37 @@ def _now_slug() -> str:
     return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _powershell_executable() -> str:
+    for candidate in ("pwsh", "powershell"):
+        if shutil.which(candidate):
+            return candidate
+    return ""
+
+
+def _default_command(model: str) -> list[str]:
+    if model != "codex":
+        return []
+    wrapper_path = _repo_root() / "scripts" / "codex_frontier_wrapper.ps1"
+    powershell = _powershell_executable()
+    if not powershell or not wrapper_path.exists():
+        return []
+    return [
+        powershell,
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(wrapper_path),
+        "{system_prompt_path}",
+        "{user_prompt_path}",
+        "{response_path}",
+    ]
+
+
 def _resolve_command(model: str, command_override: list[str] | None = None) -> list[str]:
     if command_override:
         parts: list[str] = []
@@ -32,20 +63,26 @@ def _resolve_command(model: str, command_override: list[str] | None = None) -> l
             parts.extend(shlex.split(str(item), posix=False))
         return parts
     raw = os.environ.get(ENV_KEYS[model], "").strip()
-    return shlex.split(raw, posix=False) if raw else []
+    return shlex.split(raw, posix=False) if raw else _default_command(model)
 
 
 def execution_status() -> dict[str, Any]:
     rows = []
     for model, env_key in ENV_KEYS.items():
         raw = os.environ.get(env_key, "").strip()
-        parts = shlex.split(raw, posix=False) if raw else []
+        source = "env"
+        parts = shlex.split(raw, posix=False) if raw else _default_command(model)
+        if not raw and parts:
+            source = "default"
+        elif not parts:
+            source = "unset"
         executable = parts[0] if parts else ""
         rows.append(
             {
                 "model": model,
                 "env_key": env_key,
                 "configured": bool(parts),
+                "source": source,
                 "command": parts,
                 "executable_present": shutil.which(executable) is not None if executable else False,
                 "template_placeholders": [

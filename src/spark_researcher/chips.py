@@ -15,6 +15,7 @@ CHIP_SCHEMA_VERSION = "spark-chip.v1"
 CHIP_IO_PROTOCOL = "spark-hook-io.v1"
 HOOK_NAMES = ("evaluate", "suggest", "packets", "watchtower")
 FRONTIER_MODELS = ("claude", "codex", "openclaw", "generic")
+FRONTIER_KEYS = ("allowed_mutations", "open_mutation_fields", "field_patterns", "prompt_hints", "required_fields", "model", "web_search", "enabled")
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -112,6 +113,13 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
             _command_parts(command)
         except RuntimeError as exc:
             errors.append(f"`commands.{hook_name}` {exc}")
+    misplaced_frontier_keys = [key for key in FRONTIER_KEYS if key in manifest]
+    if misplaced_frontier_keys:
+        errors.append(
+            "`frontier` configuration keys must live under the `frontier` object, not at top level: "
+            + ", ".join(sorted(misplaced_frontier_keys))
+            + "."
+        )
     frontier = manifest.get("frontier")
     if frontier is not None:
         if not isinstance(frontier, dict):
@@ -231,6 +239,60 @@ def _command_parts(raw: Any) -> list[str]:
     raise RuntimeError("Chip command entries must be arrays of command parts.")
 
 
+def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
+    if hook == "evaluate":
+        if "returncode" in response and not isinstance(response.get("returncode"), int):
+            raise RuntimeError("Chip hook `evaluate` must return an integer `returncode` when present.")
+        if "stdout" in response and not isinstance(response.get("stdout"), str):
+            raise RuntimeError("Chip hook `evaluate` must return string `stdout` when present.")
+        if "stderr" in response and not isinstance(response.get("stderr"), str):
+            raise RuntimeError("Chip hook `evaluate` must return string `stderr` when present.")
+        if "metrics" in response and not isinstance(response.get("metrics"), dict):
+            raise RuntimeError("Chip hook `evaluate` must return object `metrics` when present.")
+        if "result" in response and not isinstance(response.get("result"), dict):
+            raise RuntimeError("Chip hook `evaluate` must return object `result` when present.")
+        return
+    if hook == "suggest":
+        suggestions = response.get("suggestions", [])
+        if not isinstance(suggestions, list):
+            raise RuntimeError("Chip hook `suggest` must return array `suggestions` when present.")
+        for index, item in enumerate(suggestions):
+            if not isinstance(item, dict):
+                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}] must be an object.")
+            candidate_id = str(item.get("candidate_id", "")).strip()
+            if not candidate_id:
+                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].candidate_id is required.")
+            mutations = item.get("mutations", {})
+            if not isinstance(mutations, dict):
+                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
+        return
+    if hook == "packets":
+        documents = response.get("documents", [])
+        if not isinstance(documents, list):
+            raise RuntimeError("Chip hook `packets` must return array `documents`.")
+        for index, item in enumerate(documents):
+            if not isinstance(item, dict):
+                raise RuntimeError(f"Chip hook `packets` documents[{index}] must be an object.")
+            for key in ("kind", "title", "content"):
+                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a non-empty string.")
+            for key in ("slug", "memory_tier"):
+                if key in item and not isinstance(item.get(key), str):
+                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a string when present.")
+        return
+    if hook == "watchtower":
+        pages = response.get("pages", [])
+        if not isinstance(pages, list):
+            raise RuntimeError("Chip hook `watchtower` must return array `pages`.")
+        for index, item in enumerate(pages):
+            if not isinstance(item, dict):
+                raise RuntimeError(f"Chip hook `watchtower` pages[{index}] must be an object.")
+            for key in ("path", "content"):
+                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                    raise RuntimeError(f"Chip hook `watchtower` pages[{index}].{key} must be a non-empty string.")
+        return
+
+
 def invoke_chip_hook(
     config_path: Path,
     hook: str,
@@ -304,6 +366,7 @@ def invoke_chip_hook(
     response = json.loads(output_path.read_text(encoding="utf-8-sig"))
     if not isinstance(response, dict):
         raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
+    _validate_hook_response(hook, response)
     response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
     response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
     response.setdefault("hook", hook)

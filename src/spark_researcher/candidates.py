@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -46,6 +47,51 @@ def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> Non
     path = _continuous_status_path(runtime_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
+    path = _continuous_status_path(runtime_root)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _process_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _mark_stale_continuous_status(runtime_root: Path) -> dict[str, Any]:
+    payload = _load_continuous_status(runtime_root)
+    current_pass = payload.get("current_pass", {})
+    if not isinstance(current_pass, dict):
+        return payload
+    if str(current_pass.get("status") or "").strip().lower() != "running":
+        return payload
+    writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
+    if writer_pid and _process_alive(writer_pid):
+        return payload
+    stale_at = _now_iso()
+    current_pass["status"] = "stale"
+    current_pass["stale_detected_at"] = stale_at
+    current_pass["stale_reason"] = "writer_process_missing"
+    payload["updated_at"] = stale_at
+    payload["current_pass"] = current_pass
+    _write_continuous_status(runtime_root, payload)
+    return payload
+
+
+def _doctrine_only_mode() -> bool:
+    return str(os.environ.get("SPARK_STARTUP_DOCTRINE_ONLY", "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -494,6 +540,7 @@ def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> d
     config = load_config(config_path)
     config.candidate_trials = merged_candidate_trials(config_path, config=config)
     runtime_root = resolve_runtime_root(config_path)
+    _mark_stale_continuous_status(runtime_root)
     rows = read_jsonl(ledger_path(runtime_root))
     if chip_has_hook(config_path, "suggest", config):
         return _chip_suggestion_packet(config_path, config, command_name, rows, limit=limit)
@@ -540,6 +587,7 @@ def run_autoloop(
 ) -> dict[str, Any]:
     history: list[dict[str, Any]] = []
     queued_packet: dict[str, Any] | None = None
+    doctrine_only = _doctrine_only_mode()
     for round_index in range(1, rounds + 1):
         config = load_config(config_path)
         config.candidate_trials = merged_candidate_trials(config_path, config=config)
@@ -557,6 +605,7 @@ def run_autoloop(
                 else {"appended_count": 0, "appended": []}
             )
             if int(append_packet["appended_count"]) <= 0:
+                stopped_reason = "research_cycle_completed" if doctrine_only else "no_pending_trials_or_new_suggestions"
                 history.append(
                     {
                         "round": round_index,
@@ -564,7 +613,8 @@ def run_autoloop(
                         "results": [],
                         "suggestions": suggestion_packet,
                         "appended": append_packet,
-                        "stopped": "no_pending_trials_or_new_suggestions",
+                        "stopped": stopped_reason,
+                        "doctrine_only": doctrine_only,
                     }
                 )
                 break
@@ -595,6 +645,7 @@ def run_autoloop(
                 "appended": append_packet,
                 "next_suggestions": next_suggestions,
                 "stopped_for_discard_limit": stopped_for_discard_limit,
+                "doctrine_only": doctrine_only,
             }
         )
         if len(results) == 0 and queued_packet is None:
@@ -620,10 +671,12 @@ def run_continuous_autoloop(
 ) -> dict[str, Any]:
     passes: list[dict[str, Any]] = []
     runtime_root = resolve_runtime_root(config_path)
+    _mark_stale_continuous_status(runtime_root)
     try:
         while True:
             pass_index = len(passes) + 1
             pass_started_at = _now_iso()
+            writer_pid = os.getpid()
             start_monotonic = time.monotonic()
             artifact_before = _tracked_loop_artifacts(runtime_root)
             _write_continuous_status(
@@ -633,6 +686,7 @@ def run_continuous_autoloop(
                     "command_name": command_name,
                     "project_name": load_config(config_path).project_name,
                     "continuous": True,
+                    "writer_pid": writer_pid,
                     "pass_count": len(passes),
                     "current_pass": {
                         "pass": pass_index,
@@ -649,6 +703,12 @@ def run_continuous_autoloop(
                         "next_sleep_seconds": None,
                         "next_wake_at": None,
                         "stopped": None,
+                        "writer_pid": writer_pid,
+                        "stage": "run_autoloop",
+                        "stage_status": "running",
+                        "stage_started_at": pass_started_at,
+                        "stage_finished_at": None,
+                        "stage_error": "",
                         "status": "running",
                     },
                     "recent_passes": passes[-5:],
@@ -700,6 +760,12 @@ def run_continuous_autoloop(
                 "next_sleep_seconds": next_sleep_seconds,
                 "next_wake_at": datetime.fromtimestamp(wake_at, UTC).replace(microsecond=0).isoformat(),
                 "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
+                "writer_pid": writer_pid,
+                "stage": "pass_complete",
+                "stage_status": "completed",
+                "stage_started_at": pass_started_at,
+                "stage_finished_at": pass_finished_at,
+                "stage_error": "",
                 "status": "completed",
             }
             passes.append(pass_summary)
@@ -710,6 +776,7 @@ def run_continuous_autoloop(
                     "command_name": command_name,
                     "project_name": load_config(config_path).project_name,
                     "continuous": True,
+                    "writer_pid": writer_pid,
                     "pass_count": len(passes),
                     "current_pass": pass_summary,
                     "recent_passes": passes[-5:],

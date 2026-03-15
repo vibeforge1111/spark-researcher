@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .config import ProjectConfig, load_config
+from .config import ProjectConfig, load_config, resolve_project_root
 from .paths import chips_root, resolve_runtime_root
 
 CHIP_SCHEMA_VERSION = "spark-chip.v1"
@@ -16,6 +16,8 @@ CHIP_IO_PROTOCOL = "spark-hook-io.v1"
 HOOK_NAMES = ("evaluate", "suggest", "packets", "watchtower")
 FRONTIER_MODELS = ("claude", "codex", "openclaw", "generic")
 FRONTIER_KEYS = ("allowed_mutations", "open_mutation_fields", "field_patterns", "prompt_hints", "required_fields", "model", "web_search", "enabled")
+LOCAL_STATE_DIR_NAMES = (".paperclip-data", ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache")
+LOCAL_PATH_SUFFIXES = (".py", ".sh", ".ps1", ".cmd", ".bat", ".exe")
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -187,6 +189,12 @@ def chip_validation(config_path: Path) -> dict[str, Any]:
             "schema_path": str(schema_path()),
         }
     result = validate_manifest(context.manifest, context.manifest_path)
+    command_checks = _command_preflight(context.manifest, context.chip_root)
+    result["errors"].extend(command_checks["errors"])
+    result["warnings"].extend(command_checks["warnings"])
+    workspace_warnings = _workspace_exclusion_warnings(resolve_project_root(config_path, config), config.workspace_excludes)
+    result["warnings"].extend(workspace_warnings)
+    result["valid"] = not result["errors"]
     result.update(
         {
             "configured": True,
@@ -195,6 +203,8 @@ def chip_validation(config_path: Path) -> dict[str, Any]:
             "version": str(context.manifest.get("version", "0.0.0")),
             "chip_root": str(context.chip_root),
             "schema_path": str(schema_path()),
+            "command_checks": command_checks,
+            "workspace_excludes": list(config.workspace_excludes),
         }
     )
     return result
@@ -237,6 +247,68 @@ def _command_parts(raw: Any) -> list[str]:
     if isinstance(raw, list) and all(isinstance(item, (str, int, float)) for item in raw):
         return [str(item) for item in raw]
     raise RuntimeError("Chip command entries must be arrays of command parts.")
+
+
+def _looks_like_local_command_path(part: str) -> bool:
+    if not part or part.startswith("-"):
+        return False
+    if "/" in part or "\\" in part:
+        return True
+    return Path(part).suffix.lower() in LOCAL_PATH_SUFFIXES
+
+
+def _command_preflight(manifest: dict[str, Any], chip_root: Path) -> dict[str, list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    commands = manifest.get("commands", {})
+    if not isinstance(commands, dict):
+        return {"errors": errors, "warnings": warnings}
+    for hook_name, raw_command in commands.items():
+        try:
+            command = _command_parts(raw_command)
+        except RuntimeError:
+            continue
+        for index, part in enumerate(command):
+            if not _looks_like_local_command_path(part):
+                continue
+            candidate = Path(part)
+            if not candidate.is_absolute():
+                candidate = (chip_root / candidate).resolve()
+            if candidate.exists():
+                continue
+            errors.append(
+                f"`commands.{hook_name}[{index}]` points to a missing local path: {part} "
+                f"(resolved to {candidate})."
+            )
+    return {"errors": errors, "warnings": warnings}
+
+
+def _normalize_relative_paths(paths: list[str]) -> set[str]:
+    normalized: set[str] = set()
+    for item in paths:
+        value = str(item).strip().replace("\\", "/").strip("/")
+        if not value or value == ".":
+            continue
+        normalized.add(value.casefold())
+    return normalized
+
+
+def _workspace_exclusion_warnings(project_root: Path, workspace_excludes: list[str]) -> list[str]:
+    warnings: list[str] = []
+    normalized_excludes = _normalize_relative_paths(workspace_excludes)
+    for dir_name in LOCAL_STATE_DIR_NAMES:
+        for path in project_root.rglob(dir_name):
+            if not path.is_dir():
+                continue
+            rel_path = path.relative_to(project_root).as_posix()
+            folded = rel_path.casefold()
+            if any(folded == excluded or folded.startswith(f"{excluded}/") for excluded in normalized_excludes):
+                continue
+            warnings.append(
+                f"Local state directory `{rel_path}` is not excluded from run workspace copies. "
+                "Add it to `workspace_excludes` if it should stay out of Spark workspaces."
+            )
+    return sorted(set(warnings))
 
 
 def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:

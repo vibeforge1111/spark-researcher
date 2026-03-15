@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from spark_researcher.beliefs import build_beliefs
+from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
+from spark_researcher.memory import sync_memory
+
+
+def _write_config(repo_root: Path) -> Path:
+    repo_root.mkdir(parents=True, exist_ok=True)
+    config_path = repo_root / "spark-researcher.project.json"
+    save_config(
+        config_path,
+        ProjectConfig(
+            project_name="memory-test",
+            project_root=".",
+            eval_metric="score",
+            eval_goal="maximize",
+            commands={"research": CommandSpec(args=["python", "-c", "print('noop')"])},
+            metrics={"score": MetricSpec(pattern=r"^score:\s+([0-9.]+)$")},
+        ),
+    )
+    return config_path
+
+
+def test_build_beliefs_bounds_long_belief_filenames(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    runtime_root = tmp_path / "runtime"
+    _write_config(repo_root)
+    ledger_path = runtime_root / "artifacts" / "ledger" / "runs.jsonl"
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    long_value = "trend-" + ("momentum-" * 24)
+    rows = [
+        {
+            "run_id": "run-1",
+            "project_name": "memory-test",
+            "command_name": "research",
+            "candidate_id": "candidate-a",
+            "candidate_summary": "summary",
+            "hypothesis": "hypothesis",
+            "metric_name": "score",
+            "metric_value": 12.0,
+            "baseline_value": 10.0,
+            "verdict": "improved",
+            "applied_mutations": [{"name": "lane", "value": long_value}],
+        },
+        {
+            "run_id": "run-2",
+            "project_name": "memory-test",
+            "command_name": "research",
+            "candidate_id": "candidate-a",
+            "candidate_summary": "summary",
+            "hypothesis": "hypothesis",
+            "metric_name": "score",
+            "metric_value": 13.0,
+            "baseline_value": 10.0,
+            "verdict": "improved",
+            "applied_mutations": [{"name": "lane", "value": long_value}],
+        },
+    ]
+    ledger_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    manifest = build_beliefs(repo_root, runtime_root)
+
+    belief = manifest["beliefs"][0]
+    belief_path = Path(str(belief["path"]))
+    assert belief_path.exists()
+    assert len(belief_path.stem) <= 80
+    assert len(str(belief["belief_id"])) > len(belief_path.stem)
+
+
+def test_sync_memory_dedupes_duplicate_chip_docs_and_bounds_paths(monkeypatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    runtime_root = tmp_path / "runtime"
+    config_path = _write_config(repo_root)
+    ledger_path = runtime_root / "artifacts" / "ledger" / "runs.jsonl"
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger_path.write_text("", encoding="utf-8")
+
+    long_slug = "benchmark-" + ("evidence-" * 24)
+
+    monkeypatch.setattr("spark_researcher.memory.chip_has_hook", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        "spark_researcher.memory.invoke_chip_hook",
+        lambda *args, **kwargs: {
+            "documents": [
+                {
+                    "kind": "startup_benchmark",
+                    "title": "Benchmark Evidence",
+                    "content": "# Evidence\nsame\n",
+                    "slug": long_slug,
+                    "memory_tier": "benchmark_evidence",
+                },
+                {
+                    "kind": "startup_benchmark",
+                    "title": "Benchmark Evidence",
+                    "content": "# Evidence\nsame\n",
+                    "slug": long_slug,
+                    "memory_tier": "benchmark_evidence",
+                },
+                {
+                    "kind": "startup_benchmark",
+                    "title": "Benchmark Evidence Variant",
+                    "content": "# Evidence\nvariant\n",
+                    "slug": long_slug,
+                    "memory_tier": "benchmark_evidence",
+                },
+            ]
+        },
+    )
+
+    manifest = sync_memory(repo_root, runtime_root, goal="maximize", config_path=config_path)
+
+    chip_documents = manifest["chip_documents"]
+    assert len(chip_documents) == 2
+    paths = [Path(str(item["path"])) for item in chip_documents]
+    assert all(path.exists() for path in paths)
+    assert len({str(path) for path in paths}) == 2
+    assert all(len(path.stem) <= 82 for path in paths)

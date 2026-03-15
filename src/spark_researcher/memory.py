@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -18,6 +19,7 @@ from .ruvector import ruvector_status
 
 MAX_QUERY_LENGTH = 500
 MAX_RESULTS_LIMIT = 20
+MAX_DOCUMENT_STEM_LENGTH = 80
 
 
 def write_text(path: Path, content: str) -> None:
@@ -55,6 +57,36 @@ def _safe_unlink(path: Path) -> None:
 def _safe_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
     return slug.strip("-") or "item"
+
+
+def _bounded_document_stem(value: str, *, limit: int = MAX_DOCUMENT_STEM_LENGTH) -> str:
+    safe = _safe_slug(value)
+    if len(safe) <= limit:
+        return safe
+    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:12]
+    head_limit = max(1, limit - len(digest) - 1)
+    head = safe[:head_limit].rstrip("-._") or "item"
+    return f"{head}-{digest}"
+
+
+def _trim_document_stem(value: str, *, limit: int) -> str:
+    trimmed = value[: max(1, limit)].rstrip("-._")
+    return trimmed or "item"
+
+
+def _unique_document_path(docs_root: Path, stem: str, used_paths: set[str]) -> Path:
+    base = _bounded_document_stem(stem)
+    candidate = base
+    index = 2
+    path = docs_root / f"{candidate}.md"
+    while str(path) in used_paths:
+        suffix = f"-{index}"
+        trimmed = _trim_document_stem(base, limit=MAX_DOCUMENT_STEM_LENGTH - len(suffix))
+        candidate = f"{trimmed}{suffix}"
+        path = docs_root / f"{candidate}.md"
+        index += 1
+    used_paths.add(str(path))
+    return path
 
 
 def _normalize_query(query: str) -> str:
@@ -513,9 +545,10 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
     tier_counts: dict[str, int] = defaultdict(int)
+    used_paths: set[str] = set()
 
     for record in rows:
-        path = docs_root / f"run-{record.get('run_id', 'run')}.md"
+        path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)
         write_text(path, build_run_doc(record))
         memory_tier = "raw_run"
         written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
@@ -527,7 +560,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         for path in sorted(beliefs_root.glob("*.md")):
             if path.name.upper() == "INDEX.MD":
                 continue
-            target = docs_root / f"belief-{path.name}"
+            target = _unique_document_path(docs_root, f"belief-{path.stem}", used_paths)
             shutil.copyfile(path, target)
             written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
             kind_counts["belief"] += 1
@@ -540,7 +573,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
             review_path = proposal_path.parent / "review.json"
             review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
-            target = docs_root / f"self-edit-{proposal.get('proposal_id')}.md"
+            target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
             write_text(target, build_self_edit_doc(proposal, review))
             written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
             kind_counts["self_edit"] += 1
@@ -550,6 +583,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     working = load_working_memory(runtime_root)
     if working:
         target = docs_root / "working-memory.md"
+        used_paths.add(str(target))
         write_text(target, build_working_memory_doc(working))
         working_tier = "state_snapshot"
         written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
@@ -559,6 +593,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     episodes = load_episode_memory(runtime_root)
     if episodes:
         target = docs_root / "episode-memory.md"
+        used_paths.add(str(target))
         write_text(target, build_episode_memory_doc(episodes))
         written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
         kind_counts["episode"] += 1
@@ -566,7 +601,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
 
     outcomes = _build_outcomes(rows, goal=goal)
     for outcome in outcomes:
-        path = docs_root / f"{outcome['outcome_id']}.md"
+        path = _unique_document_path(docs_root, outcome["outcome_id"], used_paths)
         write_text(path, build_outcome_doc(outcome))
         written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
         kind_counts["outcome"] += 1
@@ -584,13 +619,19 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
                 "documents_root": str(docs_root),
             },
         )
+        seen_chip_documents: set[tuple[str, str, str, str]] = set()
         for item in packet.get("documents", []):
             title = str(item.get("title") or "Chip Document")
             kind = str(item.get("kind") or "chip")
             slug = _safe_slug(str(item.get("slug") or title))
-            path = docs_root / f"{kind}-{slug}.md"
-            write_text(path, str(item.get("content") or ""))
             memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
+            content = str(item.get("content") or "")
+            signature = (kind, title, content, memory_tier)
+            if signature in seen_chip_documents:
+                continue
+            seen_chip_documents.add(signature)
+            path = _unique_document_path(docs_root, f"{kind}-{slug}", used_paths)
+            write_text(path, content)
             record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
             written.append(record)
             chip_documents.append(record)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -8,6 +9,9 @@ from typing import Any
 from .config import load_config
 from .paths import resolve_runtime_root
 from .runner import read_jsonl
+
+
+MAX_BELIEF_FILENAME_STEM = 80
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -43,6 +47,16 @@ def _belief_id(prefix: str, source_id: str) -> str:
 
 def _safe_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "-", value).strip("-") or "item"
+
+
+def _bounded_filename_stem(value: str, *, limit: int = MAX_BELIEF_FILENAME_STEM) -> str:
+    safe = _safe_slug(value)
+    if len(safe) <= limit:
+        return safe
+    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:12]
+    head_limit = max(1, limit - len(digest) - 1)
+    head = safe[:head_limit].rstrip("-._") or "item"
+    return f"{head}-{digest}"
 
 
 def _signature(run: dict[str, Any]) -> tuple[tuple[str, str], ...]:
@@ -275,7 +289,7 @@ def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str
     skipped_runs = 0
     for group in promoted_groups:
         belief_id = str(group["belief_id"])
-        path = output_root / f"{belief_id}.md"
+        path = output_root / f"{_bounded_filename_stem(belief_id)}.md"
         _write_text(path, _render_run_belief(group))
         written.append({"belief_id": belief_id, "path": str(path), "kind": "run", "status": group.get("belief_status", "provisional")})
     promoted_run_signatures = {
@@ -301,7 +315,7 @@ def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str
             if review.get("decision") != "approve":
                 continue
             belief_id = _belief_id("self-edit", str(proposal.get("proposal_id")))
-            path = output_root / f"{belief_id}.md"
+            path = output_root / f"{_bounded_filename_stem(belief_id)}.md"
             _write_text(path, _render_self_edit_belief(proposal, review))
             written.append({"belief_id": belief_id, "path": str(path), "kind": "self_edit", "status": "durable"})
     index_lines = ["# Beliefs", ""]

@@ -102,6 +102,7 @@ class ProjectConfig:
     eval_goal: str
     commands: dict[str, CommandSpec]
     metrics: dict[str, MetricSpec]
+    workspace_excludes: list[str] = field(default_factory=list)
     mutable_parameters: list[MutationSpec] = field(default_factory=list)
     candidate_trials: list[CandidateTrial] = field(default_factory=list)
     trainers: list[TrainerSpec] = field(default_factory=list)
@@ -158,6 +159,7 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
         "eval_goal": config.eval_goal,
         "commands": {name: _command_to_payload(spec) for name, spec in config.commands.items()},
         "metrics": {name: _metric_to_payload(spec) for name, spec in config.metrics.items()},
+        "workspace_excludes": list(config.workspace_excludes),
         "mutable_parameters": [asdict(item) for item in config.mutable_parameters],
         "candidate_trials": [_candidate_to_payload(item) for item in config.candidate_trials],
         "trainers": [_trainer_to_payload(item) for item in config.trainers],
@@ -351,6 +353,7 @@ def load_config(path: Path) -> ProjectConfig:
         eval_goal=str(payload.get("eval_goal", "minimize")),
         commands=commands,
         metrics=metrics,
+        workspace_excludes=[str(item) for item in payload.get("workspace_excludes", [])],
         mutable_parameters=mutable_parameters,
         candidate_trials=candidate_trials,
         trainers=trainers,

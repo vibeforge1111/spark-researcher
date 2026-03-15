@@ -55,12 +55,45 @@ def make_run_id(kind: str) -> str:
     return f"{stamp}-{kind}"
 
 
-def copy_project_tree(source_root: Path, target_root: Path) -> None:
+def _normalize_workspace_excludes(excludes: list[str] | None) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for item in excludes or []:
+        value = str(item).strip().replace("\\", "/").strip("/")
+        if not value or value == ".":
+            continue
+        normalized.append(value.casefold())
+    return tuple(dict.fromkeys(normalized))
+
+
+def _is_excluded_copy_path(rel_path: str, excludes: tuple[str, ...]) -> bool:
+    path = rel_path.casefold()
+    return any(path == excluded or path.startswith(f"{excluded}/") for excluded in excludes)
+
+
+def _copytree_ignore(source_root: Path, extra_excludes: list[str] | None = None):
+    source_root = source_root.resolve()
+    excludes = _normalize_workspace_excludes(extra_excludes)
+
+    def _ignore(current_root: str, names: list[str]) -> set[str]:
+        ignored = {name for name in names if name in IGNORED_NAMES}
+        if not excludes:
+            return ignored
+        current_path = Path(current_root)
+        for name in names:
+            rel_path = (current_path / name).relative_to(source_root).as_posix()
+            if _is_excluded_copy_path(rel_path, excludes):
+                ignored.add(name)
+        return ignored
+
+    return _ignore
+
+
+def copy_project_tree(source_root: Path, target_root: Path, *, extra_excludes: list[str] | None = None) -> None:
     shutil.copytree(
         source_root,
         target_root,
         dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns(*IGNORED_NAMES),
+        ignore=_copytree_ignore(source_root, extra_excludes),
     )
 
 
@@ -355,7 +388,7 @@ def run_once(
     workspace_root = run_dir / "workspace"
     try:
         with trace.span("copy_project_tree", attributes={"project_root": str(project_root), "workspace_root": str(workspace_root)}):
-            copy_project_tree(project_root, workspace_root)
+            copy_project_tree(project_root, workspace_root, extra_excludes=config.workspace_excludes)
         log_path = run_dir / command_spec.log_name
         if command_spec.kind == "chip-evaluate":
             if overrides:

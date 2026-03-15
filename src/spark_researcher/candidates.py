@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import ctypes
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -63,6 +64,17 @@ def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
 def _process_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not process:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if ctypes.windll.kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code)) == 0:
+                return False
+            return exit_code.value == 259
+        finally:
+            ctypes.windll.kernel32.CloseHandle(process)
     try:
         os.kill(pid, 0)
     except OSError:

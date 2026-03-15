@@ -485,6 +485,10 @@ def apply_proposal(
         target_main = str(config.self_edit.main_branch or "main")
         if branch_name != target_main:
             raise RuntimeError(f"Direct main mode requires current branch '{target_main}', found '{branch_name}'.")
+    should_push = bool(config.self_edit.auto_push if push_override is None else push_override)
+    if git_mode in {"branch", "main"} and should_push and not _remote_exists(repo_root):
+        trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
+        raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
     applied = []
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
@@ -502,25 +506,39 @@ def apply_proposal(
     commit_sha = None
     pushed = False
     commit_message = None
-    should_push = bool(config.self_edit.auto_push if push_override is None else push_override)
-    if git_mode in {"branch", "main"}:
-        commit_message = str(
-            commit_message_override
-            or config.self_edit.commit_message_template
-            or "Apply self-edit proposal {proposal_id}"
-        ).format(proposal_id=proposal_id)
-        commit_sha = _commit_paths(repo_root, applied, commit_message)
-        if should_push:
-            if not _remote_exists(repo_root):
-                raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
-            _push_branch(repo_root, _current_branch(repo_root))
-            pushed = True
+    try:
+        if git_mode in {"branch", "main"}:
+            commit_message = str(
+                commit_message_override
+                or config.self_edit.commit_message_template
+                or "Apply self-edit proposal {proposal_id}"
+            ).format(proposal_id=proposal_id)
+            commit_sha = _commit_paths(repo_root, applied, commit_message)
+            if should_push:
+                _push_branch(repo_root, _current_branch(repo_root))
+                pushed = True
+    except Exception as exc:
+        proposal["status"] = "applied_push_failed" if commit_sha and should_push and not pushed else "apply_failed"
+        proposal["git_mode"] = git_mode
+        proposal["git_branch"] = _current_branch(repo_root)
+        proposal["git_commit_sha"] = commit_sha
+        proposal["git_pushed"] = pushed
+        proposal["apply_trace_id"] = trace.trace_id
+        proposal["apply_trace_path"] = str(trace.path)
+        proposal["apply_error"] = str(exc)
+        _write_json(proposal_path, proposal)
+        trace.finish(
+            status="error",
+            attributes={"git_mode": git_mode, "applied_file_count": len(applied), "pushed": pushed, "error": str(exc)},
+        )
+        raise
     proposal["git_mode"] = git_mode
     proposal["git_branch"] = _current_branch(repo_root)
     proposal["git_commit_sha"] = commit_sha
     proposal["git_pushed"] = pushed
     proposal["apply_trace_id"] = trace.trace_id
     proposal["apply_trace_path"] = str(trace.path)
+    proposal.pop("apply_error", None)
     _write_json(proposal_path, proposal)
     trace.finish(status="ok", attributes={"git_mode": git_mode, "applied_file_count": len(applied), "pushed": pushed})
     return {

@@ -349,6 +349,26 @@ def _research_packet(advisory: dict[str, Any], critique: dict[str, Any], *, trac
     }
 
 
+def _under_supported_packet(advisory: dict[str, Any], epistemic: dict[str, Any], *, trace_id: str, trace_path: str) -> dict[str, Any]:
+    critique = {
+        "missing_evidence": list(epistemic.get("missing_evidence", [])),
+        "issues": list(epistemic.get("missing_evidence", [])),
+        "best_next_question": "",
+        "implicated_failure_surface": "missing_support",
+    }
+    if _task_needs_fresh_research(advisory, critique):
+        return _research_packet(advisory, critique, trace_id=trace_id, trace_path=trace_path)
+    return {
+        "status": "needs_verification",
+        "decision": "needs_verification",
+        "reason": "advisory_under_supported",
+        "clarifying_questions": list(epistemic.get("clarifying_questions", [])),
+        "missing_evidence": list(epistemic.get("missing_evidence", [])),
+        "trace_id": trace_id,
+        "trace_path": trace_path,
+    }
+
+
 def execute_with_verifier(
     runtime_root: Path,
     *,
@@ -379,16 +399,8 @@ def execute_with_verifier(
             trace_id=trace.trace_id,
             metadata={"task": advisory.get("task"), "status": status},
         )
-        packet = {
-            "status": "needs_verification",
-            "decision": "needs_verification",
-            "reason": "advisory_under_supported",
-            "clarifying_questions": list(epistemic.get("clarifying_questions", [])),
-            "missing_evidence": list(epistemic.get("missing_evidence", [])),
-            "trace_id": trace.trace_id,
-            "trace_path": str(trace.path),
-        }
-        trace.finish(status="ok", attributes={"decision": "needs_verification", "reason": "advisory_under_supported"})
+        packet = _under_supported_packet(advisory, epistemic, trace_id=trace.trace_id, trace_path=str(trace.path))
+        trace.finish(status="ok", attributes={"decision": packet.get("decision", packet.get("status", "unknown")), "reason": "advisory_under_supported"})
         return packet
     if dry_run:
         draft = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=True)

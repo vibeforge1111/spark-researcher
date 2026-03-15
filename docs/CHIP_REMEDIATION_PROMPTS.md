@@ -9,6 +9,19 @@ These prompts assume:
 - each chip agent should commit often in small coherent batches
 - each chip agent should verify its own work with Spark-facing commands where possible
 
+## Terminal Handoff Rule
+
+To avoid messing anything up:
+
+1. open a terminal rooted at exactly one chip repo
+2. paste only that chip's remediation prompt first
+3. let the chip agent finish implementation, tests, and commits
+4. then paste that chip's self-questioning prompt
+5. only after the self-questioning prompt passes should you run broader Spark-facing smoke checks
+
+Do not paste multiple chip prompts into the same terminal session.
+Do not paste a chip prompt into the `spark-researcher` terminal.
+
 ## Operating Rule
 
 Do not fix chip problems by editing `spark-researcher` from inside a chip repo.
@@ -89,6 +102,41 @@ Final output:
 - mention any remaining Spark-core dependency that still blocks perfect behavior
 ```
 
+### Self-Questioning Prompt: domain-chip-trading-crypto
+
+```text
+You are still in the `domain-chip-trading-crypto` repo.
+
+Your job now is not to implement more features blindly. Your job is to challenge your own work.
+
+Audit your just-completed changes using this sequence:
+1. Re-read the changed manifest, packet hook, watchtower code, tests, and docs.
+2. Ask whether packet output is truly derived from `ledger_rows` and `outcomes`, or whether any hidden candidate-local assumption remains.
+3. Ask whether a malformed or weak benchmark row could still become doctrine too early.
+4. Ask whether the paper-trade readiness explanation is specific and falsifiable.
+5. Run the chip's tests and smoke checks.
+6. If Spark-facing commands are available, run:
+   - `chips validate`
+   - `memory sync`
+   - `obsidian build`
+   - the chip's bounded research/autoloop flow if safe
+7. Compare the post-fix state against the pre-fix state.
+
+Return a strict packet:
+- `decision`: `approve|defer|reject`
+- `regression_state`: `better|flat|worse|unclear`
+- `metric_name`: `profitability_score`
+- `best_metric_before`
+- `best_metric_after`
+- `smoke_results`
+- `autoloop_result`
+- `remaining_truth_gaps`
+- `remaining_portability_gaps`
+- `next_required_fixes`
+
+Do not be generous. If packeting still fabricates context or the benchmark bridge is still vague, say so explicitly.
+```
+
 ## Prompt: domain-chip-spark-private
 
 ```text
@@ -139,6 +187,42 @@ Final output:
 - summarize how portability was improved
 - specify what still requires local services
 - list exact verification commands and outcomes
+```
+
+### Self-Questioning Prompt: domain-chip-spark-private
+
+```text
+You are still in the `domain-chip-spark-private` repo.
+
+Now challenge your own changes.
+
+Audit sequence:
+1. Re-read the changed portability, evaluation, packet, and docs paths.
+2. Ask whether the repo can now be copied into a bounded workspace without dragging live local control-plane residue with it.
+3. Ask whether bounded evaluation is genuinely useful or only nominal.
+4. Ask whether any required local integration is still hidden rather than explicitly declared.
+5. Run the chip's tests or smoke checks.
+6. If Spark-facing commands are available, run:
+   - `chips validate`
+   - `run --command research`
+   - `memory sync`
+   - `obsidian build`
+7. Compare pre-fix and post-fix behavior.
+
+Return a strict packet:
+- `decision`: `approve|defer|reject`
+- `regression_state`: `better|flat|worse|unclear`
+- `metric_name`: `operating_system_score`
+- `best_metric_before`
+- `best_metric_after`
+- `isolation_result`
+- `smoke_results`
+- `autoloop_result`
+- `remaining_hidden_state_risks`
+- `remaining_required_local_services`
+- `next_required_fixes`
+
+If the chip is still not safely portable through Spark, do not mark it approved.
 ```
 
 ## Prompt: domain-chip-pokemon-red
@@ -195,6 +279,42 @@ Final output:
 - list verification commands run
 ```
 
+### Self-Questioning Prompt: domain-chip-pokemon-red
+
+```text
+You are still in the `domain-chip-pokemon-red` repo.
+
+Now run an adversarial self-audit.
+
+Audit sequence:
+1. Re-read the changed packet, watchtower, and truth-lane logic.
+2. Ask whether any disconnected scaffold row can still become grounded doctrine, best-run evidence, or operator-facing benchmark truth.
+3. Ask whether emulator status is obvious at the top of the watchtower.
+4. Ask whether exploratory value was preserved without overstating proof.
+5. Run chip-local tests.
+6. Run packet/watchtower smoke checks.
+7. If Spark-facing commands are available, run:
+   - `memory sync`
+   - `obsidian build`
+   - bounded research/autoloop flow if safe
+8. Compare pre-fix and post-fix behavior.
+
+Return a strict packet:
+- `decision`: `approve|defer|reject`
+- `regression_state`: `better|flat|worse|unclear`
+- `metric_name`: `pokemon_progress_score`
+- `best_metric_before`
+- `best_metric_after`
+- `emulator_truth_result`
+- `smoke_results`
+- `autoloop_result`
+- `remaining_truth-lane_gaps`
+- `remaining_false-grounding_risks`
+- `next_required_fixes`
+
+If disconnected runs still leak into grounded doctrine, reject your own work.
+```
+
 ## Prompt: domain-chip-agentic-marketing
 
 ```text
@@ -238,6 +358,39 @@ Commit often:
 Final output:
 - summarize dedupe and slug changes
 - list verification commands and whether packet paths remained unique
+```
+
+### Self-Questioning Prompt: domain-chip-agentic-marketing
+
+```text
+You are still in the `domain-chip-agentic-marketing` repo.
+
+Now audit your own fix quality.
+
+Audit sequence:
+1. Re-read the changed packet slug, dedupe, tests, and docs paths.
+2. Ask whether two distinct winners can still collapse onto the same logical document path.
+3. Ask whether repeated packet emission is now idempotent or still noisy.
+4. Ask whether the chip stayed small and reference-quality rather than growing new complexity.
+5. Run chip-local tests.
+6. If Spark-facing commands are available, run:
+   - `memory sync`
+   - `obsidian build`
+7. Compare pre-fix and post-fix packet surfaces.
+
+Return a strict packet:
+- `decision`: `approve|defer|reject`
+- `regression_state`: `better|flat|worse|unclear`
+- `metric_name`: `distribution_system_score`
+- `best_metric_before`
+- `best_metric_after`
+- `slug_collision_result`
+- `smoke_results`
+- `autoloop_result`
+- `remaining_dedupe_gaps`
+- `next_required_fixes`
+
+If packet paths can still collide under long labels, reject the work.
 ```
 
 ## Prompt: domain-chip-startup-yc
@@ -291,10 +444,55 @@ Final output:
 - list exact verification commands and outcomes
 ```
 
+### Self-Questioning Prompt: domain-chip-startup-yc
+
+```text
+You are still in the `domain-chip-startup-yc` repo.
+
+Now audit your own changes aggressively.
+
+Audit sequence:
+1. Re-read the changed benchmark dependency handling, degraded-mode logic, summaries, tests, and docs.
+2. Ask whether the external `startup-bench` dependency is now explicit enough for a new operator to understand immediately.
+3. Ask whether the chip degrades honestly when that dependency is absent.
+4. Ask whether the operator-facing surface is clearer about strongest doctrine and weakest grounded track.
+5. Run chip-local tests.
+6. Verify behavior with and without `startup-bench` if possible.
+7. If Spark-facing commands are available, run:
+   - `run --command research`
+   - `memory sync`
+   - `obsidian build`
+   - bounded autoloop or follow-up flywheel checks if safe
+8. Compare pre-fix and post-fix behavior.
+
+Return a strict packet:
+- `decision`: `approve|defer|reject`
+- `regression_state`: `better|flat|worse|unclear`
+- `metric_name`: `startup_score`
+- `best_metric_before`
+- `best_metric_after`
+- `dependency_truth_result`
+- `smoke_results`
+- `autoloop_result`
+- `remaining_external_dependency_gaps`
+- `remaining_summary_gaps`
+- `next_required_fixes`
+
+If the chip still quietly assumes `startup-bench`, reject the work.
+```
+
 ## Optional Operator Wrapper Prompt
 
 Use this if you want a shorter universal preamble before pasting a chip-specific prompt:
 
 ```text
 Read the repo first, make the smallest coherent fixes, keep all logic chip-local, add tests for each bug fixed, verify with Spark-facing commands where possible, and commit often in small reviewable batches. Do not edit `spark-researcher` from this repo.
+```
+
+## Universal Flywheel Question
+
+After a chip finishes both prompts, ask this in the same chip terminal:
+
+```text
+Now that the implementation and self-audit are done, run the chip's bounded smoke tests and flywheel/autoloop path where safe. Compare the best pre-fix versus post-fix state, list any regressions, and state whether the chip is now in a stronger, flatter, or weaker operational state.
 ```

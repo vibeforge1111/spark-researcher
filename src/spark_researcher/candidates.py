@@ -149,11 +149,31 @@ def _candidate_id(mutations: dict[str, str]) -> str:
     return "combo-" + "-".join(parts)
 
 
+def _row_status_ok(row: dict[str, Any]) -> bool:
+    return str(row.get("status") or "") == "ok"
+
+
+def _row_numeric_metric(row: dict[str, Any]) -> float | None:
+    if not _row_status_ok(row):
+        return None
+    value = row.get("metric_value")
+    if not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _row_counts_as_discard(row: dict[str, Any]) -> bool:
+    if not _row_status_ok(row):
+        return True
+    return str(row.get("verdict") or "") in {"regressed", "unknown"}
+
+
 def _baseline_metric(rows: list[dict[str, Any]], command_name: str, goal: str) -> float | None:
     baseline_values = [
         float(row["metric_value"])
         for row in rows
         if row.get("command_name") == command_name
+        and _row_status_ok(row)
         and isinstance(row.get("metric_value"), (int, float))
         and not row.get("applied_mutations")
     ]
@@ -173,14 +193,14 @@ def _best_single_primitives(rows: list[dict[str, Any]], command_name: str, goal:
     for row in rows:
         if row.get("command_name") != command_name:
             continue
-        metric_value = row.get("metric_value")
+        metric_value = _row_numeric_metric(row)
         mutations = row.get("applied_mutations") or []
-        if not isinstance(metric_value, (int, float)) or len(mutations) != 1:
+        if metric_value is None or len(mutations) != 1:
             continue
         mutation = mutations[0]
         name = str(mutation["name"])
         value = str(mutation["value"])
-        row_metric = float(metric_value)
+        row_metric = metric_value
         beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
         if not beneficial:
             continue
@@ -215,13 +235,13 @@ def _beneficial_numeric_anchors(
     for row in rows:
         if row.get("command_name") != command_name:
             continue
-        metric_value = row.get("metric_value")
-        if not isinstance(metric_value, (int, float)):
+        metric_value = _row_numeric_metric(row)
+        if metric_value is None:
             continue
         mutation_map = {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}
         if not mutation_map:
             continue
-        row_metric = float(metric_value)
+        row_metric = metric_value
         beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
         if not beneficial:
             continue
@@ -581,7 +601,7 @@ def _run_pending_trials(
         results.append(record)
         if record["verdict"] == "improved":
             consecutive_discards = 0
-        elif record["verdict"] == "regressed":
+        elif _row_counts_as_discard(record):
             consecutive_discards += 1
         if consecutive_discards >= discard_limit:
             return results, True

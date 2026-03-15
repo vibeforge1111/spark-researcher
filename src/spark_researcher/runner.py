@@ -175,11 +175,26 @@ def best_metric(runtime_root: Path, command_name: str, goal: str, *, comparison_
         row.get("metric_value")
         for row in read_jsonl(ledger_path(runtime_root))
         if row.get("command_name") == command_name
+        and row.get("status") == "ok"
         and isinstance(row.get("metric_value"), (int, float))
         and (
             comparison_class is None
             or str((row.get("chip_result", {}) if isinstance(row.get("chip_result", {}), dict) else {}).get("comparison_class", "")) == comparison_class
         )
+    ]
+    if not values:
+        return None
+    return max(values) if goal == "maximize" else min(values)
+
+
+def baseline_metric(runtime_root: Path, command_name: str, goal: str) -> float | None:
+    values = [
+        float(row["metric_value"])
+        for row in read_jsonl(ledger_path(runtime_root))
+        if row.get("command_name") == command_name
+        and row.get("status") == "ok"
+        and isinstance(row.get("metric_value"), (int, float))
+        and not row.get("applied_mutations")
     ]
     if not values:
         return None
@@ -201,6 +216,12 @@ def metric_verdict(metric_value: float | None, baseline_value: float | None, goa
         if gap <= tolerance:
             return "near_best"
     return "regressed"
+
+
+def row_counts_as_discard(row: dict[str, Any]) -> bool:
+    if str(row.get("status") or "") != "ok":
+        return True
+    return str(row.get("verdict") or "") in {"regressed", "unknown"}
 
 
 def build_record(
@@ -365,7 +386,12 @@ def run_once(
                 metrics = parse_metrics(log_path, config.metrics)
             chip_result = None
         comparison_class = str(chip_result.get("comparison_class", "")).strip() if isinstance(chip_result, dict) else ""
-        baseline_value = best_metric(runtime_root, command_name, config.eval_goal, comparison_class=comparison_class or None)
+        baseline_only = not applied_mutations
+        baseline_value = (
+            baseline_metric(runtime_root, command_name, config.eval_goal)
+            if baseline_only
+            else best_metric(runtime_root, command_name, config.eval_goal, comparison_class=comparison_class or None)
+        )
         metric_value = metrics.get(config.eval_metric)
         numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
         verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
@@ -443,7 +469,7 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
         results.append(record)
         if record["verdict"] == "improved":
             consecutive_discards = 0
-        elif record["verdict"] == "regressed":
+        elif row_counts_as_discard(record):
             consecutive_discards += 1
         if consecutive_discards >= config.guardrails.consecutive_discard_limit:
             break

@@ -92,3 +92,11 @@ def vault_root(runtime_root: Path) -> Path:
 
 def capsule_root(repo_root: Path) -> Path:
     return repo_root / ".autoresearch" / "capsules"
+
+
+def spark_swarm_root(repo_root: Path) -> Path:
+    return repo_root / ".spark-swarm"
+
+
+def spark_swarm_collective_payload_path(repo_root: Path) -> Path:
+    return spark_swarm_root(repo_root) / "collective-sync.json"

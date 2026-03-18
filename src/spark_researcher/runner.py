@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .chips import invoke_chip_hook
+from .collective import write_spark_swarm_collective_payload
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
@@ -447,6 +448,7 @@ def run_once(
             ensure_parent(run_dir / "result.json")
             (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             append_jsonl(ledger_path(runtime_root), record)
+        write_spark_swarm_collective_payload(config_path.parent.resolve(), runtime_root, config, record)
         _refresh_chip_working_memory(config, runtime_root, record)
         if record["status"] != "ok" or verdict in {"regressed", "unknown"}:
             failure_type = "run_failed" if record["status"] != "ok" else f"run_{verdict}"

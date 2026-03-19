@@ -84,6 +84,55 @@ def _batch(state: dict[str, Any], batch_id: str) -> dict[str, Any]:
     raise KeyError(f"Unknown batch_id: {batch_id}")
 
 
+def _build_governance(state: dict[str, Any]) -> dict[str, Any]:
+    """Collect governance proposals, votes, and resolutions from logs."""
+    proposals = read_log(RUNTIME_ROOT, "governance_proposals")
+    votes = read_log(RUNTIME_ROOT, "governance_votes")
+    resolutions = read_log(RUNTIME_ROOT, "governance_resolutions")
+    gov_state = state.get("governance", {})
+    return {
+        "proposals": proposals,
+        "votes": votes,
+        "resolutions": resolutions,
+        "stats": {
+            "total_resolved": gov_state.get("total_resolved", 0),
+            "total_passed": gov_state.get("total_passed", 0),
+        },
+    }
+
+
+def _build_feed(ventures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build a feed from proof_stream logs, plus timeline entries from ventures."""
+    proof = read_log(RUNTIME_ROOT, "proof_stream")
+    feed: list[dict[str, Any]] = []
+    for entry in proof:
+        feed.append({
+            "id": entry.get("proof_id") or entry.get("created_at", ""),
+            "title": entry.get("title", ""),
+            "ventureId": entry.get("venture_id", ""),
+            "ventureLabel": entry.get("venture_label", ""),
+            "detail": entry.get("detail", ""),
+            "tone": entry.get("tone", "info"),
+            "createdAt": entry.get("created_at"),
+        })
+    # Also include the most recent timeline entries from each venture
+    for v in ventures:
+        for t in (v.get("timeline") or [])[:3]:
+            if isinstance(t, dict):
+                feed.append({
+                    "id": t.get("id", ""),
+                    "title": t.get("title", ""),
+                    "ventureId": v.get("venture_id", ""),
+                    "ventureLabel": v.get("label", ""),
+                    "detail": t.get("detail", ""),
+                    "tone": t.get("tone", "info"),
+                    "createdAt": t.get("createdAt") or t.get("created_at"),
+                })
+    # Sort by createdAt descending
+    feed.sort(key=lambda e: e.get("createdAt") or "", reverse=True)
+    return feed
+
+
 # ---------------------------------------------------------------------------
 # snapshot builder (mirrors build-dashboard-data.mjs logic in Python)
 # ---------------------------------------------------------------------------
@@ -155,6 +204,16 @@ def build_dashboard_snapshot() -> dict[str, Any]:
         "trustSnapshot": trust_snapshot,
         "learningSnapshot": learning_snapshot,
         "ventures": ventures,
+        # --- governance (from logs + state) ---
+        "governance": _build_governance(state),
+        # --- feed (proof stream entries) ---
+        "feed": _build_feed(ventures),
+        # --- network (from state) ---
+        "network": state.get("network"),
+        # --- curriculum (from state) ---
+        "curriculum": state.get("curriculum"),
+        # --- genesis system (from state) ---
+        "genesisSystem": state.get("genesis_system"),
     }
 
 

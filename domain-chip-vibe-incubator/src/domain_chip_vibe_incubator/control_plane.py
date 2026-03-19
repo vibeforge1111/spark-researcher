@@ -498,6 +498,11 @@ def _handle_review(args: argparse.Namespace) -> None:
             venture["stage"] = "archived"
         else:
             venture["status"] = "active"
+        evidence = str(args.evidence or "") if hasattr(args, "evidence") else ""
+        if evidence:
+            venture["last_review_evidence"] = evidence
+            venture["evidence_backed_reviews"] = int(venture.get("evidence_backed_reviews") or 0) + 1
+        venture["total_reviews"] = int(venture.get("total_reviews") or 0) + 1
         save_state(args.runtime_root, state)
         event = append_log(
             args.runtime_root,
@@ -506,6 +511,7 @@ def _handle_review(args: argparse.Namespace) -> None:
                 "venture_id": venture["venture_id"],
                 "decision": args.decision,
                 "bottleneck": venture.get("bottleneck"),
+                "evidence": evidence,
                 "next_step": str(args.next_step or ""),
                 "note": str(args.note or ""),
             },
@@ -648,6 +654,7 @@ def _handle_customer_conversation(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
         venture = _venture(state, str(args.venture_id))
+        impact = str(getattr(args, "impact", "none") or "none")
         event = append_log(
             args.runtime_root,
             "customer_conversations",
@@ -661,10 +668,17 @@ def _handle_customer_conversation(args: argparse.Namespace) -> None:
                 "willingness_to_pay": str(args.willingness_to_pay),
                 "objection": str(args.objection or ""),
                 "outcome": str(args.outcome or ""),
+                "impact": impact,
                 "next_step": str(args.next_step or ""),
                 "note": str(args.note or ""),
             },
         )
+        # Track impact on venture state
+        if impact in ("commitment", "payment"):
+            venture["conversations_with_commitment"] = int(venture.get("conversations_with_commitment") or 0) + 1
+        if impact == "payment":
+            venture["conversations_with_payment"] = int(venture.get("conversations_with_payment") or 0) + 1
+        save_state(args.runtime_root, state)
         refreshed = refresh_ops_artifacts(args.runtime_root)
         refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
     _print(
@@ -1151,6 +1165,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--stage")
     review.add_argument("--trust-review-status", choices=["green", "amber", "red"])
     review.add_argument("--reuse-assets-count", type=int)
+    review.add_argument("--evidence", help="Concrete outcome evidence supporting this decision")
     review.add_argument("--next-step")
     review.add_argument("--note")
 
@@ -1185,6 +1200,7 @@ def build_parser() -> argparse.ArgumentParser:
     conversation.add_argument("--willingness-to-pay", choices=["unknown", "no", "maybe", "yes", "strong_yes"], default="unknown")
     conversation.add_argument("--objection")
     conversation.add_argument("--outcome")
+    conversation.add_argument("--impact", choices=["none", "interest", "commitment", "payment"], default="none")
     conversation.add_argument("--next-step")
     conversation.add_argument("--note")
 

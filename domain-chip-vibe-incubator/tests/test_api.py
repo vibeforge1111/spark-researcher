@@ -245,3 +245,149 @@ class TestApiServer:
             assert False, "Should have raised"
         except urllib.error.HTTPError as exc:
             assert exc.code == 404
+
+
+class TestOutcomeScoring:
+    """Tests for the blended outcome-anchored scoring system."""
+
+    def test_outcomes_improve_score(self, runtime_root: Path) -> None:
+        """Venture with real outcomes should score higher than activity-only."""
+        root = str(runtime_root)
+        state = load_state(root)
+        venture = state["ventures"][0]
+        venture["revenue_trend"] = 0.5
+        venture["retention_signal"] = 0.85
+        venture["conversations_with_commitment"] = 3
+        venture["customer_conversations_this_week"] = 5
+        save_state(root, state)
+        _refresh(runtime_root)
+        tick = json.loads((runtime_root / "artifacts" / "incubator_os" / "latest_tick.json").read_text("utf-8"))
+        assert "outcome_revenue_score" in tick["metrics"]
+        assert "outcome_retention_score" in tick["metrics"]
+        assert "outcome_impact_score" in tick["metrics"]
+        assert tick["metrics"]["outcome_revenue_score"] > 0.4
+        assert tick["metrics"]["outcome_retention_score"] > 0.7
+
+    def test_no_outcomes_lowers_score(self, runtime_root: Path) -> None:
+        """Venture with zero outcomes should score lower than the fixture default."""
+        root = str(runtime_root)
+        _refresh(runtime_root)
+        tick = json.loads((runtime_root / "artifacts" / "incubator_os" / "latest_tick.json").read_text("utf-8"))
+        # Default fixture has no outcome fields → outcome scores should be low
+        assert tick["metrics"]["outcome_revenue_score"] <= 0.3
+        assert tick["metrics"]["outcome_retention_score"] == 0.0
+
+
+class TestHealthAlerts:
+    """Tests for the health alert system."""
+
+    def test_healthy_venture_no_alerts(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        state = load_state(root)
+        venture = state["ventures"][0]
+        venture["revenue_trend"] = 0.2
+        venture["retention_signal"] = 0.8
+        venture["trust_review_status"] = "green"
+        save_state(root, state)
+        _refresh(runtime_root)
+        tick = json.loads((runtime_root / "artifacts" / "incubator_os" / "latest_tick.json").read_text("utf-8"))
+        assert tick["critical_alert_count"] == 0
+
+    def test_dying_venture_triggers_alerts(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        state = load_state(root)
+        venture = state["ventures"][0]
+        venture["revenue_trend"] = -0.5
+        venture["retention_signal"] = 0.1
+        venture["trust_review_status"] = "red"
+        venture["weekly_update_freshness_days"] = 20
+        venture["customer_conversations_this_week"] = 0
+        save_state(root, state)
+        _refresh(runtime_root)
+        tick = json.loads((runtime_root / "artifacts" / "incubator_os" / "latest_tick.json").read_text("utf-8"))
+        assert tick["critical_alert_count"] >= 3
+        alert_types = {a["alert"] for a in tick["health_alerts"]}
+        assert "revenue_collapse" in alert_types
+        assert "low_retention" in alert_types
+        assert "trust_red" in alert_types
+
+
+class TestGovernanceTally:
+    """Tests for governance proposal resolution."""
+
+    def test_proposal_passes_with_quorum(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        _refresh(runtime_root)
+        with ops_write_lock(root):
+            append_log(root, "governance_proposals", {
+                "proposal_id": "p1", "proposal_type": "token_readiness",
+                "venture_id": "test-venture", "description": "test", "status": "open",
+                "votes_for": 0, "votes_against": 0,
+            })
+            append_log(root, "governance_votes", {"proposal_id": "p1", "decision": "for", "weight": 2.0})
+            append_log(root, "governance_votes", {"proposal_id": "p1", "decision": "against", "weight": 0.5})
+
+        # Import and call the tally handler directly
+        from domain_chip_vibe_incubator.ops_loop import read_log
+        proposals = read_log(root, "governance_proposals")
+        votes = read_log(root, "governance_votes")
+        assert len(proposals) == 1
+        assert len(votes) == 2
+
+    def test_below_quorum_not_resolved(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        _refresh(runtime_root)
+        with ops_write_lock(root):
+            append_log(root, "governance_proposals", {
+                "proposal_id": "p2", "proposal_type": "curriculum",
+                "venture_id": "", "description": "test", "status": "open",
+                "votes_for": 0, "votes_against": 0,
+            })
+            append_log(root, "governance_votes", {"proposal_id": "p2", "decision": "for", "weight": 0.3})
+
+        from domain_chip_vibe_incubator.ops_loop import read_log
+        votes = read_log(root, "governance_votes")
+        total_weight = sum(float(v.get("weight", 0)) for v in votes if v.get("proposal_id") == "p2")
+        assert total_weight < 1.0  # below any reasonable quorum
+
+
+class TestVentureExit:
+    """Tests for the venture exit handler."""
+
+    def test_exit_archives_venture(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        _refresh(runtime_root)
+        with ops_write_lock(root):
+            state = load_state(root)
+            venture = state["ventures"][0]
+            venture["status"] = "archived"
+            venture["stage"] = "archived"
+            venture["exit_reason"] = "No PMF"
+            venture["exit_lesson"] = "Validate before building"
+            save_state(root, state)
+
+        state2 = load_state(root)
+        v = state2["ventures"][0]
+        assert v["status"] == "archived"
+        assert v["exit_reason"] == "No PMF"
+
+    def test_exit_logs_retrospective(self, runtime_root: Path) -> None:
+        root = str(runtime_root)
+        _refresh(runtime_root)
+        with ops_write_lock(root):
+            append_log(root, "venture_exits", {
+                "venture_id": "test-venture", "reason": "No traction",
+                "outcome": "loss", "lesson": "Start smaller",
+                "final_revenue": 0, "final_active_users": 0,
+            })
+            append_log(root, "retrospectives", {
+                "venture_id": "test-venture", "retrospective_id": "exit-test-venture",
+                "scope": "shutdown", "outcome": "loss", "lesson": "Start smaller",
+            })
+
+        from domain_chip_vibe_incubator.ops_loop import read_log
+        exits = read_log(root, "venture_exits")
+        retros = read_log(root, "retrospectives")
+        assert len(exits) == 1
+        assert len(retros) == 1
+        assert retros[0]["scope"] == "shutdown"

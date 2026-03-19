@@ -5,6 +5,7 @@
   "domain": "vibe-incubator",
   "version": "0.1.0",
   "description": "Agentic incubator chip for selecting, pressure-testing, and compounding vibe-coded startup plays under solo-operator constraints.",
+  "product_name": "Vibe Vibe",
   "capabilities": [
     "evaluate",
     "suggest",

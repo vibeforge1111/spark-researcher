@@ -13,11 +13,13 @@ This chip is designed for the constraint set where:
 The current version is an honest fixed-evaluator scaffold, not a live benchmark.
 It is meant to help choose and pressure-test venture operating motions before those motions graduate into real launches, paying pilots, and portfolio doctrine.
 
-Visible product name:
+## Naming Convention
 
-- `Vibe Vibe`
+- **Public product name**: `Vibe Vibe` — used in user-facing surfaces, dashboard, docs, and marketing.
+- **Internal domain/chip name**: `vibe-incubator` — used in repo paths, package names, domain field, and Spark chip identifiers.
+- **Program state label**: `Vibe Incubator` — used in runtime state and operational artifacts.
 
-Current repo and package paths still use the legacy `vibe-incubator` label and can be renamed in a later mechanical pass.
+This split is intentional. The internal name is stable for tooling; the public name is the brand.
 
 ## What It Scores
 

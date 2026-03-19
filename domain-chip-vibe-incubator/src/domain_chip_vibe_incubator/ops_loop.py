@@ -1252,6 +1252,8 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     active_count = len(ventures)
     portfolio_cap = max(1, int(policy.get("portfolio_cap", "3") or 3))
     overload = max(0, active_count - portfolio_cap)
+
+    # --- Activity metrics (operational hygiene) ---
     update_freshness = _mean([max(0.0, 1.0 - (_num(item.get("weekly_update_freshness_days"), 7.0) / 7.0)) for item in ventures], 0.35)
     review_freshness = _mean([max(0.0, 1.0 - (_num(item.get("last_review_days"), 7.0) / 7.0)) for item in ventures], 0.35)
     automation_base = _mean([_num(item.get("automation_coverage"), 0.45) for item in ventures], 0.42)
@@ -1284,6 +1286,39 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     queue_penalty = min(0.25, (len(queues.get("build", [])) + len(queues.get("validation", []))) * 0.015)
     focus_base = max(0.0, 0.72 - overload * 0.17 - queue_penalty)
     founder_latency = _mean([max(0.0, 1.0 - (_num(item.get("founder_update_latency_hours"), 72.0) / 72.0)) for item in ventures], 0.4)
+
+    # --- Outcome metrics (real-world results) ---
+    def _revenue_score(v: dict) -> float:
+        trend = _num(v.get("revenue_trend"), 0.0)
+        # Map trend to 0-1: negative growth → 0, flat → 0.3, moderate growth → 0.6, strong → 0.9+
+        if trend <= -0.2:
+            return 0.0
+        if trend <= 0:
+            return 0.15
+        return min(0.99, 0.3 + trend * 0.7)
+
+    def _retention_score(v: dict) -> float:
+        return _num(v.get("retention_signal"), 0.0)
+
+    def _impact_score(v: dict) -> float:
+        total_convos = _num(v.get("customer_conversations_this_week"), 0.0)
+        commitments = _num(v.get("conversations_with_commitment"), 0.0)
+        if total_convos <= 0:
+            return 0.0
+        return min(1.0, commitments / max(1.0, total_convos))
+
+    def _review_quality_score(v: dict) -> float:
+        total = _num(v.get("total_reviews"), 0.0)
+        evidence_backed = _num(v.get("evidence_backed_reviews"), 0.0)
+        if total <= 0:
+            return 0.3  # no reviews yet — neutral
+        return min(1.0, evidence_backed / total)
+
+    outcome_revenue = _mean([_revenue_score(v) for v in ventures], 0.15)
+    outcome_retention = _mean([_retention_score(v) for v in ventures], 0.0)
+    outcome_impact = _mean([_impact_score(v) for v in ventures], 0.0)
+    outcome_review_quality = _mean([_review_quality_score(v) for v in ventures], 0.3)
+
     adjusted = _apply_policy(
         {
             "focus": focus_base,
@@ -1301,7 +1336,11 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     validation = _clamp(adjusted["validation"])
     trust = _clamp(adjusted["trust"])
     knowledge = _clamp(adjusted["knowledge"])
-    overall = _clamp(0.10 + focus * 0.14 + automation * 0.13 + review * 0.13 + validation * 0.16 + trust * 0.17 + knowledge * 0.12 - overload * 0.04)
+
+    # Blended compound: 45% activity + 40% outcomes + 15% structure
+    activity_score = focus * 0.18 + automation * 0.16 + review * 0.16 + validation * 0.20 + knowledge * 0.15 + trust * 0.15
+    outcome_score = outcome_revenue * 0.35 + outcome_retention * 0.25 + outcome_impact * 0.25 + outcome_review_quality * 0.15
+    overall = _clamp(activity_score * 0.45 + outcome_score * 0.40 + trust * 0.15 - overload * 0.04)
     confidence = _clamp(0.40 + overall * 0.18 + trust * 0.08 + review * 0.06 - overload * 0.03)
     bottleneck, _ = min(
         [
@@ -1311,6 +1350,9 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
             ("validation_gap", validation),
             ("trust_gap", trust),
             ("knowledge_capture_gap", knowledge),
+            ("revenue_gap", outcome_revenue),
+            ("retention_gap", outcome_retention),
+            ("impact_gap", outcome_impact),
         ],
         key=lambda item: item[1],
     )
@@ -1322,6 +1364,10 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
         "ops_validation_velocity_score": validation,
         "ops_trust_hygiene_score": trust,
         "ops_knowledge_capture_score": knowledge,
+        "outcome_revenue_score": outcome_revenue,
+        "outcome_retention_score": outcome_retention,
+        "outcome_impact_score": outcome_impact,
+        "outcome_review_quality_score": outcome_review_quality,
         "verdict_confidence": confidence,
         "bottleneck": bottleneck,
         "active_portfolio_count": active_count,

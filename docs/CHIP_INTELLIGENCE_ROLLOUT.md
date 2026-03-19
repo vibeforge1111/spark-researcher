@@ -179,15 +179,13 @@ The rollout is not complete until all of these are true.
 - `docs/<DOMAIN>_REALWORLD_EVAL.md`
 - optional `docs/<DOMAIN>_DSPY_PLAN.md`
 
-The shared packet shape is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
+Shared reusable references:
 
-The shared tagging method is documented in `docs/CHIP_TAGGING_RULESET.md`.
-
-The reusable DSPy placement method for chips is documented in `docs/CHIP_DSPY_METHOD.md`.
-
-The reusable benchmark-to-chip bridge method is documented in `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`.
-
-The reusable one-loop flywheel pattern for richer chips is documented in `docs/CHIP_ONE_LOOP_FLYWHEEL.md`.
+- packet shape: `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`
+- tagging method: `docs/CHIP_TAGGING_RULESET.md`
+- DSPy placement: `docs/CHIP_DSPY_METHOD.md`
+- benchmark bridge: `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
+- richer-chip loop pattern: `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
 
 ## Rule
 

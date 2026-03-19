@@ -74,9 +74,7 @@ That loop should:
 - use a trial frontier for bounded experiments
 - update memory and watchtower every pass
 
-This pattern is documented in:
-
-- `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
+See `docs/CHIP_ONE_LOOP_FLYWHEEL.md` for the full governing-loop pattern.
 
 ## Separation Rule
 

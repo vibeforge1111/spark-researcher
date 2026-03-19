@@ -36,6 +36,16 @@ Think of it as a careful lab assistant for a project.
 
 It is not a hidden agent swarm, not a giant framework, and not an auto-ship black box.
 
+## Who It Is For
+
+Spark Researcher is most useful for people who already have some kind of repeatable task and want to improve it without losing the plot.
+
+- developers who want to test changes against a fixed benchmark or command
+- researchers who want a local system that keeps lessons, contradictions, and evidence
+- founders or operators who want structured domain learning instead of scattered notes
+- prompt or workflow builders who want to compare variants against one score
+- people building domain-specific systems who want the core to stay small and readable
+
 ## The Basic Flow
 
 ```text
@@ -74,6 +84,21 @@ Spark can suggest the next trial
 - sharing portable lessons into a collective intelligence network through capsule exports
 - building domain-specific "chips" without bloating the core repo
 
+## Real-Life Use Cases
+
+- Prompt testing:
+  You have 20 prompt variants and want to keep testing them against one score instead of guessing from vibes.
+- Coding improvement:
+  You want a system that proposes code changes, records diffs and logs, and only applies them after review.
+- Research memory:
+  You are studying a domain like startups, trading, or content, and you want doctrine, boundaries, and contradictions saved in readable files.
+- Domain mastery loops:
+  You want a system that gets better at one domain over time by combining experiments, memory, and bounded next-step suggestions.
+- Benchmark-driven iteration:
+  You already have a test, eval, or benchmark and want a simple loop around it instead of building a whole platform.
+- Domain chips:
+  You want custom logic for one domain without stuffing all that logic into the main repo.
+
 ## Why It Exists
 
 Most AI workflows fail in one of two ways:
@@ -103,6 +128,12 @@ Spark Researcher tries to stay in the middle:
 - `advisory`: prepare small evidence-backed AI briefs
 - `self-edit`: prepare code changes in a copied workspace for review
 - `chips`: plug in domain-specific logic without stuffing it into the core
+
+Plain-English translations:
+
+- `advisory`: "give the model only the few local facts that matter"
+- `chips`: "keep domain-specific logic in a separate module or repo"
+- `collective`: "export portable lessons that another Spark-style system can ingest"
 
 ## Self-Edit Flow
 
@@ -139,6 +170,23 @@ spark-researcher self-edit propose --prompt "simplify the trainer status output"
 
 The bundled config points at [`examples/toy-project/`](examples/toy-project/README.md), so you can run the core loop without setting up a separate project first.
 
+## What A Metric Can Be
+
+A metric is just the score Spark uses to judge whether one trial was better, worse, or unchanged.
+
+Real examples:
+
+- test pass rate
+- benchmark accuracy
+- error count
+- latency
+- conversion score
+- content engagement quality
+- answer quality score from a fixed evaluator
+- trading or strategy score
+
+The important part is not the exact metric. The important part is that the system keeps judging trials by the same standard.
+
 ## A Simple Mental Model
 
 ```text
@@ -146,6 +194,18 @@ config -> run -> score -> ledger -> memory -> next decision
 ```
 
 If you only remember one thing, remember that Spark is trying to make this loop honest and repeatable.
+
+## What You Actually Get
+
+In real use, Spark gives you things you can inspect:
+
+- a ledger of what was tried and what happened
+- saved memory documents with lessons and evidence
+- self-edit proposal packets with diffs, logs, and request context
+- generated watchtower pages in Obsidian
+- portable capsule exports for collective sharing
+
+So the output is not just "the AI said this." You get a paper trail.
 
 ## What Gets Written
 
@@ -188,5 +248,13 @@ Spark Researcher is intentionally opinionated:
 - it prefers small loops over giant orchestration
 - it prefers explicit apply over auto-merge magic
 - it prefers local truth over vague "agent memory"
+
+## What It Is Not
+
+- not a chatbot replacement
+- not a full workflow orchestration platform
+- not an invisible autonomous coding swarm
+- not a magic domain expert with no benchmark or evidence
+- not a system that should silently edit production code without review
 
 For the full documentation map, use [`docs/README.md`](docs/README.md).

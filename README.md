@@ -13,6 +13,18 @@ In plain English:
 
 It is built for people who want something more disciplined than "ask an AI and hope", but much lighter than a full platform.
 
+It started as a blend of two ideas:
+
+- the compactness of Karpathy's `autoresearch`
+- Spark Intelligence style recursive loop systems for building real mastery in any domain
+
+From there, it grew a few extra systems around that core:
+
+- domain chips, so domain-specific logic can live outside the kernel
+- a collective intelligence network, so useful lessons can be shared as portable capsules
+- artifact and memory systems that stay intelligent, inspectable, and human-readable
+- bounded self-editing, advisory, and review flows that keep the system useful without turning it into a black box
+
 ## What It Feels Like
 
 Think of it as a careful lab assistant for a project.
@@ -52,8 +64,14 @@ Spark can suggest the next trial
 
 - improving prompts, scripts, or pipelines with a fixed score
 - testing small project changes in a repeatable way
-- keeping a local memory of lessons instead of losing them in chat history
+- building a system that gets better at a domain over time instead of starting from scratch every session
+- organizing research, lessons, and evidence in a way a human can still read on disk
+- creating local "memory" that is more useful than chat history but less heavy than a database platform
+- keeping an audit trail of what was tried, what failed, and what worked
 - generating reviewable self-edit proposals
+- running bounded recursive improvement loops without giving up human control
+- building domain-specific research or evaluation systems through `domain-chip-*` repos
+- sharing portable lessons into a collective intelligence network through capsule exports
 - building domain-specific "chips" without bloating the core repo
 
 ## Why It Exists

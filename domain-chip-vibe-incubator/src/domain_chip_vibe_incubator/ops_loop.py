@@ -87,6 +87,16 @@ def _mean(values: list[float], default: float = 0.0) -> float:
     return sum(values) / len(values) if values else default
 
 
+def _num(value: Any, default: float) -> float:
+    """Safe numeric coercion that treats 0 as a valid value (not falsy)."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _trust_score(status: str) -> float:
     return {"green": 0.92, "amber": 0.65, "red": 0.28}.get(status, 0.45)
 
@@ -1195,17 +1205,17 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     active_count = len(ventures)
     portfolio_cap = max(1, int(policy.get("portfolio_cap", "3") or 3))
     overload = max(0, active_count - portfolio_cap)
-    update_freshness = _mean([max(0.0, 1.0 - (float(item.get("weekly_update_freshness_days", 7) or 7) / 7.0)) for item in ventures], 0.35)
-    review_freshness = _mean([max(0.0, 1.0 - (float(item.get("last_review_days", 7) or 7) / 7.0)) for item in ventures], 0.35)
-    automation_base = _mean([float(item.get("automation_coverage", 0.45) or 0.45) for item in ventures], 0.42)
+    update_freshness = _mean([max(0.0, 1.0 - (_num(item.get("weekly_update_freshness_days"), 7.0) / 7.0)) for item in ventures], 0.35)
+    review_freshness = _mean([max(0.0, 1.0 - (_num(item.get("last_review_days"), 7.0) / 7.0)) for item in ventures], 0.35)
+    automation_base = _mean([_num(item.get("automation_coverage"), 0.45) for item in ventures], 0.42)
     validation_base = _mean(
         [
             min(
                 1.0,
-                (float(item.get("customer_conversations_this_week", 0) or 0) / 4.0)
-                + (float(item.get("paid_signals_this_week", 0) or 0) * 0.2)
-                + (min(5.0, float(item.get("open_pipeline_count", 0) or 0)) * 0.05)
-                + (min(3.0, float(item.get("willingness_signal_count", 0) or 0)) * 0.08),
+                (_num(item.get("customer_conversations_this_week"), 0.0) / 4.0)
+                + (_num(item.get("paid_signals_this_week"), 0.0) * 0.2)
+                + (min(5.0, _num(item.get("open_pipeline_count"), 0.0)) * 0.05)
+                + (min(3.0, _num(item.get("willingness_signal_count"), 0.0)) * 0.08),
             )
             for item in ventures
         ],
@@ -1216,9 +1226,9 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
         [
             min(
                 1.0,
-                (min(5.0, float(item.get("reuse_assets_count", 0) or 0)) / 5.0) * 0.45
-                + (min(3.0, float(item.get("portfolio_retrospective_count", 0) or 0)) / 3.0) * 0.25
-                + (min(2.0, float(item.get("promoted_playbook_count", 0) or 0)) / 2.0) * 0.30,
+                (min(5.0, _num(item.get("reuse_assets_count"), 0.0)) / 5.0) * 0.45
+                + (min(3.0, _num(item.get("portfolio_retrospective_count"), 0.0)) / 3.0) * 0.25
+                + (min(2.0, _num(item.get("promoted_playbook_count"), 0.0)) / 2.0) * 0.30,
             )
             for item in ventures
         ],
@@ -1226,7 +1236,7 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     )
     queue_penalty = min(0.25, (len(queues.get("build", [])) + len(queues.get("validation", []))) * 0.015)
     focus_base = max(0.0, 0.72 - overload * 0.17 - queue_penalty)
-    founder_latency = _mean([max(0.0, 1.0 - (float(item.get("founder_update_latency_hours", 72) or 72) / 72.0)) for item in ventures], 0.4)
+    founder_latency = _mean([max(0.0, 1.0 - (_num(item.get("founder_update_latency_hours"), 72.0) / 72.0)) for item in ventures], 0.4)
     adjusted = _apply_policy(
         {
             "focus": focus_base,

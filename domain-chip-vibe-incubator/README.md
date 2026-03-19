@@ -128,6 +128,32 @@ The dashboard compiles a frontend snapshot from `artifacts/incubator_os/*` into:
 
 The visible product language is `Vibe Vibe`, while the runtime chip paths still use the legacy `vibe-incubator` folder/package name.
 
+## API Server
+
+A live API boundary between the dashboard and the chip artifacts.
+
+```powershell
+python domain-chip-vibe-incubator/src/domain_chip_vibe_incubator/api.py
+```
+
+Serves on `http://127.0.0.1:4177` by default (`VIBE_API_PORT` env override).
+
+Read endpoints:
+
+- `GET /api/health` — server health check
+- `GET /api/status` — incubator status snapshot (ventures, batches, tick)
+- `GET /api/dashboard` — full dashboard data payload (mirrors the static build)
+
+Write endpoints:
+
+- `POST /api/admissions-review` — action an application (`invite`, `waitlist`, `reject`)
+- `POST /api/build-request` — log or update a build request
+- `POST /api/weekly-update` — capture a founder weekly update
+- `POST /api/kpi-snapshot` — record venture KPIs
+
+The Vite dev server proxies `/api/*` requests to the API server when running `npm run dev`.
+Zero external dependencies — uses Python stdlib `http.server`.
+
 The chip should only earn stronger trust when it proves:
 
 - faster launch cycles without hidden chaos

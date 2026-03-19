@@ -587,15 +587,35 @@ def _handle_kpi_snapshot(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
         venture = _venture(state, str(args.venture_id))
+
+        # compute revenue trend from previous snapshot
+        previous_revenue = float(venture.get("weekly_revenue") or 0)
+        current_revenue = float(args.weekly_revenue)
+        if previous_revenue > 0:
+            revenue_trend = round((current_revenue - previous_revenue) / previous_revenue, 4)
+        elif current_revenue > 0:
+            revenue_trend = 1.0  # first revenue ever
+        else:
+            revenue_trend = 0.0
+
+        # retention signal: returning / (returning + churned), default 0
+        returning = int(args.returning_customers)
+        churned = int(args.churned_customers)
+        retention_signal = round(returning / max(1, returning + churned), 4) if (returning + churned) > 0 else 0.0
+
         snapshot = {
             "venture_id": venture["venture_id"],
             "stage": str(args.stage or venture.get("stage") or ""),
             "customer_conversations_this_week": int(args.customer_conversations),
             "paid_signals_this_week": int(args.paid_signals),
-            "weekly_revenue": float(args.weekly_revenue),
+            "weekly_revenue": current_revenue,
             "pipeline_count": int(args.pipeline_count),
             "active_users": int(args.active_users),
             "automation_coverage": float(args.automation_coverage),
+            "returning_customers": returning,
+            "churned_customers": churned,
+            "revenue_trend": revenue_trend,
+            "retention_signal": retention_signal,
             "note": str(args.note or ""),
         }
         venture["stage"] = snapshot["stage"]
@@ -605,6 +625,10 @@ def _handle_kpi_snapshot(args: argparse.Namespace) -> None:
         venture["weekly_revenue"] = snapshot["weekly_revenue"]
         venture["pipeline_count"] = snapshot["pipeline_count"]
         venture["active_users"] = snapshot["active_users"]
+        venture["returning_customers"] = returning
+        venture["churned_customers"] = churned
+        venture["revenue_trend"] = revenue_trend
+        venture["retention_signal"] = retention_signal
         venture["weekly_update_freshness_days"] = 0
         save_state(args.runtime_root, state)
         event = append_log(args.runtime_root, "kpi_snapshots", snapshot)
@@ -1241,6 +1265,8 @@ def build_parser() -> argparse.ArgumentParser:
     kpi.add_argument("--pipeline-count", type=int, default=0)
     kpi.add_argument("--active-users", type=int, default=0)
     kpi.add_argument("--automation-coverage", type=float, default=0.0)
+    kpi.add_argument("--returning-customers", type=int, default=0)
+    kpi.add_argument("--churned-customers", type=int, default=0)
     kpi.add_argument("--note")
 
     age = sub.add_parser("age")

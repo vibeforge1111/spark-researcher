@@ -1375,6 +1375,45 @@ def _score_state(state: dict[str, Any], policy: dict[str, str]) -> dict[str, Any
     }
 
 
+def _health_alerts(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Detect ventures showing death signals and return alerts."""
+    alerts: list[dict[str, Any]] = []
+    for v in state.get("ventures", []):
+        if not isinstance(v, dict) or v.get("status") != "active":
+            continue
+        vid = str(v.get("venture_id", ""))
+        # Revenue declining
+        trend = _num(v.get("revenue_trend"), 0.0)
+        if trend < -0.15:
+            alerts.append({"venture_id": vid, "alert": "revenue_declining", "severity": "warning",
+                           "detail": f"Revenue dropped {abs(trend)*100:.0f}% week-over-week"})
+        if trend < -0.4:
+            alerts.append({"venture_id": vid, "alert": "revenue_collapse", "severity": "critical",
+                           "detail": f"Revenue dropped {abs(trend)*100:.0f}% — consider exit review"})
+        # Zero retention
+        retention = _num(v.get("retention_signal"), -1.0)
+        if 0 <= retention < 0.2:
+            alerts.append({"venture_id": vid, "alert": "low_retention", "severity": "critical",
+                           "detail": f"Retention signal {retention:.0%} — users not coming back"})
+        # Stale updates
+        freshness = _num(v.get("weekly_update_freshness_days"), 0.0)
+        if freshness >= 14:
+            alerts.append({"venture_id": vid, "alert": "stale_updates", "severity": "warning",
+                           "detail": f"No update in {int(freshness)} days — venture may be abandoned"})
+        # No conversations in validation stage
+        convos = _num(v.get("customer_conversations_this_week"), 0.0)
+        stage = str(v.get("stage", ""))
+        if stage in ("validation", "growth") and convos == 0:
+            alerts.append({"venture_id": vid, "alert": "no_customer_contact", "severity": "warning",
+                           "detail": f"Zero conversations this week in {stage} stage"})
+        # Trust review red
+        trust = str(v.get("trust_review_status", ""))
+        if trust == "red":
+            alerts.append({"venture_id": vid, "alert": "trust_red", "severity": "critical",
+                           "detail": "Trust review status is RED — blocking issue"})
+    return alerts
+
+
 def _latest_tick(runtime_root: str) -> dict[str, Any]:
     path = _path(runtime_root, "latest_tick.json")
     if not path.exists():
@@ -1402,6 +1441,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     trust_capital = _trust_capital_snapshot(runtime_root, state)
     portfolio_learning = _portfolio_learning_snapshot(runtime_root, state)
     metrics = _score_state(state, effective_policy)
+    alerts = _health_alerts(state)
     office_hours = _build_office_hours_packets(state, priorities)
     decisions = _build_decision_packets(state, priorities)
     venture_tasks = _build_venture_task_packets(execution, customer_gtm, trust_capital, portfolio_learning)
@@ -1434,6 +1474,9 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "blocking_trust_count": int(trust_capital.get("blocking_trust_count", 0) or 0),
         "promoted_playbook_count": int(portfolio_learning.get("promoted_playbook_count", 0) or 0),
         "repeated_failure_count": int(portfolio_learning.get("repeated_failure_count", 0) or 0),
+        "health_alerts": alerts,
+        "critical_alert_count": sum(1 for a in alerts if a.get("severity") == "critical"),
+        "warning_alert_count": sum(1 for a in alerts if a.get("severity") == "warning"),
     }
     _write_json(_path(runtime_root, "latest_tick.json"), tick)
     _write_json(_path(runtime_root, "queue_snapshot.json"), queue_snapshot)

@@ -158,6 +158,18 @@ def _normalize_state(state: dict[str, Any]) -> dict[str, Any]:
                 venture_ids.append(text)
         founder["venture_ids"] = venture_ids
     state["founders"] = founders
+    # Normalize batches
+    batches = [item for item in state.get("batches", []) if isinstance(item, dict)]
+    deduped_batches: list[dict[str, Any]] = []
+    seen_batches: set[str] = set()
+    for item in batches:
+        batch_id = str(item.get("batch_id") or "").strip()
+        if not batch_id or batch_id in seen_batches:
+            continue
+        seen_batches.add(batch_id)
+        item["venture_ids"] = [vid for vid in item.get("venture_ids", []) if vid in seen_ventures]
+        deduped_batches.append(item)
+    state["batches"] = deduped_batches
     return state
 
 
@@ -247,7 +259,7 @@ def _bootstrap_state(runtime_root: str) -> dict[str, Any]:
         "program": {
             "name": "Vibe Incubator",
             "operator_mode": "solo_plus_agents",
-            "micro_batch_style": "rolling",
+            "batch_style": "cohort",
             "active_portfolio_cap": 3,
         },
         "founders": [
@@ -1070,6 +1082,41 @@ def _policy(mutations: dict[str, str]) -> dict[str, str]:
     return policy
 
 
+def _batch_snapshot(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build a snapshot of all batches with their venture health."""
+    ventures_by_id = {str(v.get("venture_id")): v for v in state.get("ventures", []) if isinstance(v, dict)}
+    snapshots: list[dict[str, Any]] = []
+    for batch in state.get("batches", []):
+        if not isinstance(batch, dict):
+            continue
+        batch_id = str(batch.get("batch_id") or "")
+        venture_ids = batch.get("venture_ids", [])
+        batch_ventures = [ventures_by_id[vid] for vid in venture_ids if vid in ventures_by_id]
+        active = [v for v in batch_ventures if str(v.get("status") or "") == "active"]
+        snapshots.append({
+            "batch_id": batch_id,
+            "label": str(batch.get("label") or batch_id),
+            "status": str(batch.get("status") or "forming"),
+            "sprint_week": int(batch.get("sprint_week", 0) or 0),
+            "duration_weeks": int(batch.get("duration_weeks", 6) or 6),
+            "venture_count": len(venture_ids),
+            "active_venture_count": len(active),
+            "mean_automation": _mean([_num(v.get("automation_coverage"), 0.45) for v in active], 0.0),
+            "mean_paid_signals": _mean([_num(v.get("paid_signals_this_week"), 0.0) for v in active], 0.0),
+            "total_weekly_revenue": sum(_num(v.get("weekly_revenue"), 0.0) for v in active),
+            "ventures": [
+                {
+                    "venture_id": v["venture_id"],
+                    "stage": v.get("stage"),
+                    "bottleneck": v.get("bottleneck"),
+                    "paid_signals_this_week": _num(v.get("paid_signals_this_week"), 0),
+                }
+                for v in batch_ventures
+            ],
+        })
+    return snapshots
+
+
 def _apply_policy(base: dict[str, float], policy: dict[str, str]) -> dict[str, float]:
     adjusted = dict(base)
     for key, value in policy.items():
@@ -1361,6 +1408,8 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     _write_json(_path(runtime_root, "portfolio_failure_registry.json"), portfolio_learning.get("repeated_failures", []))
     _write_json(_path(runtime_root, "reusable_asset_registry.json"), portfolio_learning.get("reusable_assets", []))
     _write_json(_path(runtime_root, "portfolio_playbook_packets.json"), portfolio_learning.get("playbook_packets", []))
+    batch_snapshots = _batch_snapshot(state)
+    _write_json(_path(runtime_root, "batch_snapshot.json"), batch_snapshots)
     return {
         "state": state,
         "metrics": metrics,
@@ -1374,6 +1423,7 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
         "customer_gtm": customer_gtm,
         "trust_capital": trust_capital,
         "portfolio_learning": portfolio_learning,
+        "batches": batch_snapshots,
     }
 
 

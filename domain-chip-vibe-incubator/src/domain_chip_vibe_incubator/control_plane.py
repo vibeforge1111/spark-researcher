@@ -211,6 +211,7 @@ def _status_payload(runtime_root: str) -> dict[str, Any]:
             for item in ventures
             if str(item.get("status") or "") not in {"archived", "stopped"}
         ],
+        "batches": refreshed.get("batches", []),
         "latest_tick": {
             "generated_at": tick.get("generated_at"),
             "policy": tick.get("policy", {}),
@@ -851,6 +852,82 @@ def _handle_reusable_asset(args: argparse.Namespace) -> None:
     )
 
 
+def _batch(state: dict[str, Any], batch_id: str) -> dict[str, Any]:
+    for item in state.get("batches", []):
+        if isinstance(item, dict) and str(item.get("batch_id") or "") == batch_id:
+            return item
+    raise RuntimeError(f"Unknown batch_id: {batch_id}")
+
+
+def _handle_batch_create(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        batch_id = str(args.batch_id)
+        if any(str(b.get("batch_id") or "") == batch_id for b in state.get("batches", []) if isinstance(b, dict)):
+            raise RuntimeError(f"batch_id already exists: {batch_id}")
+        batch = {
+            "batch_id": batch_id,
+            "label": str(args.label),
+            "status": "forming",
+            "sprint_week": 0,
+            "duration_weeks": int(args.duration_weeks),
+            "venture_ids": [],
+            "created_at": __import__("datetime").datetime.now(__import__("datetime").UTC).replace(microsecond=0).isoformat(),
+        }
+        state.setdefault("batches", []).append(batch)
+        # Update program batch style
+        program = state.setdefault("program", {})
+        program["batch_style"] = "cohort"
+        save_state(args.runtime_root, state)
+        event = append_log(args.runtime_root, "batches", {"batch_id": batch_id, "action": "create", "label": batch["label"], "note": str(args.note or "")})
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    _print({"runtime_root": args.runtime_root, "batch": batch, "batch_event": event, "latest_tick": refreshed["tick"]})
+
+
+def _handle_batch_admit(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        batch = _batch(state, str(args.batch_id))
+        venture = _venture(state, str(args.venture_id))
+        venture_id = str(venture["venture_id"])
+        if venture_id not in batch.get("venture_ids", []):
+            batch.setdefault("venture_ids", []).append(venture_id)
+        venture["batch_id"] = str(args.batch_id)
+        if batch["status"] == "forming":
+            batch["status"] = "active"
+            batch["sprint_week"] = 1
+        save_state(args.runtime_root, state)
+        event = append_log(args.runtime_root, "batches", {"batch_id": str(args.batch_id), "action": "admit", "venture_id": venture_id, "note": str(args.note or "")})
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_batch = _batch(refreshed["state"], str(args.batch_id))
+    _print({"runtime_root": args.runtime_root, "batch": refreshed_batch, "venture": _venture(refreshed["state"], venture_id), "batch_event": event, "latest_tick": refreshed["tick"]})
+
+
+def _handle_batch_status(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    batches = refreshed.get("batches", [])
+    if args.batch_id:
+        batches = [b for b in batches if b.get("batch_id") == str(args.batch_id)]
+    _print({"runtime_root": args.runtime_root, "batches": batches, "latest_tick": refreshed["tick"]})
+
+
+def _handle_batch_advance(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        batch = _batch(state, str(args.batch_id))
+        current_week = int(batch.get("sprint_week", 0) or 0)
+        duration = int(batch.get("duration_weeks", 6) or 6)
+        batch["sprint_week"] = current_week + 1
+        if batch["sprint_week"] > duration:
+            batch["status"] = "graduated"
+        save_state(args.runtime_root, state)
+        event = append_log(args.runtime_root, "batches", {"batch_id": str(args.batch_id), "action": "advance", "sprint_week": batch["sprint_week"], "status": batch["status"], "note": str(args.note or "")})
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_batch = _batch(refreshed["state"], str(args.batch_id))
+    _print({"runtime_root": args.runtime_root, "batch": refreshed_batch, "batch_event": event, "latest_tick": refreshed["tick"]})
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -1080,6 +1157,25 @@ def build_parser() -> argparse.ArgumentParser:
     age.add_argument("--days", type=int, default=1)
     age.add_argument("--venture-id")
     age.add_argument("--note")
+
+    batch_create = sub.add_parser("batch-create")
+    batch_create.add_argument("--batch-id", required=True)
+    batch_create.add_argument("--label", required=True)
+    batch_create.add_argument("--duration-weeks", type=int, default=6)
+    batch_create.add_argument("--note")
+
+    batch_admit = sub.add_parser("batch-admit")
+    batch_admit.add_argument("--batch-id", required=True)
+    batch_admit.add_argument("--venture-id", required=True)
+    batch_admit.add_argument("--note")
+
+    batch_status = sub.add_parser("batch-status")
+    batch_status.add_argument("--batch-id")
+
+    batch_advance = sub.add_parser("batch-advance")
+    batch_advance.add_argument("--batch-id", required=True)
+    batch_advance.add_argument("--note")
+
     return parser
 
 
@@ -1136,6 +1232,18 @@ def main() -> None:
         return
     if args.action == "age":
         _handle_age(args)
+        return
+    if args.action == "batch-create":
+        _handle_batch_create(args)
+        return
+    if args.action == "batch-admit":
+        _handle_batch_admit(args)
+        return
+    if args.action == "batch-status":
+        _handle_batch_status(args)
+        return
+    if args.action == "batch-advance":
+        _handle_batch_advance(args)
         return
 
 

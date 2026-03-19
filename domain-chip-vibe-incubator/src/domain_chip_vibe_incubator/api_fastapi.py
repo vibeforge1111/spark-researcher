@@ -390,6 +390,63 @@ def venture_exit(body: VentureExitRequest, _=Depends(verify_token)):
 
 
 # ---------------------------------------------------------------------------
+# Scheduler & Events
+# ---------------------------------------------------------------------------
+
+_scheduler_instance = None
+
+
+class SchedulerStartRequest(BaseModel):
+    interval: int = Field(300, ge=10, le=86400, description="Tick interval in seconds")
+
+
+@app.get("/api/events")
+def get_events(
+    event_type: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    events = read_log(RUNTIME_ROOT, "events")
+    if event_type:
+        events = [e for e in events if e.get("event_type") == event_type]
+    events.sort(key=lambda e: e.get("timestamp") or e.get("created_at") or "", reverse=True)
+    return events[:limit]
+
+
+@app.get("/api/scheduler/status")
+def get_scheduler_status() -> dict[str, Any]:
+    global _scheduler_instance
+    if _scheduler_instance is None:
+        return {"running": False, "tick_count": 0, "last_tick_at": None}
+    return _scheduler_instance.status
+
+
+@app.post("/api/scheduler/start", dependencies=[Depends(verify_token)])
+async def start_scheduler(body: SchedulerStartRequest) -> dict[str, Any]:
+    global _scheduler_instance
+    if _scheduler_instance is not None and _scheduler_instance._running:
+        raise HTTPException(400, "Scheduler already running")
+
+    from .scheduler import IncubatorScheduler
+    import asyncio
+
+    _scheduler_instance = IncubatorScheduler(
+        runtime_root=RUNTIME_ROOT,
+        tick_interval_seconds=body.interval,
+    )
+    asyncio.create_task(_scheduler_instance.run())
+    return {"status": "started", "interval": body.interval}
+
+
+@app.post("/api/scheduler/stop", dependencies=[Depends(verify_token)])
+def stop_scheduler() -> dict[str, Any]:
+    global _scheduler_instance
+    if _scheduler_instance is None or not _scheduler_instance._running:
+        raise HTTPException(400, "Scheduler not running")
+    _scheduler_instance.stop()
+    return {"status": "stopping"}
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

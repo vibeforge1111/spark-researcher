@@ -9,6 +9,19 @@ description = "Spark domain chip for running a solo, agentic incubator for vibe-
 readme = "README.md"
 requires-python = ">=3.11"
 
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+notifications = ["aiohttp>=3.9"]
+
+[project.scripts]
+vibe-incubator-daemon = "domain_chip_vibe_incubator.scheduler:main_cli"
+vibe-incubator-api = "domain_chip_vibe_incubator.api_fastapi:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

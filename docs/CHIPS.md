@@ -29,21 +29,14 @@ spark-researcher chips validate
 
 The canonical schema lives at `schemas/spark-chip.schema.json`.
 
-The standard runtime validation flow for any chip is documented in `docs/CHIP_VALIDATION.md`.
+Use `docs/README.md` for the full chip-doc map.
 
-The standard memory and watchtower upgrade path used on the startup chip is documented in `docs/CHIP_MEMORY_ROLLOUT.md`.
+## Related Docs
 
-The reusable intelligence contract for turning one chip into a proving ground for other chips is documented in `docs/CHIP_INTELLIGENCE_CONTRACT.md`.
-
-The rollout sequence for source maps, research packets, real-world evals, and narrow inference optimizers is documented in `docs/CHIP_INTELLIGENCE_ROLLOUT.md`.
-
-The reusable research-packet shape for source-grounded chip intelligence is documented in `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`.
-
-The reusable chip tagging method for contradiction, factor, and other packet tags is documented in `docs/CHIP_TAGGING_RULESET.md`.
-
-The reusable DSPy method for narrow chip optimizers is documented in `docs/CHIP_DSPY_METHOD.md`.
-
-The reusable one-loop flywheel pattern for richer chips is documented in `docs/CHIP_ONE_LOOP_FLYWHEEL.md`.
+- validation: `docs/CHIP_VALIDATION.md`, `docs/CHECKLOOP.md`
+- rollout and operating model: `docs/CHIP_MEMORY_ROLLOUT.md`, `docs/CHIP_INTELLIGENCE_CONTRACT.md`, `docs/CHIP_INTELLIGENCE_ROLLOUT.md`, `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
+- packet and optimizer methods: `docs/CHIP_RESEARCH_PACKET_SCHEMA.md`, `docs/CHIP_TAGGING_RULESET.md`, `docs/CHIP_DSPY_METHOD.md`, `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
+- registry: `docs/CHIP_REGISTRY.md`
 
 For richer chips, keep source choice separate from source fetching:
 
@@ -196,4 +189,4 @@ Do not mix unrelated runtime residue or queue state into those commits unless yo
 
 ## Registry
 
-Current known chips are listed in `docs/CHIP_REGISTRY.md`.
+Current known chips are listed in `docs/CHIP_REGISTRY.md`. The broader documentation map lives in `docs/README.md`.

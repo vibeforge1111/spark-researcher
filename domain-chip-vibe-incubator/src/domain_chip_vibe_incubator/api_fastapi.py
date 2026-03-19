@@ -447,6 +447,88 @@ def stop_scheduler() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# LLM Agent Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/agents/status")
+def get_agents_status() -> dict[str, Any]:
+    """Return which LLM agents are available and last evaluation info."""
+    try:
+        from .llm_client import get_client
+        client = get_client()
+        llm_available = client.available
+    except Exception:
+        llm_available = False
+
+    agents_info = {
+        "llm_available": llm_available,
+        "agents": [
+            {"name": "VentureAnalystAgent", "type": "evaluation", "available": llm_available},
+            {"name": "ReviewAgent", "type": "review", "available": llm_available},
+            {"name": "AdmissionsAgent", "type": "admissions", "available": llm_available},
+            {"name": "BottleneckDiagnosticAgent", "type": "diagnostic", "available": llm_available},
+        ],
+    }
+    # Include last LLM results from scheduler if available
+    global _scheduler_instance
+    if _scheduler_instance is not None:
+        agents_info["last_llm_results"] = _scheduler_instance._last_llm_results
+    return agents_info
+
+
+@app.post("/api/evaluate/{venture_id}", dependencies=[Depends(verify_token)])
+async def evaluate_venture(venture_id: str) -> dict[str, Any]:
+    """Trigger on-demand LLM evaluation of a specific venture."""
+    try:
+        from .agents import VentureAnalystAgent
+    except ImportError:
+        raise HTTPException(501, "Agent module not available")
+
+    agent = VentureAnalystAgent()
+    if not agent.available:
+        raise HTTPException(503, "LLM not available — set ANTHROPIC_API_KEY")
+
+    state = load_state(RUNTIME_ROOT)
+    ventures = [v for v in state.get("ventures", []) if isinstance(v, dict) and str(v.get("venture_id", "")) == venture_id]
+    if not ventures:
+        raise HTTPException(404, f"Venture {venture_id} not found")
+
+    venture = ventures[0]
+    result = await agent.evaluate(venture)
+    if result is None:
+        raise HTTPException(502, "LLM evaluation failed")
+
+    # Persist the assessment
+    with ops_write_lock(RUNTIME_ROOT):
+        state = load_state(RUNTIME_ROOT)
+        for v in state.get("ventures", []):
+            if isinstance(v, dict) and str(v.get("venture_id", "")) == venture_id:
+                v["llm_assessment"] = {
+                    "scores": result.scores,
+                    "reasoning": result.reasoning,
+                    "recommendation": result.recommendation,
+                    "confidence": result.confidence,
+                    "evaluated_at": __import__("datetime").datetime.now(__import__("datetime").UTC).replace(microsecond=0).isoformat(),
+                }
+                break
+        save_state(RUNTIME_ROOT, state)
+
+    return {
+        "venture_id": venture_id,
+        "llm": {
+            "scores": result.scores,
+            "reasoning": result.reasoning,
+            "recommendation": result.recommendation,
+            "confidence": result.confidence,
+        },
+        "heuristic": {
+            "compound_score": venture.get("compound_score"),
+            "bottleneck": venture.get("bottleneck"),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

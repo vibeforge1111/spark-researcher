@@ -29,6 +29,7 @@ KPI_MISSING = "kpi.missing"
 EXPERIMENT_STALE = "experiment.stale"
 SCHEDULER_STARTED = "scheduler.started"
 SCHEDULER_STOPPED = "scheduler.stopped"
+AGENT_EVALUATION_COMPLETE = "agent.evaluation_complete"
 
 
 # ---------------------------------------------------------------------------

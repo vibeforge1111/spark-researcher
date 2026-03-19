@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .event_types import (
+    AGENT_EVALUATION_COMPLETE,
     ALERT_CRITICAL,
     ALERT_WARNING,
     APPLICATION_PENDING,
@@ -92,6 +93,8 @@ class IncubatorScheduler:
         self._last_tick_at: str | None = None
         self._last_age_at: float = 0.0
         self._last_weekly_at: str | None = None
+        self._llm_tick_cadence = int(os.environ.get("VIBE_LLM_TICK_CADENCE", "6"))
+        self._last_llm_results: dict[str, Any] = {}
 
         # Wire up persistent event logging
         self.bus.subscribe_all(lambda e: emit_event_log(self.runtime_root, e))
@@ -106,6 +109,8 @@ class IncubatorScheduler:
             "last_tick_at": self._last_tick_at,
             "tick_interval_seconds": self.tick_interval,
             "runtime_root": self.runtime_root,
+            "llm_tick_cadence": self._llm_tick_cadence,
+            "llm_last_results": self._last_llm_results,
         }
 
     async def run(self) -> None:
@@ -122,6 +127,7 @@ class IncubatorScheduler:
                 await self._tick()
                 await self._maybe_age_tick()
                 await self._maybe_weekly_tick()
+                await self._maybe_llm_tick()
                 await asyncio.sleep(self.tick_interval)
         except asyncio.CancelledError:
             log.info("Scheduler cancelled")
@@ -205,6 +211,48 @@ class IncubatorScheduler:
                 }))
         except Exception:
             log.exception("Weekly tick failed")
+
+    async def _maybe_llm_tick(self) -> None:
+        """Run LLM evaluation on active ventures every N ticks."""
+        if self._llm_tick_cadence <= 0 or self._tick_count % self._llm_tick_cadence != 0:
+            return
+
+        try:
+            from .agents import VentureAnalystAgent
+            agent = VentureAnalystAgent()
+            if not agent.available:
+                return
+        except Exception:
+            return  # anthropic not installed or other import error
+
+        log.info("Running LLM evaluation tick")
+        try:
+            state = load_state(self.runtime_root)
+            active = [v for v in state.get("ventures", []) if isinstance(v, dict) and v.get("status") == "active"]
+            for venture in active:
+                result = await agent.evaluate(venture)
+                if result is None:
+                    continue
+                vid = str(venture.get("venture_id", ""))
+                self._last_llm_results[vid] = {
+                    "scores": result.scores,
+                    "reasoning": result.reasoning,
+                    "recommendation": result.recommendation,
+                    "confidence": result.confidence,
+                    "evaluated_at": _now_iso(),
+                }
+                # Persist to venture state
+                venture["llm_assessment"] = self._last_llm_results[vid]
+                self.bus.publish(IncubatorEvent(AGENT_EVALUATION_COMPLETE, {
+                    "venture_id": vid,
+                    "recommendation": result.recommendation,
+                    "confidence": result.confidence,
+                }))
+
+            with ops_write_lock(self.runtime_root):
+                save_state(self.runtime_root, state)
+        except Exception:
+            log.exception("LLM evaluation tick failed")
 
     # -- event emission --
 

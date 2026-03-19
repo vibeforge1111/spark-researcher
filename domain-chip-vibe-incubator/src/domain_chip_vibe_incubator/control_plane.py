@@ -1019,6 +1019,52 @@ def _handle_token_readiness(args: argparse.Namespace) -> None:
     _print({"runtime_root": args.runtime_root, "token_readiness": checklist})
 
 
+def _handle_venture_exit(args: argparse.Namespace) -> None:
+    """Archive a venture with a mandatory post-mortem."""
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        venture["status"] = "archived"
+        venture["stage"] = "archived"
+        venture["exit_reason"] = str(args.reason)
+        venture["exit_lesson"] = str(args.lesson)
+        venture["exit_reusable_assets"] = str(args.reusable_assets or "")
+
+        # Auto-create a retrospective entry for the exit
+        retro_entry = {
+            "venture_id": venture["venture_id"],
+            "retrospective_id": f"exit-{venture['venture_id']}",
+            "scope": "shutdown",
+            "outcome": str(args.outcome),
+            "lesson": str(args.lesson),
+            "failure_mode": str(args.failure_mode or ""),
+            "reusable_assets": str(args.reusable_assets or ""),
+        }
+        append_log(args.runtime_root, "retrospectives", retro_entry)
+
+        exit_event = {
+            "venture_id": venture["venture_id"],
+            "reason": str(args.reason),
+            "outcome": str(args.outcome),
+            "lesson": str(args.lesson),
+            "failure_mode": str(args.failure_mode or ""),
+            "reusable_assets": str(args.reusable_assets or ""),
+            "final_revenue": float(venture.get("weekly_revenue") or 0),
+            "final_active_users": int(venture.get("active_users") or 0),
+        }
+        event = append_log(args.runtime_root, "venture_exits", exit_event)
+        save_state(args.runtime_root, state)
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+        refreshed_venture = _venture(refreshed["state"], venture["venture_id"])
+    _print({
+        "runtime_root": args.runtime_root,
+        "venture": refreshed_venture,
+        "exit_event": event,
+        "retrospective": retro_entry,
+        "latest_tick": refreshed["tick"],
+    })
+
+
 def _handle_governance_propose(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -1399,6 +1445,14 @@ def build_parser() -> argparse.ArgumentParser:
     governance_vote.add_argument("--weight", type=float, default=1.0)
     governance_vote.add_argument("--note")
 
+    venture_exit = sub.add_parser("venture-exit")
+    venture_exit.add_argument("--venture-id", required=True)
+    venture_exit.add_argument("--reason", required=True, help="Why is this venture exiting?")
+    venture_exit.add_argument("--outcome", choices=["win", "mixed", "loss", "blocked"], required=True)
+    venture_exit.add_argument("--lesson", required=True, help="Key lesson learned")
+    venture_exit.add_argument("--failure-mode", help="Primary failure mode if applicable")
+    venture_exit.add_argument("--reusable-assets", help="Comma-separated list of assets to preserve")
+
     governance_tally = sub.add_parser("governance-tally")
     governance_tally.add_argument("--quorum", type=float, default=1.0, help="Minimum total vote weight to resolve")
 
@@ -1479,6 +1533,9 @@ def main() -> None:
         return
     if args.action == "token-readiness":
         _handle_token_readiness(args)
+        return
+    if args.action == "venture-exit":
+        _handle_venture_exit(args)
         return
     if args.action == "governance-propose":
         _handle_governance_propose(args)

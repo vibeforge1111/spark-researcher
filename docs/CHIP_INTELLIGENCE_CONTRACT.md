@@ -4,6 +4,11 @@ Use this contract when you want a chip to become more intelligent without becomi
 
 The startup chip is the first proving ground. The goal is not to freeze startup assumptions into core. The goal is to define a portable pattern that other chips can reuse with their own domain sources, benchmarks, and real-world checks.
 
+Read this first when you are deciding which intelligence surfaces a serious chip should own.
+
+- if you need rollout order, read `docs/CHIP_INTELLIGENCE_ROLLOUT.md` next
+- if you need the governing pass structure, read `docs/CHIP_ONE_LOOP_FLYWHEEL.md` next
+
 ## Intent
 
 A serious chip should know:

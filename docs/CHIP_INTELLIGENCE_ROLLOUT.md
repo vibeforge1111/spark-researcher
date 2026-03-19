@@ -4,6 +4,11 @@ Use this after a chip already has the newer memory and watchtower model.
 
 The purpose is to move from "the chip can run" to "the chip is learning from the right external intelligence and proving value outside its own benchmark."
 
+Use this doc for sequencing.
+
+- read `docs/CHIP_INTELLIGENCE_CONTRACT.md` first if the chip surfaces are not settled yet
+- read this when the contract is accepted and you need an implementation order
+
 ## Rollout Order
 
 1. Add a source registry.

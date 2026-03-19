@@ -4,6 +4,11 @@ Use this guide when a chip has, or will have, a domain benchmark and needs to co
 
 This is a generic pattern.
 
+Use this only when a benchmark lane is real or imminent.
+
+- if the chip has no benchmark surface yet, skip this for now
+- if the chip already has a benchmark but promotion and memory are still ad hoc, start here
+
 The startup chip is the first concrete example, but the same structure should transfer to:
 
 - trading

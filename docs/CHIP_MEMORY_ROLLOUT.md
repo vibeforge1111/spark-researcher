@@ -4,6 +4,11 @@ Use this playbook when upgrading another domain chip to the newer Spark memory m
 
 This document captures the sequence used on the startup chip during the March 11-12, 2026 upgrade session.
 
+Use this before the richer intelligence rollout.
+
+- start here when a chip still has raw run-heavy memory or stale working memory
+- read `docs/CHIP_INTELLIGENCE_ROLLOUT.md` after this once the memory model is in place
+
 ## Goal
 
 Move a chip from:

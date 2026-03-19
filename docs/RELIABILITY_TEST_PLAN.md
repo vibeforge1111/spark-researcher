@@ -4,6 +4,12 @@ Use this guide when you want to assess whether Spark Researcher is behaving like
 
 This is more detailed than [CHECKLOOP](C:\Users\USER\Desktop\spark-researcher\docs\CHECKLOOP.md). `CHECKLOOP` proves the repo still runs. This plan checks whether the architecture is reliable one subsystem at a time.
 
+Use this plan when:
+
+- `CHECKLOOP` already passes and you want subsystem-level confidence
+- you are debugging honesty, retrieval, verifier, research, or watchtower behavior
+- you need a structured pass/warn/fail audit instead of a quick smoke test
+
 ## Test Goal
 
 Prove these claims, in order:

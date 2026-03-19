@@ -4,6 +4,10 @@ Use this guide when a chip has moved beyond simple evaluation hooks and now need
 
 This is the portable version of the richer startup-chip design.
 
+Use this doc when the chip already has meaningful sources, packets, benchmarks, or outer validation and now needs one governing pass structure.
+
+Minimal hook-only chips usually do not need this yet.
+
 The goal is:
 
 - one governing loop

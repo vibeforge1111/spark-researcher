@@ -2,6 +2,8 @@
 
 Spark Researcher can use external coding agents as proposal engines.
 
+For the operator-side propose/apply workflow, see `docs/SELF_EDITING.md`.
+
 ## Current State
 
 - built-in profile today: `codex-exec`

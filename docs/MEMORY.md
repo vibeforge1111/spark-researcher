@@ -6,8 +6,7 @@ Spark Researcher memory stays lightweight on purpose.
 
 - `local` is the default backend
 - `ruvector` is the recommended retrieval upgrade once the corpus grows
-- local Markdown memory stays canonical
-- local Markdown memory remains the source of truth
+- local Markdown memory is the canonical source of truth
 - Spark falls back to local search when RuVector is unavailable in the current shell
 - beliefs are promoted through a keepability gate instead of promoting every improved run
 

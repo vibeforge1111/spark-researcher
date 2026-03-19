@@ -21,7 +21,7 @@ Self editing is split into `propose` and `apply`.
 
 Use an external coding agent that can run with restrictive permissions. Spark Researcher gives you a transparent packet and a narrow apply path, but it does not pretend to be an operating-system sandbox.
 
-Repo-wide backend rules live in `AGENTS.md`. Backend integration expectations live in `docs/AGENT_BACKENDS.md`.
+Repo-wide backend rules live in `AGENTS.md`. Backend integration expectations live in `docs/AGENT_BACKENDS.md`. This page stays focused on the operator flow.
 
 ## Backend Profiles
 
@@ -37,7 +37,7 @@ Use the installed Codex CLI profile:
 spark-researcher self-edit propose --prompt "..." --backend-profile codex-exec
 ```
 
-Keep the built-in profile list small. Use another backend with an explicit command override unless it becomes stable enough to deserve first-class support:
+Use another backend with an explicit command override when you do not want the built-in profile:
 
 ```powershell
 spark-researcher self-edit propose --prompt "..." --backend-command claude --backend-command code --backend-command --print

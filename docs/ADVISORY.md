@@ -34,6 +34,8 @@ Advisory now also tracks packet stability:
 - if matching beliefs are only `provisional`, advisory is downgraded toward `partial` and told to surface uncertainty
 - active contradiction counts are carried forward as missing-evidence pressure instead of being hidden
 
+Belief status semantics live in `docs/BELIEFS.md`.
+
 Packet retrieval is intentionally asymmetric:
 
 - durable or provisional belief packets outrank evidence-only research outcome packets when both match

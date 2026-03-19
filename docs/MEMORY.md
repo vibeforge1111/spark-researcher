@@ -30,18 +30,9 @@ Spark promotes a run-derived belief only when one of these is true:
 - the same mutation signature improved more than once
 - the signature is the current best observed candidate for that command and has no regressed runs
 
-Spark then assigns a belief status:
+Belief status semantics live in `docs/BELIEFS.md`.
 
-- `durable`
-  - repeated support and no active contradiction with another promoted lesson on the same command
-- `provisional`
-  - promoted for local usefulness, but still contradicted or not yet replicated enough to count as settled memory
-
-This keeps operational residue and unresolved competing lessons out of durable memory.
-
-Advisory packet retrieval also uses that status: durable beliefs score above provisional ones, and contradictory beliefs are slightly down-weighted instead of being hidden.
-
-Research-oriented outcome docs can also appear in packet search as `research_outcome` entries, but only for the `research` command. These are evidence-only packet surfaces for discoverability, not promoted doctrine, and they rank below doctrine or belief packets when both match.
+Memory search prefers promoted belief docs over evidence-only `research_outcome` entries, and contradictory beliefs are down-weighted rather than hidden. `research_outcome` remains a discoverability surface from the `research` command, not promoted doctrine.
 
 ## RuVector
 

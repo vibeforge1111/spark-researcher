@@ -10,9 +10,9 @@ except ImportError:
     from cli import score_venture_candidate
 
 try:
-    from .ops_loop import append_log, default_runtime_root, load_state, ops_write_lock, read_log, refresh_ops_artifacts, save_state
+    from .ops_loop import append_log, default_runtime_root, load_state, ops_write_lock, promote_learning, read_log, refresh_ops_artifacts, save_state
 except ImportError:
-    from ops_loop import append_log, default_runtime_root, load_state, ops_write_lock, read_log, refresh_ops_artifacts, save_state
+    from ops_loop import append_log, default_runtime_root, load_state, ops_write_lock, promote_learning, read_log, refresh_ops_artifacts, save_state
 
 
 def _print(payload: dict[str, Any]) -> None:
@@ -928,6 +928,11 @@ def _handle_batch_advance(args: argparse.Namespace) -> None:
     _print({"runtime_root": args.runtime_root, "batch": refreshed_batch, "batch_event": event, "latest_tick": refreshed["tick"]})
 
 
+def _handle_promote_learning(args: argparse.Namespace) -> None:
+    summary = promote_learning(args.runtime_root)
+    _print({"runtime_root": args.runtime_root, "learning_promotion": summary})
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -1176,6 +1181,8 @@ def build_parser() -> argparse.ArgumentParser:
     batch_advance.add_argument("--batch-id", required=True)
     batch_advance.add_argument("--note")
 
+    sub.add_parser("promote-learning")
+
     return parser
 
 
@@ -1244,6 +1251,9 @@ def main() -> None:
         return
     if args.action == "batch-advance":
         _handle_batch_advance(args)
+        return
+    if args.action == "promote-learning":
+        _handle_promote_learning(args)
         return
 
 

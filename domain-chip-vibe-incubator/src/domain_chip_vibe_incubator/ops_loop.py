@@ -1427,6 +1427,89 @@ def refresh_ops_artifacts(runtime_root: str, policy: dict[str, str] | None = Non
     }
 
 
+def promote_learning(runtime_root: str) -> dict[str, Any]:
+    """Scan retrospectives and assets for promotion-eligible items.
+
+    Writes belief packets and trainer entries to artifacts/beliefs/
+    so the Spark summary can report belief_count > 0.
+    """
+    beliefs_dir = Path(runtime_root) / "artifacts" / "beliefs"
+    beliefs_dir.mkdir(parents=True, exist_ok=True)
+    trainer_dir = Path(runtime_root) / "artifacts" / "trainer"
+    trainer_dir.mkdir(parents=True, exist_ok=True)
+
+    retrospectives = _read_jsonl(log_path(runtime_root, "portfolio_retrospectives"))
+    reusable_assets = _read_jsonl(log_path(runtime_root, "reusable_assets"))
+
+    promoted_beliefs: list[dict[str, Any]] = []
+    promoted_trainers: list[dict[str, Any]] = []
+
+    # Promote retrospectives with promote_doctrine=true and evidence >= moderate
+    for retro in retrospectives:
+        if not retro.get("promote_doctrine"):
+            continue
+        strength = str(retro.get("evidence_strength") or "low")
+        if strength not in ("medium", "high"):
+            continue
+        claim = str(retro.get("doctrine_claim") or "").strip()
+        if not claim:
+            continue
+        belief_id = _slug(str(retro.get("retrospective_id") or "belief"))
+        belief = {
+            "belief_id": belief_id,
+            "belief_status": "candidate_doctrine",
+            "claim": claim,
+            "mechanism": str(retro.get("lesson") or ""),
+            "boundary": str(retro.get("boundary") or ""),
+            "evidence_strength": strength,
+            "source_venture_id": str(retro.get("venture_id") or ""),
+            "source_scope": str(retro.get("scope") or ""),
+            "promoted_at": _now_iso(),
+        }
+        belief_path = beliefs_dir / f"{belief_id}.json"
+        if not belief_path.exists():
+            _write_json(belief_path, belief)
+            promoted_beliefs.append(belief)
+
+    # Promote reusable assets with reused_by_count >= 2 as trainer entries
+    seen_assets: dict[str, dict[str, Any]] = {}
+    for asset in reusable_assets:
+        asset_id = str(asset.get("asset_id") or "")
+        if asset_id:
+            seen_assets[asset_id] = asset
+    for asset_id, asset in seen_assets.items():
+        if int(asset.get("reused_by_count", 0) or 0) < 2:
+            continue
+        trainer_id = _slug(asset_id)
+        trainer = {
+            "trainer_id": trainer_id,
+            "label": str(asset.get("label") or asset_id),
+            "kind": str(asset.get("kind") or "playbook"),
+            "reused_by_count": int(asset.get("reused_by_count", 0) or 0),
+            "source_venture_id": str(asset.get("venture_id") or ""),
+            "promoted_at": _now_iso(),
+        }
+        trainer_path = trainer_dir / f"{trainer_id}.json"
+        if not trainer_path.exists():
+            _write_json(trainer_path, trainer)
+            promoted_trainers.append(trainer)
+
+    # Count totals
+    belief_count = len(list(beliefs_dir.glob("*.json")))
+    trainer_count = len(list(trainer_dir.glob("*.json")))
+
+    summary = {
+        "belief_count": belief_count,
+        "trainer_count": trainer_count,
+        "newly_promoted_beliefs": len(promoted_beliefs),
+        "newly_promoted_trainers": len(promoted_trainers),
+        "promoted_beliefs": promoted_beliefs,
+        "promoted_trainers": promoted_trainers,
+    }
+    _write_json(_path(runtime_root, "learning_promotion_summary.json"), summary)
+    return summary
+
+
 def evaluate_ops(payload: dict[str, Any]) -> dict[str, Any]:
     runtime_root = str(payload.get("runtime_root") or "")
     mutations = {

@@ -1,32 +1,112 @@
 # Spark Researcher
 
-Spark Researcher is a small, review-first research loop for local projects.
+Spark Researcher is a small local system for improving a project step by step.
 
-It combines three ideas:
+In plain English:
 
-- Karpathy-style autoresearch with fixed evaluation
-- bounded Spark-style recursive improvement
-- file-first memory, watchtower output, and transparent self-edit packets
+- you tell it what command to run
+- it measures the result with a fixed score
+- it keeps a log of what happened
+- it saves useful lessons
+- it can suggest the next experiments
+- it can prepare code changes for review without auto-applying them
 
-The design target is simple: stay legible, keep the evaluator fixed, and preserve a visible artifact trail instead of hiding state in a heavier framework.
+It is built for people who want something more disciplined than "ask an AI and hope", but much lighter than a full platform.
 
-## What It Does
+## What It Feels Like
 
-- runs declared project commands from one small JSON config
-- evaluates candidates against a fixed metric and appends an immutable ledger
-- exports local Markdown memory and Obsidian watchtower pages
-- keeps self-editing proposal-first, with explicit human apply
-- supports external domain chips without moving domain logic into the core repo
-- supports advisory-backed model execution through lightweight command templates
+Think of it as a careful lab assistant for a project.
 
-## Core Rules
+- it runs tests or project commands
+- it records the outcome
+- it remembers what seems to work
+- it stays reviewable
 
-- fixed evaluator, mutable strategy
-- one mutation, one hypothesis
-- ledger first, narrative second
-- self-edit never auto-applies
-- mutable targets must be declared
-- the system works in copied workspaces, not in-place
+It is not a hidden agent swarm, not a giant framework, and not an auto-ship black box.
+
+## The Basic Flow
+
+```text
+You define a project
+        |
+        v
+Spark runs one command
+        |
+        v
+Spark reads one metric
+        |
+        v
+Spark writes the result to the ledger
+        |
+        v
+Spark updates memory and docs
+        |
+        v
+You review what happened
+        |
+        v
+Spark can suggest the next trial
+```
+
+## What You Can Use It For
+
+- improving prompts, scripts, or pipelines with a fixed score
+- testing small project changes in a repeatable way
+- keeping a local memory of lessons instead of losing them in chat history
+- generating reviewable self-edit proposals
+- building domain-specific "chips" without bloating the core repo
+
+## Why It Exists
+
+Most AI workflows fail in one of two ways:
+
+1. they are too loose, so nobody can tell what actually worked
+2. they are too heavy, so the system becomes harder to trust than the project itself
+
+Spark Researcher tries to stay in the middle:
+
+- simple enough to inspect
+- strict enough to learn from real results
+
+## Core Ideas
+
+- fixed evaluator, changing strategy
+- one experiment at a time
+- visible artifacts on disk
+- memory stays local and file-first
+- self-editing is proposal-first, never silent auto-apply
+
+## Main Pieces
+
+- `run`: run one declared project command
+- `loop`: run the current set of candidates
+- `autoloop`: run bounded rounds and suggest next trials
+- `memory`: save searchable local lessons
+- `advisory`: prepare small evidence-backed AI briefs
+- `self-edit`: prepare code changes in a copied workspace for review
+- `chips`: plug in domain-specific logic without stuffing it into the core
+
+## Self-Edit Flow
+
+```text
+You ask for a change
+        |
+        v
+Spark copies the repo to a workspace
+        |
+        v
+An external coding agent edits only that copy
+        |
+        v
+Spark saves diff + logs + request packet
+        |
+        v
+You review the proposal
+        |
+        +---- reject ----> nothing changes in the repo
+        |
+        \---- apply -----> Spark copies allowed files back
+```
 
 ## Quick Start
 
@@ -39,52 +119,56 @@ spark-researcher autoloop --command train
 spark-researcher self-edit propose --prompt "simplify the trainer status output"
 ```
 
-The bundled config targets [`examples/toy-project/`](examples/toy-project/README.md), so the core loop is runnable without extra setup.
+The bundled config points at [`examples/toy-project/`](examples/toy-project/README.md), so you can run the core loop without setting up a separate project first.
 
-## Documentation
+## A Simple Mental Model
 
-Use [`docs/README.md`](docs/README.md) as the canonical map.
+```text
+config -> run -> score -> ledger -> memory -> next decision
+```
 
-Recommended reading order:
+If you only remember one thing, remember that Spark is trying to make this loop honest and repeatable.
 
-1. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-2. [`docs/RULES.md`](docs/RULES.md)
-3. [`docs/CHECKLOOP.md`](docs/CHECKLOOP.md)
-4. the focused operator doc for the subsystem you are touching
+## What Gets Written
 
-High-signal operator docs:
+- `artifacts/`: logs, traces, memory exports, self-edit packets, and other generated output
+- `obsidian-vault/`: generated watchtower pages
+- `.autoresearch/capsules/`: portable capsule exports
 
-- [`docs/AUTOLOOP.md`](docs/AUTOLOOP.md)
-- [`docs/ADVISORY.md`](docs/ADVISORY.md)
-- [`docs/MEMORY.md`](docs/MEMORY.md)
-- [`docs/BELIEFS.md`](docs/BELIEFS.md)
-- [`docs/INTENT.md`](docs/INTENT.md)
-- [`docs/SELF_EDITING.md`](docs/SELF_EDITING.md)
-- [`docs/CHIPS.md`](docs/CHIPS.md)
+Nothing important is hidden behind a database by default.
 
-Repo and backend contracts:
+## Repo Layout
 
-- [`AGENTS.md`](AGENTS.md)
-- [`docs/AGENT_BACKENDS.md`](docs/AGENT_BACKENDS.md)
-- [`AUTORESEARCH.md`](AUTORESEARCH.md)
+- `src/spark_researcher/`: the runtime
+- `docs/`: operator docs and design docs
+- `examples/toy-project/`: runnable demo project
+- `domain-chip-*`: optional external or sibling domain chips
 
-## Layout
+## Where To Read Next
 
-- `src/spark_researcher/`: core runtime
-- `docs/`: operator and design docs
-- `examples/toy-project/`: runnable demo target
-- `artifacts/`: generated ledger, traces, memory, self-edit packets, and related runtime output
-- `obsidian-vault/`: generated watchtower view
-- `.autoresearch/capsules/`: collective-ready exports
-- `domain-chip-*`: external or sibling domain chips
+If you are new:
+
+1. [`docs/README.md`](docs/README.md)
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+3. [`docs/RULES.md`](docs/RULES.md)
+4. [`docs/CHECKLOOP.md`](docs/CHECKLOOP.md)
+
+If you want a specific area:
+
+- experiments and bounded automation: [`docs/AUTOLOOP.md`](docs/AUTOLOOP.md)
+- memory and saved lessons: [`docs/MEMORY.md`](docs/MEMORY.md)
+- evidence-backed AI calls: [`docs/ADVISORY.md`](docs/ADVISORY.md)
+- self-edit workflow: [`docs/SELF_EDITING.md`](docs/SELF_EDITING.md)
+- external coding backend contract: [`docs/AGENT_BACKENDS.md`](docs/AGENT_BACKENDS.md)
+- domain-chip system: [`docs/CHIPS.md`](docs/CHIPS.md)
 
 ## Boundaries
 
-Spark is meant to become more useful, not more theatrical.
+Spark Researcher is intentionally opinionated:
 
-- keep domain intelligence in chips when it does not belong in the kernel
-- keep durable memory local and file-first
-- keep provider execution lightweight and wrapper-based
-- keep self-editing reviewable and explicitly applied
+- it prefers reviewable files over hidden systems
+- it prefers small loops over giant orchestration
+- it prefers explicit apply over auto-merge magic
+- it prefers local truth over vague "agent memory"
 
-See [`docs/README.md`](docs/README.md) for the organized doc structure and where each topic now lives.
+For the full documentation map, use [`docs/README.md`](docs/README.md).

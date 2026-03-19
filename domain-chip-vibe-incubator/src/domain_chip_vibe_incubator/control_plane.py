@@ -1056,6 +1056,70 @@ def _handle_governance_vote(args: argparse.Namespace) -> None:
     _print({"runtime_root": args.runtime_root, "vote_event": event, "latest_tick": refreshed["tick"]})
 
 
+def _handle_governance_tally(args: argparse.Namespace) -> None:
+    """Tally votes on open proposals, resolve those that meet quorum."""
+    with ops_write_lock(args.runtime_root):
+        proposals = read_log(args.runtime_root, "governance_proposals")
+        votes = read_log(args.runtime_root, "governance_votes")
+        quorum = float(args.quorum)
+
+        # Build map: proposal_id → latest proposal record
+        open_proposals: dict[str, dict] = {}
+        for p in proposals:
+            pid = str(p.get("proposal_id", ""))
+            if pid:
+                open_proposals[pid] = p
+
+        # Tally votes per proposal
+        tallies: dict[str, dict] = {}
+        for v in votes:
+            pid = str(v.get("proposal_id", ""))
+            if pid not in tallies:
+                tallies[pid] = {"for": 0.0, "against": 0.0, "abstain": 0.0, "total": 0.0}
+            decision = str(v.get("decision", "abstain"))
+            weight = float(v.get("weight", 1.0))
+            if decision in tallies[pid]:
+                tallies[pid][decision] += weight
+            tallies[pid]["total"] += weight
+
+        resolved: list[dict] = []
+        for pid, proposal in open_proposals.items():
+            if str(proposal.get("status", "")) != "open":
+                continue
+            tally = tallies.get(pid, {"for": 0.0, "against": 0.0, "abstain": 0.0, "total": 0.0})
+            if tally["total"] < quorum:
+                continue  # not enough votes yet
+            outcome = "passed" if tally["for"] > tally["against"] else "rejected"
+            resolution = {
+                "proposal_id": pid,
+                "proposal_type": str(proposal.get("proposal_type", "")),
+                "venture_id": str(proposal.get("venture_id", "")),
+                "outcome": outcome,
+                "votes_for": tally["for"],
+                "votes_against": tally["against"],
+                "votes_abstain": tally["abstain"],
+                "quorum_met": tally["total"],
+            }
+            resolved.append(resolution)
+            append_log(args.runtime_root, "governance_resolutions", resolution)
+
+        # Update state with resolved governance counts
+        state = load_state(args.runtime_root)
+        passed_count = sum(1 for r in resolved if r["outcome"] == "passed")
+        state.setdefault("governance", {})
+        state["governance"]["total_resolved"] = int(state["governance"].get("total_resolved") or 0) + len(resolved)
+        state["governance"]["total_passed"] = int(state["governance"].get("total_passed") or 0) + passed_count
+        save_state(args.runtime_root, state)
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    _print({
+        "runtime_root": args.runtime_root,
+        "resolved_count": len(resolved),
+        "resolutions": resolved,
+        "governance": state["governance"],
+        "latest_tick": refreshed["tick"],
+    })
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -1335,6 +1399,9 @@ def build_parser() -> argparse.ArgumentParser:
     governance_vote.add_argument("--weight", type=float, default=1.0)
     governance_vote.add_argument("--note")
 
+    governance_tally = sub.add_parser("governance-tally")
+    governance_tally.add_argument("--quorum", type=float, default=1.0, help="Minimum total vote weight to resolve")
+
     return parser
 
 
@@ -1418,6 +1485,9 @@ def main() -> None:
         return
     if args.action == "governance-vote":
         _handle_governance_vote(args)
+        return
+    if args.action == "governance-tally":
+        _handle_governance_tally(args)
         return
 
 

@@ -933,6 +933,91 @@ def _handle_promote_learning(args: argparse.Namespace) -> None:
     _print({"runtime_root": args.runtime_root, "learning_promotion": summary})
 
 
+def _handle_log_contribution(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        venture = _venture(state, str(args.venture_id))
+        event = append_log(
+            args.runtime_root,
+            "contributions",
+            {
+                "venture_id": venture["venture_id"],
+                "contributor_id": str(args.contributor_id),
+                "quest_type": str(args.quest_type),
+                "evidence": str(args.evidence),
+                "genesis_credits": int(args.genesis_credits),
+                "status": str(args.status),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    _print({"runtime_root": args.runtime_root, "contribution_event": event, "latest_tick": refreshed["tick"]})
+
+
+def _token_readiness_checklist(runtime_root: str, venture_id: str) -> dict[str, Any]:
+    """Check token readiness gates for a venture."""
+    state = load_state(runtime_root)
+    venture = _venture(state, venture_id)
+    trust_reviews = [r for r in read_log(runtime_root, "trust_reviews") if r.get("venture_id") == venture_id]
+    governance_proposals = [p for p in read_log(runtime_root, "governance_proposals") if p.get("venture_id") == venture_id]
+    security_passed = any(r.get("scope") == "security" and r.get("status") == "green" for r in trust_reviews)
+    governance_approved = any(p.get("status") == "approved" and p.get("proposal_type") == "token_readiness" for p in governance_proposals)
+    has_revenue = float(venture.get("weekly_revenue", 0) or 0) > 0
+    has_paid_signals = int(venture.get("paid_signals_this_week", 0) or 0) > 0
+    checklist = {
+        "venture_id": venture_id,
+        "utility_demonstrated": has_revenue and has_paid_signals,
+        "security_review_passed": security_passed,
+        "governance_proposal_approved": governance_approved,
+        "community_threshold_met": int(venture.get("active_users", 0) or 0) >= 5,
+        "all_gates_passed": False,
+    }
+    checklist["all_gates_passed"] = all(checklist[k] for k in ("utility_demonstrated", "security_review_passed", "governance_proposal_approved", "community_threshold_met"))
+    return checklist
+
+
+def _handle_token_readiness(args: argparse.Namespace) -> None:
+    checklist = _token_readiness_checklist(args.runtime_root, str(args.venture_id))
+    _print({"runtime_root": args.runtime_root, "token_readiness": checklist})
+
+
+def _handle_governance_propose(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        state = load_state(args.runtime_root)
+        event = append_log(
+            args.runtime_root,
+            "governance_proposals",
+            {
+                "proposal_id": str(args.proposal_id),
+                "proposal_type": str(args.proposal_type),
+                "venture_id": str(args.venture_id or ""),
+                "description": str(args.description),
+                "status": "open",
+                "votes_for": 0,
+                "votes_against": 0,
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    _print({"runtime_root": args.runtime_root, "governance_event": event, "latest_tick": refreshed["tick"]})
+
+
+def _handle_governance_vote(args: argparse.Namespace) -> None:
+    with ops_write_lock(args.runtime_root):
+        event = append_log(
+            args.runtime_root,
+            "governance_votes",
+            {
+                "proposal_id": str(args.proposal_id),
+                "decision": str(args.decision),
+                "weight": float(args.weight),
+                "note": str(args.note or ""),
+            },
+        )
+        refreshed = refresh_ops_artifacts(args.runtime_root)
+    _print({"runtime_root": args.runtime_root, "vote_event": event, "latest_tick": refreshed["tick"]})
+
+
 def _handle_age(args: argparse.Namespace) -> None:
     with ops_write_lock(args.runtime_root):
         state = load_state(args.runtime_root)
@@ -1183,6 +1268,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("promote-learning")
 
+    contribution = sub.add_parser("log-contribution")
+    contribution.add_argument("--venture-id", required=True)
+    contribution.add_argument("--contributor-id", required=True)
+    contribution.add_argument("--quest-type", choices=["growth", "product", "research", "trust"], required=True)
+    contribution.add_argument("--evidence", required=True)
+    contribution.add_argument("--genesis-credits", type=int, default=1)
+    contribution.add_argument("--status", choices=["pending", "verified", "rejected"], default="pending")
+    contribution.add_argument("--note")
+
+    token_readiness = sub.add_parser("token-readiness")
+    token_readiness.add_argument("--venture-id", required=True)
+
+    governance_propose = sub.add_parser("governance-propose")
+    governance_propose.add_argument("--proposal-id", required=True)
+    governance_propose.add_argument("--proposal-type", choices=["token_readiness", "support_reserve", "curriculum", "contributor_reward", "treasury_support", "spotlight"], required=True)
+    governance_propose.add_argument("--venture-id")
+    governance_propose.add_argument("--description", required=True)
+    governance_propose.add_argument("--note")
+
+    governance_vote = sub.add_parser("governance-vote")
+    governance_vote.add_argument("--proposal-id", required=True)
+    governance_vote.add_argument("--decision", choices=["for", "against", "abstain"], required=True)
+    governance_vote.add_argument("--weight", type=float, default=1.0)
+    governance_vote.add_argument("--note")
+
     return parser
 
 
@@ -1254,6 +1364,18 @@ def main() -> None:
         return
     if args.action == "promote-learning":
         _handle_promote_learning(args)
+        return
+    if args.action == "log-contribution":
+        _handle_log_contribution(args)
+        return
+    if args.action == "token-readiness":
+        _handle_token_readiness(args)
+        return
+    if args.action == "governance-propose":
+        _handle_governance_propose(args)
+        return
+    if args.action == "governance-vote":
+        _handle_governance_vote(args)
         return
 
 

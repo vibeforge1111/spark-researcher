@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { api } from './api'
 import rawData from './generated/incubator-dashboard.json'
 
 type DashboardData = typeof rawData
@@ -222,6 +223,26 @@ function App() {
   const [activeCommand, setActiveCommand] = useState<NavCommand>('batches')
   const [selectedVentureId, setSelectedVentureId] = useState(data.ventures[0]?.venture_id ?? '')
   const [theme, setTheme] = useState<AppTheme>(initialTheme)
+  const [toast, setToast] = useState<{ message: string; tone: 'good' | 'warn' | 'info' } | null>(null)
+  const [busyAction, setBusyAction] = useState<string | null>(null)
+
+  const showToast = useCallback((message: string, tone: 'good' | 'warn' | 'info' = 'info') => {
+    setToast({ message, tone })
+    setTimeout(() => setToast(null), 4000)
+  }, [])
+
+  const handleAdmissionsReview = useCallback(async (applicationId: string, decision: string) => {
+    const key = `${applicationId}:${decision}`
+    setBusyAction(key)
+    try {
+      await api.admissionsReview({ application_id: applicationId, decision })
+      showToast(`${applicationId} → ${decision}`, 'good')
+    } catch (err) {
+      showToast(`Failed: ${err instanceof Error ? err.message : String(err)}`, 'warn')
+    } finally {
+      setBusyAction(null)
+    }
+  }, [showToast])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -353,7 +374,7 @@ function App() {
     apply: (
       <div className="view-stack">
         <ViewIntro id="apply">Applications are handled like operating packets, not essay submissions. The first-week plan matters more than pitch theatrics.</ViewIntro>
-        <section className="panel"><div className="panel-header"><h2>applications</h2><span className="panel-kicker">{data.scout.pending_count} pending</span></div><div className="stack-list">{data.scout.applications.map((application) => <div key={application.application_id} className="stack-card"><div className="stack-card-top"><strong>{application.label}</strong><span className="data-chip">{application.status}</span></div><span>{application.thesis_summary}</span><span>founder {application.founder_label} · score {application.incubator_compound_score}</span><div className="chip-row">{application.first_week_plan.map((step) => <span key={step} className="data-chip">{step}</span>)}</div></div>)}</div></section>
+        <section className="panel"><div className="panel-header"><h2>applications</h2><span className="panel-kicker">{data.scout.pending_count} pending</span></div><div className="stack-list">{data.scout.applications.map((application) => <div key={application.application_id} className="stack-card"><div className="stack-card-top"><strong>{application.label}</strong><span className="data-chip">{application.status}</span></div><span>{application.thesis_summary}</span><span>founder {application.founder_label} · score {application.incubator_compound_score}</span><div className="chip-row">{application.first_week_plan.map((step) => <span key={step} className="data-chip">{step}</span>)}</div>{application.status === 'pending' && (<div className="action-row">{(['invite', 'waitlist', 'reject'] as const).map((decision) => { const key = `${application.application_id}:${decision}`; return (<button key={decision} type="button" className={`action-btn action-btn-${decision}`} disabled={busyAction === key} onClick={() => handleAdmissionsReview(application.application_id, decision)}>{busyAction === key ? '...' : decision}</button>)})}</div>)}</div>)}</div></section>
       </div>
     ),
     operator: (
@@ -463,6 +484,7 @@ function App() {
         <span className="status-bar-item">queue {data.queueSnapshot.venture_task_count} tasks</span>
         <span className="status-bar-item status-bar-right">selected {selectedVenture.venture_id} | readiness {selectedVenture.tokenReadiness.overall}</span>
       </div>
+      {toast && <div className={`toast toast-${toast.tone}`} role="alert">{toast.message}</div>}
     </div>
   )
 }

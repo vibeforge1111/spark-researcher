@@ -20,6 +20,9 @@ Add `--force` if you want to replace an existing generated folder.
 - `src/replicated/Modules/GameConfig.lua`
 - `src/replicated/Modules/LoopDefinition.lua`
 - one stub service per declared system
+- `docs/STUDIO_SYNC.md`
+- `scripts/run_rojo_serve.ps1`
+- `scripts/run_rojo_serve.cmd`
 
 ## Current Scope
 

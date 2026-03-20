@@ -309,6 +309,71 @@ def _workspace_notes(brief: dict[str, Any]) -> str:
     )
 
 
+def _studio_sync_doc(brief: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"# {brief['game_title']} Studio Sync",
+            "",
+            "## Goal",
+            "",
+            "Start a local Rojo server and connect the generated project to Roblox Studio.",
+            "",
+            "## Steps",
+            "",
+            "1. Install Rojo if it is not already available on your machine.",
+            "2. Run `scripts/run_rojo_serve.ps1` from PowerShell.",
+            "3. Open Roblox Studio with the Rojo plugin enabled.",
+            "4. Connect Studio to `localhost:34872`.",
+            "5. Confirm the generated modules appear under ReplicatedStorage, ServerScriptService, StarterPlayerScripts, and Workspace.",
+            "",
+            "## First Manual Checks",
+            "",
+            "- `bootstrap.server.lua` loads without syntax errors",
+            "- `bootstrap.client.lua` prints the generated session goal",
+            "- each generated service module can be required cleanly",
+            "- the map and spawn path still need manual assembly",
+        ]
+    )
+
+
+def _run_rojo_ps1() -> str:
+    return "\n".join(
+        [
+            "param(",
+            "    [int]$Port = 34872",
+            ")",
+            "",
+            '$ProjectPath = Join-Path $PSScriptRoot "..\\default.project.json"',
+            "",
+            "if (-not (Get-Command rojo -ErrorAction SilentlyContinue)) {",
+            '    Write-Error "Rojo is not installed or not on PATH."',
+            "    exit 1",
+            "}",
+            "",
+            'Write-Host "Starting Rojo with project $ProjectPath on port $Port"',
+            "rojo serve $ProjectPath --port $Port",
+        ]
+    )
+
+
+def _run_rojo_cmd() -> str:
+    return "\n".join(
+        [
+            "@echo off",
+            "set PORT=%1",
+            "if \"%PORT%\"==\"\" set PORT=34872",
+            "where rojo >nul 2>nul",
+            "if errorlevel 1 (",
+            "  echo Rojo is not installed or not on PATH.",
+            "  exit /b 1",
+            ")",
+            "set PROJECT=%~dp0..\\default.project.json",
+            "echo Starting Rojo with project %PROJECT% on port %PORT%",
+            "rojo serve %PROJECT% --port %PORT%",
+        ]
+    )
+
+
 def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = False) -> dict[str, Any]:
     normalized = _normalize_brief(brief)
     destination = output_dir.resolve()
@@ -330,6 +395,9 @@ def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = F
     _write(destination / "src" / "server" / "bootstrap.server.lua", _server_bootstrap(normalized))
     _write(destination / "src" / "client" / "bootstrap.client.lua", _client_bootstrap(normalized))
     _write(destination / "src" / "workspace" / "README.md", _workspace_notes(normalized))
+    _write(destination / "docs" / "STUDIO_SYNC.md", _studio_sync_doc(normalized))
+    _write(destination / "scripts" / "run_rojo_serve.ps1", _run_rojo_ps1())
+    _write(destination / "scripts" / "run_rojo_serve.cmd", _run_rojo_cmd())
     for system in normalized["systems"]:
         _write(
             destination / "src" / "server" / "Services" / f"{system['service_name']}.lua",

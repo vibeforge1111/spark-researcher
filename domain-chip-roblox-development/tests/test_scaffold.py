@@ -34,6 +34,9 @@ def test_generate_project_writes_expected_files(tmp_path: Path) -> None:
     assert (output / "src" / "client" / "bootstrap.client.lua").exists()
     assert (output / "src" / "server" / "Services" / "CheckpointService.lua").exists()
     assert (output / "src" / "server" / "Services" / "HazardService.lua").exists()
+    assert (output / "docs" / "STUDIO_SYNC.md").exists()
+    assert (output / "scripts" / "run_rojo_serve.ps1").exists()
+    assert (output / "scripts" / "run_rojo_serve.cmd").exists()
 
     config = json.loads((output / "game.config.json").read_text(encoding="utf-8"))
     assert config["game_title"] == "Skyrail Obby"

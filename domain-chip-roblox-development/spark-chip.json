@@ -1,0 +1,101 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-roblox-development",
+  "domain": "roblox-development",
+  "version": "0.1.0",
+  "description": "Roblox game delivery chip for planning an end-to-end flywheel from brief to playable prototype, release, and live operations.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_roblox_development/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_roblox_development/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_roblox_development/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_roblox_development/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": false,
+    "allowed_mutations": {
+      "production_phase": [
+        "foundation",
+        "prototype",
+        "vertical_slice",
+        "launch_prep",
+        "live_ops"
+      ],
+      "automation_lane": [
+        "design_packets",
+        "repo_scaffold",
+        "studio_sync",
+        "playtest_telemetry",
+        "economy_tuning",
+        "live_service"
+      ],
+      "evidence_lane": [
+        "synthetic",
+        "bench",
+        "playtest",
+        "live"
+      ],
+      "game_genre": [
+        "obby",
+        "tycoon",
+        "simulator",
+        "battler",
+        "social_rp"
+      ],
+      "team_mode": [
+        "solo_dev",
+        "founder_plus_ai",
+        "micro_studio",
+        "design_partner"
+      ],
+      "build_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "build_theme"
+    ],
+    "field_patterns": {
+      "production_phase": "^(foundation|prototype|vertical_slice|launch_prep|live_ops)$",
+      "automation_lane": "^(design_packets|repo_scaffold|studio_sync|playtest_telemetry|economy_tuning|live_service)$",
+      "evidence_lane": "^(synthetic|bench|playtest|live)$",
+      "game_genre": "^(obby|tycoon|simulator|battler|social_rp)$",
+      "team_mode": "^(solo_dev|founder_plus_ai|micro_studio|design_partner)$",
+      "build_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "production_phase",
+      "automation_lane",
+      "evidence_lane"
+    ],
+    "prompt_hints": [
+      "Prefer the smallest end-to-end Roblox delivery lane that the current platform can honestly support.",
+      "Do not propose live-service or publish automation before Studio sync, playtest telemetry, and QA gates exist.",
+      "Treat prototype grounding and evidence quality as more important than ambitious genre scope."
+    ]
+  }
+}

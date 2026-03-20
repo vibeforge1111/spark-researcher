@@ -169,7 +169,7 @@ class TestEventLog:
 class TestSchedulerTick:
     def test_single_tick_produces_artifacts(self, runtime_root):
         scheduler = IncubatorScheduler(runtime_root=runtime_root, tick_interval_seconds=9999)
-        result = asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        result = asyncio.run(scheduler._tick())
 
         assert "tick" in result
         assert "metrics" in result
@@ -179,7 +179,7 @@ class TestSchedulerTick:
 
     def test_tick_stamps_last_tick_at_on_state(self, runtime_root):
         scheduler = IncubatorScheduler(runtime_root=runtime_root)
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
 
         state = load_state(runtime_root)
         assert "last_tick_at" in state
@@ -190,7 +190,7 @@ class TestSchedulerTick:
         received = []
         scheduler.bus.subscribe_all(lambda e: received.append(e))
 
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
 
         types = [e.event_type for e in received]
         assert TICK_COMPLETED in types
@@ -199,8 +199,13 @@ class TestSchedulerTick:
 
     def test_tick_idempotent(self, runtime_root):
         scheduler = IncubatorScheduler(runtime_root=runtime_root)
-        r1 = asyncio.get_event_loop().run_until_complete(scheduler._tick())
-        r2 = asyncio.get_event_loop().run_until_complete(scheduler._tick())
+
+        async def two_ticks():
+            r1 = await scheduler._tick()
+            r2 = await scheduler._tick()
+            return r1, r2
+
+        r1, r2 = asyncio.run(two_ticks())
 
         # Same state → same compound score
         score1 = r1["tick"]["metrics"]["incubator_compound_score"]
@@ -210,7 +215,7 @@ class TestSchedulerTick:
 
     def test_tick_events_persisted_to_log(self, runtime_root):
         scheduler = IncubatorScheduler(runtime_root=runtime_root)
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
 
         events = read_log(runtime_root, "events")
         assert len(events) > 0
@@ -229,7 +234,7 @@ class TestAgeTick:
 
         scheduler = IncubatorScheduler(runtime_root=runtime_root, age_interval_hours=0)
         # Force the age tick by setting last_age_at to 0 (default)
-        asyncio.get_event_loop().run_until_complete(scheduler._maybe_age_tick())
+        asyncio.run(scheduler._maybe_age_tick())
 
         state = load_state(runtime_root)
         assert state["ventures"][0]["weekly_update_freshness_days"] == original_freshness + 1
@@ -247,7 +252,7 @@ class TestAgeTick:
         save_state(runtime_root, state)
 
         scheduler = IncubatorScheduler(runtime_root=runtime_root, age_interval_hours=0)
-        asyncio.get_event_loop().run_until_complete(scheduler._maybe_age_tick())
+        asyncio.run(scheduler._maybe_age_tick())
 
         state = load_state(runtime_root)
         archived = [v for v in state["ventures"] if v["venture_id"] == "v-archived"][0]
@@ -269,7 +274,7 @@ class TestStaleVentureEvents:
         received = []
         scheduler.bus.subscribe(VENTURE_STALE, lambda e: received.append(e))
 
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
 
         assert len(received) == 1
         assert received[0].payload["venture_id"] == "v-alpha"
@@ -284,7 +289,7 @@ class TestStaleVentureEvents:
         received = []
         scheduler.bus.subscribe(REVIEW_NEEDED, lambda e: received.append(e))
 
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
 
         assert len(received) == 1
         assert received[0].payload["last_review_days"] == 20
@@ -305,7 +310,7 @@ class TestSchedulerStatus:
 
     def test_status_after_tick(self, runtime_root):
         scheduler = IncubatorScheduler(runtime_root=runtime_root)
-        asyncio.get_event_loop().run_until_complete(scheduler._tick())
+        asyncio.run(scheduler._tick())
         s = scheduler.status
         assert s["running"] is False  # not in run loop, just direct _tick()
         assert s["tick_count"] == 1

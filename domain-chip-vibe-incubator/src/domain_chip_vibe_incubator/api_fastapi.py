@@ -529,6 +529,142 @@ async def evaluate_venture(venture_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Notification Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/notifications")
+def get_notifications(limit: int = 50) -> list[dict[str, Any]]:
+    """Return recent notification history."""
+    records = read_log(RUNTIME_ROOT, "notifications")
+    records.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return records[:limit]
+
+
+@app.get("/api/notifications/channels")
+def get_notification_channels() -> dict[str, Any]:
+    """Return available notification channels and current routing rules."""
+    global _scheduler_instance
+    if _scheduler_instance is not None and _scheduler_instance._notification_router is not None:
+        router = _scheduler_instance._notification_router
+        return {
+            "channels": router.available_channels,
+            "rule_count": len(router.rules),
+            "rules": [
+                {"event_type": r.event_type, "channels": r.channels, "min_severity": r.min_severity}
+                for r in router.rules
+            ],
+        }
+    # Standalone check
+    try:
+        from .notification_router import NotificationRouter
+        router = NotificationRouter(RUNTIME_ROOT)
+        return {
+            "channels": router.available_channels,
+            "rule_count": len(router.rules),
+            "rules": [
+                {"event_type": r.event_type, "channels": r.channels, "min_severity": r.min_severity}
+                for r in router.rules
+            ],
+        }
+    except Exception:
+        return {"channels": [], "rule_count": 0, "rules": []}
+
+
+# ---------------------------------------------------------------------------
+# Enrichment Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/enrichment/status")
+def get_enrichment_status() -> dict[str, Any]:
+    """Return enrichment source availability and recent activity."""
+    try:
+        from .enrichment import VentureEnricher
+        enricher = VentureEnricher()
+        available = enricher.available
+        sources = enricher.source_names
+    except Exception:
+        available = False
+        sources = []
+
+    recent = read_log(RUNTIME_ROOT, "enrichment")
+    recent.sort(key=lambda r: r.get("enriched_at", ""), reverse=True)
+
+    return {
+        "available": available,
+        "sources": sources,
+        "recent_enrichments": recent[:10],
+    }
+
+
+@app.post("/api/enrichment/run", dependencies=[Depends(verify_token)])
+async def run_enrichment() -> dict[str, Any]:
+    """Trigger manual enrichment of all due ventures."""
+    try:
+        from .enrichment import VentureEnricher
+        enricher = VentureEnricher()
+    except ImportError:
+        raise HTTPException(501, "Enrichment module not available")
+
+    if not enricher.available:
+        raise HTTPException(503, "No enrichment sources configured")
+
+    records = await enricher.enrich_portfolio(RUNTIME_ROOT)
+    return {
+        "enriched_count": len(records),
+        "records": [r.to_dict() for r in records],
+    }
+
+
+@app.post("/api/enrichment/venture/{venture_id}", dependencies=[Depends(verify_token)])
+async def enrich_single_venture(venture_id: str) -> dict[str, Any]:
+    """Trigger enrichment for a specific venture."""
+    try:
+        from .enrichment import VentureEnricher
+        enricher = VentureEnricher()
+    except ImportError:
+        raise HTTPException(501, "Enrichment module not available")
+
+    if not enricher.available:
+        raise HTTPException(503, "No enrichment sources configured")
+
+    state = load_state(RUNTIME_ROOT)
+    ventures = [v for v in state.get("ventures", []) if isinstance(v, dict) and str(v.get("venture_id", "")) == venture_id]
+    if not ventures:
+        raise HTTPException(404, f"Venture {venture_id} not found")
+
+    record = await enricher.enrich_venture(ventures[0])
+    if record is None:
+        return {"venture_id": venture_id, "enriched": False, "reason": "No results from sources"}
+
+    # Persist
+    with ops_write_lock(RUNTIME_ROOT):
+        state = load_state(RUNTIME_ROOT)
+        for v in state.get("ventures", []):
+            if isinstance(v, dict) and str(v.get("venture_id", "")) == venture_id:
+                v["enrichment_data"] = record.to_dict()
+                break
+        save_state(RUNTIME_ROOT, state)
+
+    return {"venture_id": venture_id, "enriched": True, "record": record.to_dict()}
+
+
+class NotificationTestRequest(BaseModel):
+    channel: str = "console"
+
+
+@app.post("/api/notifications/test", dependencies=[Depends(verify_token)])
+async def test_notification(body: NotificationTestRequest) -> dict[str, Any]:
+    """Send a test notification to verify channel connectivity."""
+    try:
+        from .notification_router import NotificationRouter
+        router = NotificationRouter(RUNTIME_ROOT)
+        record = await router.send_test(body.channel)
+        return record.to_dict()
+    except Exception as exc:
+        raise HTTPException(500, f"Notification test failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

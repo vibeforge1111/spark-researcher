@@ -95,9 +95,24 @@ class IncubatorScheduler:
         self._last_weekly_at: str | None = None
         self._llm_tick_cadence = int(os.environ.get("VIBE_LLM_TICK_CADENCE", "6"))
         self._last_llm_results: dict[str, Any] = {}
+        self._enrichment_interval = int(os.environ.get("VIBE_ENRICHMENT_INTERVAL_HOURS", "6")) * 3600
+        self._last_enrichment_at: float = 0.0
 
         # Wire up persistent event logging
         self.bus.subscribe_all(lambda e: emit_event_log(self.runtime_root, e))
+
+        # Wire up notification router (optional — degrades gracefully)
+        self._notification_router = None
+        try:
+            from .notification_router import NotificationRouter
+            self._notification_router = NotificationRouter(self.runtime_root)
+            self._notification_router.wire(self.bus)
+            log.info(
+                "Notification router active  channels=%s",
+                self._notification_router.available_channels,
+            )
+        except Exception:
+            log.debug("Notification router not available")
 
     # -- public API --
 
@@ -128,6 +143,7 @@ class IncubatorScheduler:
                 await self._maybe_age_tick()
                 await self._maybe_weekly_tick()
                 await self._maybe_llm_tick()
+                await self._maybe_enrichment_tick()
                 await asyncio.sleep(self.tick_interval)
         except asyncio.CancelledError:
             log.info("Scheduler cancelled")
@@ -253,6 +269,29 @@ class IncubatorScheduler:
                 save_state(self.runtime_root, state)
         except Exception:
             log.exception("LLM evaluation tick failed")
+
+    async def _maybe_enrichment_tick(self) -> None:
+        """Run external data enrichment on a slower cadence."""
+        import time
+        now = time.monotonic()
+        if now - self._last_enrichment_at < self._enrichment_interval:
+            return
+
+        try:
+            from .enrichment import VentureEnricher
+            enricher = VentureEnricher()
+            if not enricher.available:
+                return
+        except Exception:
+            return
+
+        self._last_enrichment_at = now
+        log.info("Running enrichment tick  sources=%s", enricher.source_names)
+        try:
+            records = await enricher.enrich_portfolio(self.runtime_root)
+            log.info("Enrichment completed: %d ventures enriched", len(records))
+        except Exception:
+            log.exception("Enrichment tick failed")
 
     # -- event emission --
 

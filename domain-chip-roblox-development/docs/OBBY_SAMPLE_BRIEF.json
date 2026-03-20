@@ -1,0 +1,30 @@
+{
+  "core_loop": "Run through floating sky platforms, hit checkpoints, avoid hazards, and finish the course in one session.",
+  "game_slug": "skyrail-obby",
+  "game_title": "Skyrail Obby",
+  "genre": "obby",
+  "monetization": {
+    "primary": "cosmetics",
+    "secondary": "speed boost"
+  },
+  "session_goal": "Reach the finish portal in under five minutes.",
+  "systems": [
+    {
+      "description": "Save progress at glowing pads and respawn players there after failure.",
+      "name": "Checkpoint"
+    },
+    {
+      "description": "Reset the player when they touch lava or miss the platform route.",
+      "name": "Hazard"
+    },
+    {
+      "description": "Track run duration and show whether the player beat the target time.",
+      "name": "Timer"
+    }
+  ],
+  "target_audience": "Roblox players ages 8-14 who like fast skill-based courses.",
+  "world": {
+    "setting": "Floating neon skyway above the clouds.",
+    "tone": "Bright arcade challenge with clean checkpoints."
+  }
+}

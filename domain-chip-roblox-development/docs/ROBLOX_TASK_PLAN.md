@@ -16,9 +16,9 @@ Run `autoloop --continuous` only as a bounded prioritizer. Each pass should prod
 
 ## Priority Queue
 
-1. `P0` Scaffold the repo surface.
-   Exit when a Roblox project skeleton can be generated from a brief into a stable folder structure.
-2. `P1` Add Studio sync.
+1. `P0` Scaffold the repo surface. Status: complete.
+   Exit condition met: a Roblox project skeleton can now be generated from a brief into a stable folder structure.
+2. `P1` Add Studio sync. Status: active.
    Exit when scaffolded output can be loaded and iterated in Roblox Studio.
 3. `P2` Add Luau quality gates.
    Exit when local format, lint, and test commands can reject broken output.

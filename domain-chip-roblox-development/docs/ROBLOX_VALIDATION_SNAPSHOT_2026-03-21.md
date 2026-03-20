@@ -7,7 +7,9 @@ Captured on 2026-03-21 after the first bounded `autoloop` pass.
 - chip manifest validation passed
 - hook smoke test passed
 - `pytest tests/test_cli.py` passed
+- `pytest tests/test_scaffold.py` passed
 - one bounded `autoloop --rounds 1 --suggest-limit 2` run completed successfully
+- one scaffold smoke generation pass completed from `docs/OBBY_SAMPLE_BRIEF.json`
 
 ## Observed Scores
 
@@ -28,5 +30,5 @@ Captured on 2026-03-21 after the first bounded `autoloop` pass.
 
 Implement Phase 1 and Phase 2 from `ROBLOX_IMPLEMENTATION_PLAN.md`:
 
-1. brief to project scaffold
-2. scaffold to Studio sync
+1. finish hardening the brief-to-project scaffold surface
+2. move scaffold output into Studio sync

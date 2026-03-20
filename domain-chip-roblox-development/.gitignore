@@ -1,5 +1,6 @@
 artifacts/
 .spark-swarm/
+generated/
 obsidian-vault/
 docs/beliefs/
 __pycache__/

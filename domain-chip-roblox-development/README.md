@@ -1,12 +1,13 @@
 # domain-chip-roblox-development
 
-`domain-chip-roblox-development` is a Spark domain chip scaffold for building an end-to-end Roblox game flywheel.
+`domain-chip-roblox-development` is a Spark domain chip for building an end-to-end Roblox game flywheel.
 
 Its current honest state is planning-first:
 
 - Spark core already provides bounded autoloop, chip hooks, frontier queueing, packet emission, and watchtower output.
 - This chip now encodes the Roblox delivery audit and the next implementation sequence.
-- It does not yet connect to Roblox Studio, Rojo, playtest telemetry, publishing, or live-ops services.
+- It now includes a deterministic brief-to-project scaffold generator.
+- It still does not connect to Roblox Studio, Rojo sync, playtest telemetry, publishing, or live-ops services.
 
 ## Quick Start
 
@@ -16,6 +17,7 @@ python -m pip install -e .
 $env:PYTHONPATH="C:\Users\USER\Desktop\spark-researcher\src;src"
 python -m spark_researcher.cli chips validate --config spark-researcher.project.json
 python -m spark_researcher.cli autoloop --config spark-researcher.project.json --command research --rounds 2 --suggest-limit 3
+python -m domain_chip_roblox_development.scaffold --brief docs/OBBY_SAMPLE_BRIEF.json --output-dir generated/skyrail-obby
 ```
 
 ## Read First
@@ -25,6 +27,7 @@ python -m spark_researcher.cli autoloop --config spark-researcher.project.json -
 - `docs/ROBLOX_IMPLEMENTATION_PLAN.md`
 - `docs/ROBLOX_TASK_PLAN.md`
 - `docs/ROBLOX_VALIDATION_SNAPSHOT_2026-03-21.md`
+- `docs/ROBLOX_SCAFFOLD_RUNBOOK.md`
 
 ## What The Chip Owns
 
@@ -35,7 +38,7 @@ python -m spark_researcher.cli autoloop --config spark-researcher.project.json -
 
 ## What Is Still Missing
 
-- real Roblox project generation and Rojo sync
+- Roblox Studio and Rojo sync
 - Luau lint, format, and test execution
 - playtest analytics and retention instrumentation
 - publish, rollback, moderation, and live-ops integration

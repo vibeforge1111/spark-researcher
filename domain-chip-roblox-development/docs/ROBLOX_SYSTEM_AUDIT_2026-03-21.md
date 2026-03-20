@@ -13,7 +13,13 @@ The reusable platform already exists in the parent Spark repo:
 - queue-backed suggestion flow
 - packet and watchtower export surfaces
 
-Those core capabilities are enough to host a Roblox chip, but they do not yet execute Roblox development work.
+Those core capabilities were enough to host a Roblox chip, but they did not yet execute Roblox development work.
+
+That changed in the current workspace revision:
+
+- the chip now has a deterministic brief-to-project scaffold generator
+- the generated output is Rojo-ready in structure
+- the generator is still static and unverified in Roblox Studio
 
 ## What Already Exists In Spark Core
 
@@ -35,8 +41,7 @@ Those core capabilities are enough to host a Roblox chip, but they do not yet ex
 
 ### Foundation gaps
 
-- no Roblox project template generation
-- no Rojo project sync or place-file handling
+- no Studio-connected Rojo sync or place-file handling
 - no Luau test, lint, or formatting runner
 - no asset pipeline for maps, UI, audio, or prefabs
 
@@ -71,3 +76,4 @@ The immediate goal is:
 - a fixed evaluator that scores the current Roblox delivery reality honestly
 - bounded next-step suggestions aligned to the missing service order
 - docs that convert the audit into an implementation sequence and an operating task plan
+- a deterministic scaffold generator that turns a brief into a Roblox project skeleton

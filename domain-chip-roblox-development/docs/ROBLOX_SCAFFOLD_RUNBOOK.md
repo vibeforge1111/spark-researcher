@@ -15,6 +15,7 @@ Add `--force` if you want to replace an existing generated folder.
 ```powershell
 python -m domain_chip_roblox_development.studio_sync --project-dir generated/skyrail-obby
 python -m domain_chip_roblox_development.quality --project-dir generated/skyrail-obby
+python -m domain_chip_roblox_development.playable --project-dir generated/skyrail-obby
 ```
 
 ## What It Generates
@@ -34,6 +35,8 @@ python -m domain_chip_roblox_development.quality --project-dir generated/skyrail
 - `scripts/run_sync_preflight.cmd`
 - `scripts/run_quality_gate.ps1`
 - `scripts/run_quality_gate.cmd`
+- `scripts/run_playable_check.ps1`
+- `scripts/run_playable_check.cmd`
 
 ## Current Scope
 

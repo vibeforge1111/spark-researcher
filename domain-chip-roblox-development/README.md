@@ -8,6 +8,7 @@ Its current honest state is planning-first:
 - This chip now encodes the Roblox delivery audit and the next implementation sequence.
 - It now includes a deterministic brief-to-project scaffold generator.
 - It now includes Studio sync preflight and local quality gate commands for generated projects.
+- It now includes a deterministic playable-stub acceptance check for generated obby scaffolds.
 - It still does not connect directly to Roblox Studio sessions, playtest telemetry, publishing, or live-ops services.
 
 ## Quick Start

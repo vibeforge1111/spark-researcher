@@ -22,8 +22,8 @@ Run `autoloop --continuous` only as a bounded prioritizer. Each pass should prod
    Current state: sync preflight and Rojo handoff scripts exist. Remaining exit condition: scaffolded output can be loaded and iterated in Roblox Studio.
 3. `P2` Add Luau quality gates. Status: partial.
    Current state: deterministic structural quality checks exist. Remaining exit condition: formatter, lint, and test commands can reject broken output with real Luau tooling when available.
-4. `P3` Add playable-loop acceptance checks.
-   Exit when one obby loop can be regenerated and validated repeatedly.
+4. `P3` Add playable-loop acceptance checks. Status: partial.
+   Current state: deterministic playable-stub checks exist for the generated obby lane. Remaining exit condition: one obby loop can be regenerated and validated repeatedly in Studio.
 5. `P4` Add playtest telemetry.
    Exit when the system can emit evidence about completion, fail points, and session flow.
 6. `P5` Add launch-prep and economy lanes.

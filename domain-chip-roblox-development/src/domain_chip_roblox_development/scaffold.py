@@ -412,6 +412,25 @@ def _sync_preflight_cmd() -> str:
     )
 
 
+def _playable_check_ps1() -> str:
+    return "\n".join(
+        [
+            '$ProjectPath = Join-Path $PSScriptRoot ".."',
+            'python -m domain_chip_roblox_development.playable --project-dir $ProjectPath',
+        ]
+    )
+
+
+def _playable_check_cmd() -> str:
+    return "\n".join(
+        [
+            "@echo off",
+            "set PROJECT=%~dp0..",
+            "python -m domain_chip_roblox_development.playable --project-dir %PROJECT%",
+        ]
+    )
+
+
 def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = False) -> dict[str, Any]:
     normalized = _normalize_brief(brief)
     destination = output_dir.resolve()
@@ -440,6 +459,8 @@ def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = F
     _write(destination / "scripts" / "run_quality_gate.cmd", _quality_cmd())
     _write(destination / "scripts" / "run_sync_preflight.ps1", _sync_preflight_ps1())
     _write(destination / "scripts" / "run_sync_preflight.cmd", _sync_preflight_cmd())
+    _write(destination / "scripts" / "run_playable_check.ps1", _playable_check_ps1())
+    _write(destination / "scripts" / "run_playable_check.cmd", _playable_check_cmd())
     for system in normalized["systems"]:
         _write(
             destination / "src" / "server" / "Services" / f"{system['service_name']}.lua",

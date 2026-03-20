@@ -17,7 +17,7 @@ REQUIRED_FILES = (
     "src/replicated/Modules/LoopDefinition.lua",
 )
 
-OPTIONAL_TOOLS = ("rojo", "stylua", "selene", "luau-lsp")
+OPTIONAL_TOOLS = ("rojo", "stylua", "selene", "luau-lsp", "luau-analyze")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -29,6 +29,24 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _discover_tools() -> dict[str, str | None]:
     return {tool: shutil.which(tool) for tool in OPTIONAL_TOOLS}
+
+
+def _run_tool(command: list[str], cwd: Path) -> dict[str, Any]:
+    result = subprocess.run(
+        command,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return {
+        "command": command,
+        "returncode": result.returncode,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip(),
+        "passed": result.returncode == 0,
+    }
 
 
 def _balanced_lua(text: str) -> bool:
@@ -65,6 +83,7 @@ def check_project(project_dir: Path) -> dict[str, Any]:
     root = project_dir.resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    tool_results: list[dict[str, Any]] = []
 
     for relative in REQUIRED_FILES:
         if not (root / relative).exists():
@@ -142,10 +161,30 @@ def check_project(project_dir: Path) -> dict[str, Any]:
                 errors.append(f"bootstrap.server.lua does not reference `{service_name}`.")
 
     tools = _discover_tools()
+    stylua_path = tools.get("stylua")
+    if stylua_path is not None and lua_files:
+        stylua_result = _run_tool([stylua_path, "--check", "."], root)
+        tool_results.append({"tool": "stylua", **stylua_result})
+        if not stylua_result["passed"]:
+            errors.append("`stylua --check .` failed.")
     if tools["stylua"] is None:
         warnings.append("Optional tool `stylua` is not available on PATH.")
+    selene_path = tools.get("selene")
+    if selene_path is not None and lua_files:
+        selene_result = _run_tool([selene_path, "."], root)
+        tool_results.append({"tool": "selene", **selene_result})
+        if not selene_result["passed"]:
+            errors.append("`selene .` failed.")
     if tools["selene"] is None:
         warnings.append("Optional tool `selene` is not available on PATH.")
+    luau_analyze_path = tools.get("luau-analyze")
+    if luau_analyze_path is not None and lua_files:
+        analyze_result = _run_tool([luau_analyze_path, "src"], root)
+        tool_results.append({"tool": "luau-analyze", **analyze_result})
+        if not analyze_result["passed"]:
+            errors.append("`luau-analyze src` failed.")
+    if tools["luau-analyze"] is None:
+        warnings.append("Optional tool `luau-analyze` is not available on PATH.")
 
     passed = not errors
     return {
@@ -154,6 +193,7 @@ def check_project(project_dir: Path) -> dict[str, Any]:
         "errors": errors,
         "warnings": warnings,
         "tooling": tools,
+        "tool_results": tool_results,
         "checked_lua_file_count": len(lua_files),
     }
 

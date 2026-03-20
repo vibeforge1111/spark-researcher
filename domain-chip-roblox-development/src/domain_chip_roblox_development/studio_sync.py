@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,25 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must contain a JSON object.")
     return payload
+
+
+def _run_rojo_sourcemap(project_dir: Path, rojo_path: str) -> dict[str, Any]:
+    command = [rojo_path, "sourcemap", "default.project.json", "--output", "-"]
+    result = subprocess.run(
+        command,
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return {
+        "command": command,
+        "returncode": result.returncode,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip(),
+        "passed": result.returncode == 0,
+    }
 
 
 def inspect_project(project_dir: Path) -> dict[str, Any]:
@@ -43,6 +63,11 @@ def inspect_project(project_dir: Path) -> dict[str, Any]:
     plugin_needed = True
     if rojo_path is None:
         warnings.append("Rojo is not installed or not on PATH.")
+        rojo_check = None
+    else:
+        rojo_check = _run_rojo_sourcemap(root, rojo_path)
+        if not rojo_check["passed"]:
+            warnings.append("Rojo is installed but `rojo sourcemap` failed for this project.")
 
     mappings = {
         "ReplicatedStorage": "src/replicated",
@@ -66,6 +91,7 @@ def inspect_project(project_dir: Path) -> dict[str, Any]:
         "warnings": warnings,
         "rojo_available": rojo_path is not None,
         "rojo_path": rojo_path,
+        "rojo_check": rojo_check,
         "studio_plugin_required": plugin_needed,
         "serve_command": "rojo serve default.project.json --port 34872",
         "connect_target": "localhost:34872",

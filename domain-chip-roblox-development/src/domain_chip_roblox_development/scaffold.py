@@ -374,6 +374,44 @@ def _run_rojo_cmd() -> str:
     )
 
 
+def _quality_ps1() -> str:
+    return "\n".join(
+        [
+            '$ProjectPath = Join-Path $PSScriptRoot ".."',
+            'python -m domain_chip_roblox_development.quality --project-dir $ProjectPath',
+        ]
+    )
+
+
+def _quality_cmd() -> str:
+    return "\n".join(
+        [
+            "@echo off",
+            "set PROJECT=%~dp0..",
+            "python -m domain_chip_roblox_development.quality --project-dir %PROJECT%",
+        ]
+    )
+
+
+def _sync_preflight_ps1() -> str:
+    return "\n".join(
+        [
+            '$ProjectPath = Join-Path $PSScriptRoot ".."',
+            'python -m domain_chip_roblox_development.studio_sync --project-dir $ProjectPath',
+        ]
+    )
+
+
+def _sync_preflight_cmd() -> str:
+    return "\n".join(
+        [
+            "@echo off",
+            "set PROJECT=%~dp0..",
+            "python -m domain_chip_roblox_development.studio_sync --project-dir %PROJECT%",
+        ]
+    )
+
+
 def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = False) -> dict[str, Any]:
     normalized = _normalize_brief(brief)
     destination = output_dir.resolve()
@@ -398,6 +436,10 @@ def generate_project(brief: dict[str, Any], output_dir: Path, *, force: bool = F
     _write(destination / "docs" / "STUDIO_SYNC.md", _studio_sync_doc(normalized))
     _write(destination / "scripts" / "run_rojo_serve.ps1", _run_rojo_ps1())
     _write(destination / "scripts" / "run_rojo_serve.cmd", _run_rojo_cmd())
+    _write(destination / "scripts" / "run_quality_gate.ps1", _quality_ps1())
+    _write(destination / "scripts" / "run_quality_gate.cmd", _quality_cmd())
+    _write(destination / "scripts" / "run_sync_preflight.ps1", _sync_preflight_ps1())
+    _write(destination / "scripts" / "run_sync_preflight.cmd", _sync_preflight_cmd())
     for system in normalized["systems"]:
         _write(
             destination / "src" / "server" / "Services" / f"{system['service_name']}.lua",

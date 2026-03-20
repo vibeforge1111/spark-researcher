@@ -18,10 +18,10 @@ Run `autoloop --continuous` only as a bounded prioritizer. Each pass should prod
 
 1. `P0` Scaffold the repo surface. Status: complete.
    Exit condition met: a Roblox project skeleton can now be generated from a brief into a stable folder structure.
-2. `P1` Add Studio sync. Status: active.
-   Exit when scaffolded output can be loaded and iterated in Roblox Studio.
-3. `P2` Add Luau quality gates.
-   Exit when local format, lint, and test commands can reject broken output.
+2. `P1` Add Studio sync. Status: partial.
+   Current state: sync preflight and Rojo handoff scripts exist. Remaining exit condition: scaffolded output can be loaded and iterated in Roblox Studio.
+3. `P2` Add Luau quality gates. Status: partial.
+   Current state: deterministic structural quality checks exist. Remaining exit condition: formatter, lint, and test commands can reject broken output with real Luau tooling when available.
 4. `P3` Add playable-loop acceptance checks.
    Exit when one obby loop can be regenerated and validated repeatedly.
 5. `P4` Add playtest telemetry.

@@ -7,7 +7,8 @@ Its current honest state is planning-first:
 - Spark core already provides bounded autoloop, chip hooks, frontier queueing, packet emission, and watchtower output.
 - This chip now encodes the Roblox delivery audit and the next implementation sequence.
 - It now includes a deterministic brief-to-project scaffold generator.
-- It still does not connect to Roblox Studio, Rojo sync, playtest telemetry, publishing, or live-ops services.
+- It now includes Studio sync preflight and local quality gate commands for generated projects.
+- It still does not connect directly to Roblox Studio sessions, playtest telemetry, publishing, or live-ops services.
 
 ## Quick Start
 

@@ -8,8 +8,10 @@ Captured on 2026-03-21 after the first bounded `autoloop` pass.
 - hook smoke test passed
 - `pytest tests/test_cli.py` passed
 - `pytest tests/test_scaffold.py` passed
+- `pytest tests/test_tooling.py` passed
 - one bounded `autoloop --rounds 1 --suggest-limit 2` run completed successfully
 - one scaffold smoke generation pass completed from `docs/OBBY_SAMPLE_BRIEF.json`
+- one sync preflight check and one quality-gate check completed on the generated sample project
 
 ## Observed Scores
 

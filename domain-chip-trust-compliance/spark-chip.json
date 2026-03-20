@@ -1,0 +1,90 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-trust-compliance",
+  "domain": "trust-compliance",
+  "version": "0.1.0",
+  "description": "Agentic trust and compliance chip for evaluating risk domains, review depth, regulatory context, and remediation urgency across startup operations.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_trust_compliance/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_trust_compliance/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_trust_compliance/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_trust_compliance/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "risk_domain": [
+        "data_privacy",
+        "financial_compliance",
+        "security_posture",
+        "legal_structure",
+        "ip_protection"
+      ],
+      "review_depth": [
+        "surface_scan",
+        "standard_review",
+        "deep_audit"
+      ],
+      "regulatory_context": [
+        "pre_revenue_light",
+        "b2b_standard",
+        "fintech_regulated",
+        "health_hipaa",
+        "eu_gdpr"
+      ],
+      "trust_signal": [
+        "green_clear",
+        "amber_watch",
+        "red_escalate"
+      ],
+      "remediation_urgency": [
+        "preventive",
+        "corrective",
+        "emergency"
+      ],
+      "trust_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "trust_theme"
+    ],
+    "field_patterns": {
+      "risk_domain": "^(data_privacy|financial_compliance|security_posture|legal_structure|ip_protection)$",
+      "review_depth": "^(surface_scan|standard_review|deep_audit)$",
+      "regulatory_context": "^(pre_revenue_light|b2b_standard|fintech_regulated|health_hipaa|eu_gdpr)$",
+      "trust_signal": "^(green_clear|amber_watch|red_escalate)$",
+      "remediation_urgency": "^(preventive|corrective|emergency)$",
+      "trust_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "risk_domain",
+      "trust_signal"
+    ]
+  }
+}

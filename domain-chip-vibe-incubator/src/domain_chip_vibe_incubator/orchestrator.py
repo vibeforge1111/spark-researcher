@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .agents import AgentOutput, _BaseAgent, _load_prompt
+from .chip_knowledge_adapter import enhance_heuristic
 from .event_types import EventBus, IncubatorEvent
 from .llm_client import ClaudeClient, get_client
 from .ops_loop import append_log, load_state, ops_write_lock, read_log, save_state
@@ -133,6 +134,14 @@ class _QueueAgent:
             return self._heuristic_action(item, venture, state)
         return await self._llm_action(item, venture, state)
 
+    def _chip_context(
+        self,
+        venture: dict[str, Any],
+        state: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Get chip knowledge context for this agent type."""
+        return enhance_heuristic(self.agent_type, venture, state)
+
     def _heuristic_action(
         self,
         item: dict[str, Any],
@@ -204,12 +213,24 @@ class FounderCoachAgent(_QueueAgent):
         if float(venture.get("revenue_trend", 0) or 0) < -0.1:
             issues.append("Revenue declining")
 
+        # Consult chip knowledge for enhanced coaching style
+        chip = self._chip_context(venture, state)
+        reasoning = f"Coaching agenda: {'; '.join(issues) if issues else 'routine check-in'}"
+        confidence = 0.6
+        if chip.get("chip_available"):
+            play = chip.get("matched_play")
+            if play:
+                style = play.get("then", {}).get("style", "")
+                if style:
+                    reasoning += f" [chip: {style} style recommended]"
+                    confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action="coach",
-            reasoning=f"Coaching agenda: {'; '.join(issues) if issues else 'routine check-in'}",
-            confidence=0.6,
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
 
@@ -241,12 +262,21 @@ class CustomerResearchAgent(_QueueAgent):
             action_str = "monitor"
             reasoning = "Validation on track"
 
+        # Consult chip knowledge for enhanced validation guidance
+        chip = self._chip_context(venture, state)
+        confidence = 0.5
+        if chip.get("chip_available"):
+            rule = chip.get("matched_rule")
+            if rule:
+                reasoning += f" [chip: {rule.get('action', '')}]"
+                confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action=action_str,
             reasoning=reasoning,
-            confidence=0.5,
+            confidence=confidence,
         )
 
 
@@ -267,12 +297,22 @@ class GTMOperatorAgent(_QueueAgent):
     def _heuristic_action(self, item: dict, venture: dict, state: dict) -> AgentAction | None:
         vid = str(venture.get("venture_id", ""))
         dist = str(venture.get("distribution_engine", ""))
+        reasoning = f"GTM via {dist or 'unset distribution engine'}"
+        confidence = 0.4
+
+        chip = self._chip_context(venture, state)
+        if chip.get("chip_available"):
+            rule = chip.get("matched_rule")
+            if rule:
+                reasoning += f" [chip: {rule.get('action', '')}]"
+                confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action="execute_gtm",
-            reasoning=f"GTM via {dist or 'unset distribution engine'}",
-            confidence=0.4,
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
 
@@ -293,12 +333,22 @@ class BuildOrchestratorAgent(_QueueAgent):
     def _heuristic_action(self, item: dict, venture: dict, state: dict) -> AgentAction | None:
         vid = str(venture.get("venture_id", ""))
         backlog = int(venture.get("build_backlog_count", 0) or 0)
+        reasoning = f"Build backlog: {backlog} items — {'high priority' if backlog > 5 else 'normal'}"
+        confidence = 0.5
+
+        chip = self._chip_context(venture, state)
+        if chip.get("chip_available"):
+            rule = chip.get("matched_rule")
+            if rule:
+                reasoning += f" [chip: {rule.get('action', '')}]"
+                confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action="route_build",
-            reasoning=f"Build backlog: {backlog} items — {'high priority' if backlog > 5 else 'normal'}",
-            confidence=0.5,
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
 
@@ -330,12 +380,22 @@ class TrustDiligenceAgent(_QueueAgent):
                 requires_human=True,
             )
 
+        reasoning = f"Trust status: {trust_status}"
+        confidence = 0.6
+
+        chip = self._chip_context(venture, state)
+        if chip.get("chip_available"):
+            rule = chip.get("matched_rule")
+            if rule:
+                reasoning += f" [chip: {rule.get('action', '')}]"
+                confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action="review_trust",
-            reasoning=f"Trust status: {trust_status}",
-            confidence=0.6,
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
 
@@ -358,13 +418,22 @@ class CapitalOperatorAgent(_QueueAgent):
         revenue = float(venture.get("weekly_revenue", 0) or 0)
         stage = str(venture.get("stage", ""))
 
+        chip = self._chip_context(venture, state)
+
         if stage in ("growth", "scale") and revenue > 0:
+            reasoning = f"Stage={stage}, revenue=${revenue:.0f}/wk — assess fundraising readiness"
+            confidence = 0.5
+            if chip.get("chip_available"):
+                rule = chip.get("matched_rule")
+                if rule:
+                    reasoning += f" [chip: {rule.get('action', '')}]"
+                    confidence = min(0.85, confidence + 0.15)
             return AgentAction(
                 agent_type=self.agent_type,
                 venture_id=vid,
                 action="assess_readiness",
-                reasoning=f"Stage={stage}, revenue=${revenue:.0f}/wk — assess fundraising readiness",
-                confidence=0.5,
+                reasoning=reasoning,
+                confidence=confidence,
             )
 
         return AgentAction(
@@ -392,12 +461,22 @@ class PortfolioLibrarianAgent(_QueueAgent):
 
     def _heuristic_action(self, item: dict, venture: dict, state: dict) -> AgentAction | None:
         vid = str(venture.get("venture_id", ""))
+        reasoning = "Routine doctrine extraction"
+        confidence = 0.4
+
+        chip = self._chip_context(venture, state)
+        if chip.get("chip_available"):
+            rule = chip.get("matched_rule")
+            if rule:
+                reasoning += f" [chip: {rule.get('action', '')}]"
+                confidence = min(0.85, confidence + 0.15)
+
         return AgentAction(
             agent_type=self.agent_type,
             venture_id=vid,
             action="extract_pattern",
-            reasoning="Routine doctrine extraction",
-            confidence=0.4,
+            reasoning=reasoning,
+            confidence=confidence,
         )
 
 

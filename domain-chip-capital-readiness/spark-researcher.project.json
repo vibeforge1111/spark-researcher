@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-capital-readiness",
+  "eval_metric": "capital_readiness_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-capital-readiness.log"
+    }
+  },
+  "metrics": {
+    "capital_readiness_score": {
+      "kind": "float",
+      "pattern": "^capital_readiness_score:\\s+([0-9.]+)$"
+    },
+    "round_fit_score": {
+      "kind": "float",
+      "pattern": "^round_fit_score:\\s+([0-9.]+)$"
+    },
+    "investor_alignment_score": {
+      "kind": "float",
+      "pattern": "^investor_alignment_score:\\s+([0-9.]+)$"
+    },
+    "traction_evidence_score": {
+      "kind": "float",
+      "pattern": "^traction_evidence_score:\\s+([0-9.]+)$"
+    },
+    "pitch_effectiveness_score": {
+      "kind": "float",
+      "pattern": "^pitch_effectiveness_score:\\s+([0-9.]+)$"
+    },
+    "timing_calibration_score": {
+      "kind": "float",
+      "pattern": "^timing_calibration_score:\\s+([0-9.]+)$"
+    },
+    "narrative_coherence_score": {
+      "kind": "float",
+      "pattern": "^narrative_coherence_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the capital readiness floor before trusting any round or timing strategy.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear round type and timing strategy, capital readiness cannot be meaningfully assessed.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "preseed-angel-revenue-deck-raise",
+      "candidate_summary": "Pre-seed raise from angel network with revenue milestone readiness, deck-only pitch, raise-now timing.",
+      "commands": ["research"],
+      "hypothesis": "Pre-seed with angel networks converts fastest when revenue milestones are the lead signal and the deck is tight.",
+      "mutations": {
+        "round_type": "pre_seed",
+        "investor_fit": "angel_network",
+        "readiness_signal": "revenue_milestone",
+        "pitch_format": "deck_only",
+        "timing_strategy": "raise_now",
+        "capital_theme": "preseed angel revenue raise"
+      }
+    },
+    {
+      "candidate_id": "seed-microvc-growth-memo-traction",
+      "candidate_summary": "Seed round from micro VC with user growth signal, memo-first pitch, build-more-traction timing.",
+      "commands": ["research"],
+      "hypothesis": "Micro VCs at seed prefer memo-first pitches backed by user growth data, especially when the founder is building more traction.",
+      "mutations": {
+        "round_type": "seed",
+        "investor_fit": "micro_vc",
+        "readiness_signal": "user_growth",
+        "pitch_format": "memo_first",
+        "timing_strategy": "build_more_traction",
+        "capital_theme": "seed microvc growth memo"
+      }
+    },
+    {
+      "candidate_id": "seriesa-institutional-revenue-dataroom-raise",
+      "candidate_summary": "Series A from institutional VC with revenue milestone, data room pitch, raise-now timing.",
+      "commands": ["research"],
+      "hypothesis": "Series A institutional rounds require data room preparation and clear revenue milestones to close efficiently.",
+      "mutations": {
+        "round_type": "series_a",
+        "investor_fit": "institutional_vc",
+        "readiness_signal": "revenue_milestone",
+        "pitch_format": "data_room",
+        "timing_strategy": "raise_now",
+        "capital_theme": "series a institutional data room"
+      }
+    },
+    {
+      "candidate_id": "revenue-based-strategic-team-warm-bootstrap",
+      "candidate_summary": "Revenue-based financing from strategic investor with team completeness signal, warm intro, consider-bootstrap timing.",
+      "commands": ["research"],
+      "hypothesis": "Revenue-based financing through strategic partners is optimal when the team is complete and bootstrapping is a viable alternative.",
+      "mutations": {
+        "round_type": "revenue_based",
+        "investor_fit": "strategic",
+        "readiness_signal": "team_completeness",
+        "pitch_format": "warm_intro",
+        "timing_strategy": "consider_bootstrap",
+        "capital_theme": "revenue strategic bootstrap"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

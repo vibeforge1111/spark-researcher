@@ -1,0 +1,93 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-customer-validation",
+  "domain": "customer-validation",
+  "version": "0.1.0",
+  "description": "Agentic validation chip for evaluating customer discovery methods, ICP progression, and signal strength across market types.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_customer_validation/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_customer_validation/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_customer_validation/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_customer_validation/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "validation_method": [
+        "customer_interview",
+        "landing_page_test",
+        "concierge_mvp",
+        "smoke_test",
+        "letter_of_intent"
+      ],
+      "icp_stage": [
+        "hypothesis",
+        "narrowing",
+        "confirmed",
+        "expanding"
+      ],
+      "signal_type": [
+        "verbal_interest",
+        "email_signup",
+        "time_commitment",
+        "payment",
+        "referral"
+      ],
+      "market_type": [
+        "b2b_saas",
+        "b2c_app",
+        "marketplace",
+        "api_platform",
+        "agency"
+      ],
+      "sample_size": [
+        "small_5",
+        "medium_15",
+        "large_30_plus"
+      ],
+      "validation_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "validation_theme"
+    ],
+    "field_patterns": {
+      "validation_method": "^(customer_interview|landing_page_test|concierge_mvp|smoke_test|letter_of_intent)$",
+      "icp_stage": "^(hypothesis|narrowing|confirmed|expanding)$",
+      "signal_type": "^(verbal_interest|email_signup|time_commitment|payment|referral)$",
+      "market_type": "^(b2b_saas|b2c_app|marketplace|api_platform|agency)$",
+      "sample_size": "^(small_5|medium_15|large_30_plus)$",
+      "validation_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "validation_method",
+      "market_type"
+    ]
+  }
+}

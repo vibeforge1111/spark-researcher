@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-gtm-distribution",
+  "eval_metric": "gtm_effectiveness_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-gtm-distribution.log"
+    }
+  },
+  "metrics": {
+    "gtm_effectiveness_score": {
+      "kind": "float",
+      "pattern": "^gtm_effectiveness_score:\\s+([0-9.]+)$"
+    },
+    "channel_leverage_score": {
+      "kind": "float",
+      "pattern": "^channel_leverage_score:\\s+([0-9.]+)$"
+    },
+    "content_resonance_score": {
+      "kind": "float",
+      "pattern": "^content_resonance_score:\\s+([0-9.]+)$"
+    },
+    "launch_momentum_score": {
+      "kind": "float",
+      "pattern": "^launch_momentum_score:\\s+([0-9.]+)$"
+    },
+    "funnel_efficiency_score": {
+      "kind": "float",
+      "pattern": "^funnel_efficiency_score:\\s+([0-9.]+)$"
+    },
+    "compounding_potential_score": {
+      "kind": "float",
+      "pattern": "^compounding_potential_score:\\s+([0-9.]+)$"
+    },
+    "stage_alignment_score": {
+      "kind": "float",
+      "pattern": "^stage_alignment_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the GTM floor before trusting any channel or strategy combination.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear distribution channel and growth stage, GTM motions cannot compound.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "content-community-prelaunch",
+      "candidate_summary": "Content marketing with long-form blog, community seed launch at pre-launch stage focused on awareness.",
+      "commands": ["research"],
+      "hypothesis": "Content-led community building before launch creates the strongest organic distribution foundation.",
+      "mutations": {
+        "distribution_channel": "content_marketing",
+        "content_format": "long_form_blog",
+        "launch_strategy": "community_seed",
+        "growth_stage": "pre_launch",
+        "conversion_focus": "awareness",
+        "gtm_theme": "content community prelaunch"
+      }
+    },
+    {
+      "candidate_id": "product-led-waitlist-activation",
+      "candidate_summary": "Product-led growth with video demos, waitlist build at early traction stage focused on activation.",
+      "commands": ["research"],
+      "hypothesis": "Product-led growth with demo-driven waitlists converts curiosity into activation faster than content alone.",
+      "mutations": {
+        "distribution_channel": "product_led",
+        "content_format": "video_demo",
+        "launch_strategy": "waitlist_build",
+        "growth_stage": "early_traction",
+        "conversion_focus": "activation",
+        "gtm_theme": "product led waitlist activation"
+      }
+    },
+    {
+      "candidate_id": "outbound-case-study-revenue",
+      "candidate_summary": "Cold outbound with case studies, public launch at scaling stage focused on revenue.",
+      "commands": ["research"],
+      "hypothesis": "At scaling stage, outbound powered by strong case studies converts directly to revenue faster than inbound alone.",
+      "mutations": {
+        "distribution_channel": "cold_outbound",
+        "content_format": "case_study",
+        "launch_strategy": "public_launch",
+        "growth_stage": "scaling",
+        "conversion_focus": "revenue",
+        "gtm_theme": "outbound case study revenue"
+      }
+    },
+    {
+      "candidate_id": "partnership-newsletter-referral",
+      "candidate_summary": "Partnership distribution with newsletter content, beta invite strategy at early traction focused on referral.",
+      "commands": ["research"],
+      "hypothesis": "Partnerships amplified by newsletter reach create compounding referral loops at early traction.",
+      "mutations": {
+        "distribution_channel": "partnerships",
+        "content_format": "newsletter",
+        "launch_strategy": "beta_invite",
+        "growth_stage": "early_traction",
+        "conversion_focus": "referral",
+        "gtm_theme": "partnership newsletter referral"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

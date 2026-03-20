@@ -1,0 +1,96 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-gtm-distribution",
+  "domain": "gtm-distribution",
+  "version": "0.1.0",
+  "description": "Agentic go-to-market chip for evaluating distribution channels, content formats, launch strategies, and conversion funnels across growth stages.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_gtm_distribution/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_gtm_distribution/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_gtm_distribution/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_gtm_distribution/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "distribution_channel": [
+        "content_marketing",
+        "cold_outbound",
+        "community",
+        "partnerships",
+        "product_led",
+        "paid_acquisition"
+      ],
+      "content_format": [
+        "long_form_blog",
+        "social_threads",
+        "video_demo",
+        "case_study",
+        "newsletter"
+      ],
+      "launch_strategy": [
+        "soft_launch",
+        "public_launch",
+        "waitlist_build",
+        "beta_invite",
+        "community_seed"
+      ],
+      "growth_stage": [
+        "pre_launch",
+        "early_traction",
+        "scaling",
+        "mature"
+      ],
+      "conversion_focus": [
+        "awareness",
+        "activation",
+        "retention",
+        "referral",
+        "revenue"
+      ],
+      "gtm_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "gtm_theme"
+    ],
+    "field_patterns": {
+      "distribution_channel": "^(content_marketing|cold_outbound|community|partnerships|product_led|paid_acquisition)$",
+      "content_format": "^(long_form_blog|social_threads|video_demo|case_study|newsletter)$",
+      "launch_strategy": "^(soft_launch|public_launch|waitlist_build|beta_invite|community_seed)$",
+      "growth_stage": "^(pre_launch|early_traction|scaling|mature)$",
+      "conversion_focus": "^(awareness|activation|retention|referral|revenue)$",
+      "gtm_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "distribution_channel",
+      "growth_stage"
+    ]
+  }
+}

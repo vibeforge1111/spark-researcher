@@ -1,0 +1,90 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-founder-coaching",
+  "domain": "founder-coaching",
+  "version": "0.1.0",
+  "description": "Agentic coaching chip for evaluating and optimizing founder coaching interventions across style, format, stage, and urgency dimensions.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_founder_coaching/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_founder_coaching/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_founder_coaching/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_founder_coaching/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "coaching_style": [
+        "socratic",
+        "directive",
+        "accountability",
+        "peer_mirror"
+      ],
+      "session_format": [
+        "weekly_1on1",
+        "async_written",
+        "crisis_intervention",
+        "milestone_review"
+      ],
+      "focus_area": [
+        "growth_blockers",
+        "founder_wellbeing",
+        "team_dynamics",
+        "market_repositioning"
+      ],
+      "stage_context": [
+        "pre_product",
+        "validation",
+        "growth",
+        "scale"
+      ],
+      "urgency_level": [
+        "routine",
+        "attention_needed",
+        "critical"
+      ],
+      "coaching_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "coaching_theme"
+    ],
+    "field_patterns": {
+      "coaching_style": "^(socratic|directive|accountability|peer_mirror)$",
+      "session_format": "^(weekly_1on1|async_written|crisis_intervention|milestone_review)$",
+      "focus_area": "^(growth_blockers|founder_wellbeing|team_dynamics|market_repositioning)$",
+      "stage_context": "^(pre_product|validation|growth|scale)$",
+      "urgency_level": "^(routine|attention_needed|critical)$",
+      "coaching_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "coaching_style",
+      "stage_context"
+    ]
+  }
+}

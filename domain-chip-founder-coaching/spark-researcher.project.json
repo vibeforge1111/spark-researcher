@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-founder-coaching",
+  "eval_metric": "coaching_effectiveness_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-founder-coaching.log"
+    }
+  },
+  "metrics": {
+    "coaching_effectiveness_score": {
+      "kind": "float",
+      "pattern": "^coaching_effectiveness_score:\\s+([0-9.]+)$"
+    },
+    "style_fit_score": {
+      "kind": "float",
+      "pattern": "^style_fit_score:\\s+([0-9.]+)$"
+    },
+    "timing_quality_score": {
+      "kind": "float",
+      "pattern": "^timing_quality_score:\\s+([0-9.]+)$"
+    },
+    "question_depth_score": {
+      "kind": "float",
+      "pattern": "^question_depth_score:\\s+([0-9.]+)$"
+    },
+    "blocker_resolution_potential": {
+      "kind": "float",
+      "pattern": "^blocker_resolution_potential:\\s+([0-9.]+)$"
+    },
+    "founder_trust_score": {
+      "kind": "float",
+      "pattern": "^founder_trust_score:\\s+([0-9.]+)$"
+    },
+    "adaptability_score": {
+      "kind": "float",
+      "pattern": "^adaptability_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the coaching floor before trusting any intervention style or format.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear coaching style, stage context, or focus area, coaching interventions cannot reliably move a founder forward.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "socratic-weekly-growth",
+      "candidate_summary": "Socratic weekly 1-on-1 coaching focused on growth blockers at growth stage with routine urgency.",
+      "commands": ["research"],
+      "hypothesis": "Socratic questioning in regular weekly sessions is the highest-leverage coaching style for founders navigating growth blockers.",
+      "mutations": {
+        "coaching_style": "socratic",
+        "session_format": "weekly_1on1",
+        "focus_area": "growth_blockers",
+        "stage_context": "growth",
+        "urgency_level": "routine",
+        "coaching_theme": "socratic growth unblocking"
+      }
+    },
+    {
+      "candidate_id": "directive-crisis-pivot",
+      "candidate_summary": "Directive crisis intervention for market repositioning at validation stage under critical urgency.",
+      "commands": ["research"],
+      "hypothesis": "When a founder faces a critical pivot decision, directive coaching in a crisis format cuts through decision paralysis faster than open questioning.",
+      "mutations": {
+        "coaching_style": "directive",
+        "session_format": "crisis_intervention",
+        "focus_area": "market_repositioning",
+        "stage_context": "validation",
+        "urgency_level": "critical",
+        "coaching_theme": "directive crisis pivot"
+      }
+    },
+    {
+      "candidate_id": "accountability-async-validation",
+      "candidate_summary": "Accountability-style async written coaching for growth blockers at validation stage with attention-needed urgency.",
+      "commands": ["research"],
+      "hypothesis": "Async written accountability loops create more sustained behavioral change than synchronous sessions for founders in validation mode.",
+      "mutations": {
+        "coaching_style": "accountability",
+        "session_format": "async_written",
+        "focus_area": "growth_blockers",
+        "stage_context": "validation",
+        "urgency_level": "attention_needed",
+        "coaching_theme": "accountability async validation"
+      }
+    },
+    {
+      "candidate_id": "peer-mirror-milestone-scale",
+      "candidate_summary": "Peer mirror milestone review coaching for team dynamics at scale stage with routine urgency.",
+      "commands": ["research"],
+      "hypothesis": "At scale stage, founders benefit most from peer mirroring that surfaces blind spots in team dynamics during milestone reviews.",
+      "mutations": {
+        "coaching_style": "peer_mirror",
+        "session_format": "milestone_review",
+        "focus_area": "team_dynamics",
+        "stage_context": "scale",
+        "urgency_level": "routine",
+        "coaching_theme": "peer mirror milestone scale"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

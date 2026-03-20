@@ -1,0 +1,95 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-capital-readiness",
+  "domain": "capital-readiness",
+  "version": "0.1.0",
+  "description": "Agentic capital readiness chip for evaluating fundraising round types, investor fit, readiness signals, pitch formats, and timing strategies.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_capital_readiness/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_capital_readiness/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_capital_readiness/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_capital_readiness/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "round_type": [
+        "pre_seed",
+        "seed",
+        "series_a",
+        "bridge",
+        "revenue_based"
+      ],
+      "investor_fit": [
+        "angel_network",
+        "micro_vc",
+        "institutional_vc",
+        "strategic",
+        "accelerator_follow_on"
+      ],
+      "readiness_signal": [
+        "revenue_milestone",
+        "user_growth",
+        "team_completeness",
+        "market_timing",
+        "competitive_pressure"
+      ],
+      "pitch_format": [
+        "deck_only",
+        "memo_first",
+        "data_room",
+        "warm_intro",
+        "cold_outreach"
+      ],
+      "timing_strategy": [
+        "raise_now",
+        "build_more_traction",
+        "extend_runway",
+        "consider_bootstrap"
+      ],
+      "capital_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "capital_theme"
+    ],
+    "field_patterns": {
+      "round_type": "^(pre_seed|seed|series_a|bridge|revenue_based)$",
+      "investor_fit": "^(angel_network|micro_vc|institutional_vc|strategic|accelerator_follow_on)$",
+      "readiness_signal": "^(revenue_milestone|user_growth|team_completeness|market_timing|competitive_pressure)$",
+      "pitch_format": "^(deck_only|memo_first|data_room|warm_intro|cold_outreach)$",
+      "timing_strategy": "^(raise_now|build_more_traction|extend_runway|consider_bootstrap)$",
+      "capital_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "round_type",
+      "timing_strategy"
+    ]
+  }
+}

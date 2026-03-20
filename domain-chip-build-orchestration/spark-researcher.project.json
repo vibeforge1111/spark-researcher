@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-build-orchestration",
+  "eval_metric": "build_velocity_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-build-orchestration.log"
+    }
+  },
+  "metrics": {
+    "build_velocity_score": {
+      "kind": "float",
+      "pattern": "^build_velocity_score:\\s+([0-9.]+)$"
+    },
+    "approach_leverage_score": {
+      "kind": "float",
+      "pattern": "^approach_leverage_score:\\s+([0-9.]+)$"
+    },
+    "priority_clarity_score": {
+      "kind": "float",
+      "pattern": "^priority_clarity_score:\\s+([0-9.]+)$"
+    },
+    "quality_confidence_score": {
+      "kind": "float",
+      "pattern": "^quality_confidence_score:\\s+([0-9.]+)$"
+    },
+    "team_efficiency_score": {
+      "kind": "float",
+      "pattern": "^team_efficiency_score:\\s+([0-9.]+)$"
+    },
+    "iteration_throughput_score": {
+      "kind": "float",
+      "pattern": "^iteration_throughput_score:\\s+([0-9.]+)$"
+    },
+    "reusability_score": {
+      "kind": "float",
+      "pattern": "^reusability_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the build velocity floor before trusting any approach or team configuration.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear build approach and quality gate, development velocity cannot be reliably measured or improved.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "template-impact-mvp-solo-daily",
+      "candidate_summary": "Template factory with impact-effort prioritization, minimal viable quality, solo founder shipping daily.",
+      "commands": ["research"],
+      "hypothesis": "Template-based building with daily shipping cadence is the fastest path for solo founders targeting MVP.",
+      "mutations": {
+        "build_approach": "template_factory",
+        "priority_method": "impact_effort_matrix",
+        "quality_gate": "minimal_viable",
+        "team_composition": "solo_founder",
+        "iteration_speed": "daily_ship",
+        "build_theme": "template solo daily mvp"
+      }
+    },
+    {
+      "candidate_id": "agent-revenue-production-ai-weekly",
+      "candidate_summary": "Agent workflow with revenue-impact prioritization, production grade quality, founder plus AI weekly releases.",
+      "commands": ["research"],
+      "hypothesis": "AI-augmented agent workflows produce production-grade output faster than manual development when prioritized by revenue impact.",
+      "mutations": {
+        "build_approach": "agent_workflow",
+        "priority_method": "revenue_impact",
+        "quality_gate": "production_grade",
+        "team_composition": "founder_plus_ai",
+        "iteration_speed": "weekly_release",
+        "build_theme": "agent revenue production ai"
+      }
+    },
+    {
+      "candidate_id": "custom-security-enterprise-team-biweekly",
+      "candidate_summary": "Custom development with security-first prioritization, enterprise quality, small team on biweekly sprints.",
+      "commands": ["research"],
+      "hypothesis": "Enterprise-ready custom development requires small teams with security-first discipline and biweekly review cycles.",
+      "mutations": {
+        "build_approach": "custom_development",
+        "priority_method": "security_first",
+        "quality_gate": "enterprise_ready",
+        "team_composition": "small_team",
+        "iteration_speed": "biweekly_sprint",
+        "build_theme": "custom enterprise security team"
+      }
+    },
+    {
+      "candidate_id": "lowcode-user-mvp-contractor-weekly",
+      "candidate_summary": "Low-code with user-request prioritization, minimal viable quality, contractor-augmented team on weekly releases.",
+      "commands": ["research"],
+      "hypothesis": "Low-code platforms with contractor augmentation can ship user-requested features faster than custom development at MVP stage.",
+      "mutations": {
+        "build_approach": "low_code",
+        "priority_method": "user_request",
+        "quality_gate": "minimal_viable",
+        "team_composition": "contractor_augmented",
+        "iteration_speed": "weekly_release",
+        "build_theme": "lowcode contractor weekly mvp"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

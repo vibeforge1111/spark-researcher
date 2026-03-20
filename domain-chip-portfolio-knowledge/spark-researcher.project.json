@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-portfolio-knowledge",
+  "eval_metric": "knowledge_utility_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-portfolio-knowledge.log"
+    }
+  },
+  "metrics": {
+    "knowledge_utility_score": {
+      "kind": "float",
+      "pattern": "^knowledge_utility_score:\\s+([0-9.]+)$"
+    },
+    "pattern_depth_score": {
+      "kind": "float",
+      "pattern": "^pattern_depth_score:\\s+([0-9.]+)$"
+    },
+    "scope_coverage_score": {
+      "kind": "float",
+      "pattern": "^scope_coverage_score:\\s+([0-9.]+)$"
+    },
+    "extraction_quality_score": {
+      "kind": "float",
+      "pattern": "^extraction_quality_score:\\s+([0-9.]+)$"
+    },
+    "shareability_score": {
+      "kind": "float",
+      "pattern": "^shareability_score:\\s+([0-9.]+)$"
+    },
+    "compounding_value_score": {
+      "kind": "float",
+      "pattern": "^compounding_value_score:\\s+([0-9.]+)$"
+    },
+    "freshness_score": {
+      "kind": "float",
+      "pattern": "^freshness_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the knowledge utility floor before trusting any pattern or extraction approach.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear pattern type and knowledge scope, portfolio knowledge cannot compound.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "playbook-cross-kpi-doctrine-evergreen",
+      "candidate_summary": "Growth playbook from cross-portfolio KPI trend analysis shared as doctrine cards with evergreen relevance.",
+      "commands": ["research"],
+      "hypothesis": "Cross-portfolio growth playbooks extracted from KPI trends produce the highest-utility evergreen doctrine.",
+      "mutations": {
+        "pattern_type": "growth_playbook",
+        "knowledge_scope": "cross_portfolio",
+        "extraction_method": "kpi_trend_analysis",
+        "sharing_format": "doctrine_card",
+        "relevance_decay": "evergreen",
+        "knowledge_theme": "cross portfolio growth doctrine"
+      }
+    },
+    {
+      "candidate_id": "postmortem-single-interview-brief-seasonal",
+      "candidate_summary": "Failure postmortem from single venture via founder interview synthesis shared as mentor brief with seasonal relevance.",
+      "commands": ["research"],
+      "hypothesis": "Single-venture failure postmortems are most valuable when synthesized from founder interviews and shared as mentor briefs.",
+      "mutations": {
+        "pattern_type": "failure_postmortem",
+        "knowledge_scope": "single_venture",
+        "extraction_method": "founder_interview_synthesis",
+        "sharing_format": "mentor_brief",
+        "relevance_decay": "seasonal",
+        "knowledge_theme": "failure postmortem mentor brief"
+      }
+    },
+    {
+      "candidate_id": "pivot-industry-benchmark-playbook-seasonal",
+      "candidate_summary": "Pivot case study at industry-wide scope via benchmark comparison shared as playbook chapter with seasonal relevance.",
+      "commands": ["research"],
+      "hypothesis": "Industry-wide pivot case studies benchmarked against comparable companies produce reusable playbook chapters.",
+      "mutations": {
+        "pattern_type": "pivot_case_study",
+        "knowledge_scope": "industry_wide",
+        "extraction_method": "benchmark_comparison",
+        "sharing_format": "playbook_chapter",
+        "relevance_decay": "seasonal",
+        "knowledge_theme": "industry pivot playbook"
+      }
+    },
+    {
+      "candidate_id": "template-cross-agent-digest-evergreen",
+      "candidate_summary": "Operational template from cross-portfolio agent observation shared as founder digest with evergreen relevance.",
+      "commands": ["research"],
+      "hypothesis": "Agent-observed operational patterns across portfolios produce reusable templates that stay fresh when shared as digests.",
+      "mutations": {
+        "pattern_type": "operational_template",
+        "knowledge_scope": "cross_portfolio",
+        "extraction_method": "agent_observation",
+        "sharing_format": "founder_digest",
+        "relevance_decay": "evergreen",
+        "knowledge_theme": "operational template agent digest"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

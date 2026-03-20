@@ -1,0 +1,91 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-portfolio-knowledge",
+  "domain": "portfolio-knowledge",
+  "version": "0.1.0",
+  "description": "Agentic portfolio knowledge chip for evaluating pattern extraction, knowledge scoping, extraction methods, sharing formats, and relevance decay across venture portfolios.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_portfolio_knowledge/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_portfolio_knowledge/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_portfolio_knowledge/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_portfolio_knowledge/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "pattern_type": [
+        "growth_playbook",
+        "failure_postmortem",
+        "pivot_case_study",
+        "operational_template",
+        "market_insight"
+      ],
+      "knowledge_scope": [
+        "single_venture",
+        "cross_portfolio",
+        "industry_wide",
+        "historical"
+      ],
+      "extraction_method": [
+        "kpi_trend_analysis",
+        "founder_interview_synthesis",
+        "agent_observation",
+        "benchmark_comparison"
+      ],
+      "sharing_format": [
+        "doctrine_card",
+        "playbook_chapter",
+        "mentor_brief",
+        "founder_digest"
+      ],
+      "relevance_decay": [
+        "evergreen",
+        "seasonal",
+        "time_sensitive"
+      ],
+      "knowledge_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "knowledge_theme"
+    ],
+    "field_patterns": {
+      "pattern_type": "^(growth_playbook|failure_postmortem|pivot_case_study|operational_template|market_insight)$",
+      "knowledge_scope": "^(single_venture|cross_portfolio|industry_wide|historical)$",
+      "extraction_method": "^(kpi_trend_analysis|founder_interview_synthesis|agent_observation|benchmark_comparison)$",
+      "sharing_format": "^(doctrine_card|playbook_chapter|mentor_brief|founder_digest)$",
+      "relevance_decay": "^(evergreen|seasonal|time_sensitive)$",
+      "knowledge_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "pattern_type",
+      "knowledge_scope"
+    ]
+  }
+}

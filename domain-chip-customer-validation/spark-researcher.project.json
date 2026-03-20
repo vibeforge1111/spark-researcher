@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-customer-validation",
+  "eval_metric": "validation_confidence_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-customer-validation.log"
+    }
+  },
+  "metrics": {
+    "validation_confidence_score": {
+      "kind": "float",
+      "pattern": "^validation_confidence_score:\\s+([0-9.]+)$"
+    },
+    "signal_strength_score": {
+      "kind": "float",
+      "pattern": "^signal_strength_score:\\s+([0-9.]+)$"
+    },
+    "icp_clarity_score": {
+      "kind": "float",
+      "pattern": "^icp_clarity_score:\\s+([0-9.]+)$"
+    },
+    "method_fit_score": {
+      "kind": "float",
+      "pattern": "^method_fit_score:\\s+([0-9.]+)$"
+    },
+    "evidence_weight_score": {
+      "kind": "float",
+      "pattern": "^evidence_weight_score:\\s+([0-9.]+)$"
+    },
+    "market_alignment_score": {
+      "kind": "float",
+      "pattern": "^market_alignment_score:\\s+([0-9.]+)$"
+    },
+    "scalability_signal_score": {
+      "kind": "float",
+      "pattern": "^scalability_signal_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure validation floor before trusting any method or market combination.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear validation method, market type, or signal type, confidence in customer validation cannot accumulate.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "interview-hypothesis-b2b",
+      "candidate_summary": "Customer interviews at hypothesis stage for B2B SaaS with verbal interest signals from small sample.",
+      "commands": ["research"],
+      "hypothesis": "Direct customer interviews are the highest-signal validation method at the hypothesis stage for B2B SaaS.",
+      "mutations": {
+        "validation_method": "customer_interview",
+        "icp_stage": "hypothesis",
+        "signal_type": "verbal_interest",
+        "market_type": "b2b_saas",
+        "sample_size": "small_5",
+        "validation_theme": "b2b hypothesis interviews"
+      }
+    },
+    {
+      "candidate_id": "concierge-narrowing-payment",
+      "candidate_summary": "Concierge MVP at ICP narrowing stage for B2B SaaS with payment signals from medium sample.",
+      "commands": ["research"],
+      "hypothesis": "Concierge MVPs produce the strongest payment signals when the ICP is narrowing and the founder delivers value manually.",
+      "mutations": {
+        "validation_method": "concierge_mvp",
+        "icp_stage": "narrowing",
+        "signal_type": "payment",
+        "market_type": "b2b_saas",
+        "sample_size": "medium_15",
+        "validation_theme": "concierge narrowing payment"
+      }
+    },
+    {
+      "candidate_id": "smoke-test-confirmed-marketplace",
+      "candidate_summary": "Smoke test at confirmed ICP stage for marketplace with email signup signals from large sample.",
+      "commands": ["research"],
+      "hypothesis": "Smoke tests at scale validate marketplace demand efficiently once the ICP is confirmed.",
+      "mutations": {
+        "validation_method": "smoke_test",
+        "icp_stage": "confirmed",
+        "signal_type": "email_signup",
+        "market_type": "marketplace",
+        "sample_size": "large_30_plus",
+        "validation_theme": "smoke test marketplace demand"
+      }
+    },
+    {
+      "candidate_id": "loi-expanding-enterprise",
+      "candidate_summary": "Letter of intent at expanding ICP stage for B2B SaaS with payment signals from medium sample.",
+      "commands": ["research"],
+      "hypothesis": "LOIs from expanding enterprise segments provide the strongest pre-revenue validation signal.",
+      "mutations": {
+        "validation_method": "letter_of_intent",
+        "icp_stage": "expanding",
+        "signal_type": "payment",
+        "market_type": "b2b_saas",
+        "sample_size": "medium_15",
+        "validation_theme": "loi expanding enterprise"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

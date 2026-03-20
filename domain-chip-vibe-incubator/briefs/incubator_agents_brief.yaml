@@ -1,0 +1,752 @@
+# Multi-Chip Brief: Vibe Incubator Agent Domain Chips
+# Each chip builds deep expertise for one of the 7 queue agents in orchestrator.py
+# Format follows spark-domain-chip-labs scaffold input
+
+schema_version: "incubator-agent-brief.v1"
+parent_chip: "domain-chip-vibe-incubator"
+category: "incubator_agent"
+
+chips:
+
+  # ─────────────────────────────────────────────────────
+  # Chip 1: Founder Coaching
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-founder-coaching"
+    agent_type: "founder_coach"
+    queue_name: "office_hours"
+    description: >
+      Master the art of startup coaching — knowing when to push, when to listen,
+      when to suggest a pivot vs when to encourage persistence. Build a doctrine
+      library of coaching plays indexed by venture stage, founder context, and
+      current blocker type.
+    primary_metric: "coaching_effectiveness_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      coaching_style:
+        - socratic
+        - directive
+        - accountability
+        - peer_mirror
+      session_format:
+        - weekly_1on1
+        - async_written
+        - crisis_intervention
+        - milestone_review
+      focus_area:
+        - growth_blockers
+        - founder_wellbeing
+        - team_dynamics
+        - market_repositioning
+      stage_context:
+        - pre_product
+        - validation
+        - growth
+        - scale
+      urgency_level:
+        - routine
+        - attention_needed
+        - critical
+    open_mutation_fields:
+      - coaching_theme
+    field_patterns:
+      coaching_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - coaching_style
+      - stage_context
+    source_registry:
+      - name: "YC Office Hours"
+        type: "practitioner_talks"
+        people: ["Michael Seibel", "Dalton Caldwell", "Gustaf Alstromer"]
+      - name: "Techstars Mentor Methodology"
+        type: "playbook"
+      - name: "The Mom Test (Rob Fitzpatrick)"
+        type: "book"
+        focus: "question design"
+      - name: "Coaching Psychology (GROW model, Motivational Interviewing)"
+        type: "research"
+      - name: "First Round Review Coaching Articles"
+        type: "articles"
+      - name: "Reforge Growth Coaching Frameworks"
+        type: "framework"
+    seed_candidates:
+      - candidate_id: "socratic-weekly-growth"
+        mutations:
+          coaching_style: socratic
+          session_format: weekly_1on1
+          focus_area: growth_blockers
+          stage_context: validation
+          urgency_level: routine
+        hypothesis: "Socratic questioning on weekly growth metrics surfaces founder blind spots"
+      - candidate_id: "directive-crisis-pivot"
+        mutations:
+          coaching_style: directive
+          session_format: crisis_intervention
+          focus_area: market_repositioning
+          stage_context: validation
+          urgency_level: critical
+        hypothesis: "Direct intervention when metrics collapse accelerates pivot decisions"
+      - candidate_id: "accountability-async-validation"
+        mutations:
+          coaching_style: accountability
+          session_format: async_written
+          focus_area: growth_blockers
+          stage_context: validation
+          urgency_level: attention_needed
+        hypothesis: "Async written check-ins during validation maintain accountability without overhead"
+      - candidate_id: "peer-mirror-milestone-scale"
+        mutations:
+          coaching_style: peer_mirror
+          session_format: milestone_review
+          focus_area: team_dynamics
+          stage_context: scale
+          urgency_level: routine
+        hypothesis: "Peer comparison at milestone reviews motivates scaling-stage founders"
+    synergies:
+      coaching_style_x_urgency:
+        directive_critical: 0.15
+        socratic_routine: 0.10
+        accountability_attention_needed: 0.10
+        peer_mirror_routine: 0.05
+        socratic_critical: -0.10  # too slow for crisis
+      stage_x_focus:
+        pre_product_founder_wellbeing: 0.10
+        validation_growth_blockers: 0.15
+        growth_market_repositioning: 0.10
+        scale_team_dynamics: 0.15
+
+  # ─────────────────────────────────────────────────────
+  # Chip 2: Customer Validation
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-customer-validation"
+    agent_type: "customer_research"
+    queue_name: "validation"
+    description: >
+      Master customer discovery — ICP definition, interview design, signal
+      interpretation, and the critical pivot from "people say they'd pay" to
+      "people actually pay." Build doctrine on validation patterns across
+      venture models.
+    primary_metric: "validation_confidence_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      validation_method:
+        - customer_interview
+        - landing_page_test
+        - concierge_mvp
+        - smoke_test
+        - letter_of_intent
+      icp_stage:
+        - hypothesis
+        - narrowing
+        - confirmed
+        - expanding
+      signal_type:
+        - verbal_interest
+        - email_signup
+        - time_commitment
+        - payment
+        - referral
+      market_type:
+        - b2b_saas
+        - b2c_app
+        - marketplace
+        - api_platform
+        - agency
+      sample_size:
+        - small_5
+        - medium_15
+        - large_30_plus
+    open_mutation_fields:
+      - validation_theme
+    field_patterns:
+      validation_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - validation_method
+      - market_type
+    source_registry:
+      - name: "The Mom Test (Rob Fitzpatrick)"
+        type: "book"
+        focus: "interview anti-patterns"
+      - name: "Lean Startup (Eric Ries)"
+        type: "book"
+        focus: "build-measure-learn"
+      - name: "Competing Against Luck (Christensen)"
+        type: "book"
+        focus: "jobs-to-be-done"
+      - name: "Superhuman PMF Survey (Rahul Vohra)"
+        type: "methodology"
+      - name: "YC Talk to Users Lectures"
+        type: "practitioner_talks"
+      - name: "First Round Review Customer Discovery"
+        type: "articles"
+      - name: "Stripe Atlas Validation Guides"
+        type: "guides"
+    seed_candidates:
+      - candidate_id: "interview-hypothesis-b2b"
+        mutations:
+          validation_method: customer_interview
+          icp_stage: hypothesis
+          signal_type: verbal_interest
+          market_type: b2b_saas
+          sample_size: small_5
+        hypothesis: "Early 5-person interviews in B2B surface fundamental assumptions to test"
+      - candidate_id: "concierge-narrowing-payment"
+        mutations:
+          validation_method: concierge_mvp
+          icp_stage: narrowing
+          signal_type: payment
+          market_type: b2b_saas
+          sample_size: medium_15
+        hypothesis: "Concierge MVP with payment signal focus separates real from aspirational demand"
+      - candidate_id: "smoke-test-confirmed-marketplace"
+        mutations:
+          validation_method: landing_page_test
+          icp_stage: confirmed
+          signal_type: email_signup
+          market_type: marketplace
+          sample_size: large_30_plus
+        hypothesis: "Landing page test for confirmed ICP in marketplace validates at scale"
+      - candidate_id: "loi-expanding-enterprise"
+        mutations:
+          validation_method: letter_of_intent
+          icp_stage: expanding
+          signal_type: payment
+          market_type: api_platform
+          sample_size: small_5
+        hypothesis: "LOI collection for expanding enterprise ICP proves willingness to pay"
+    synergies:
+      method_x_signal:
+        customer_interview_verbal_interest: 0.10
+        concierge_mvp_payment: 0.20
+        landing_page_test_email_signup: 0.15
+        letter_of_intent_payment: 0.25
+        smoke_test_time_commitment: 0.10
+      icp_x_sample:
+        hypothesis_small_5: 0.15
+        narrowing_medium_15: 0.15
+        confirmed_large_30_plus: 0.10
+        expanding_small_5: -0.05  # expanding needs bigger sample
+
+  # ─────────────────────────────────────────────────────
+  # Chip 3: GTM Distribution
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-gtm-distribution"
+    agent_type: "gtm_operator"
+    queue_name: "gtm"
+    description: >
+      Master go-to-market execution — channel selection, content strategy,
+      launch timing, and distribution engine optimization. Build doctrine on
+      which distribution engines work for which venture models at which stages.
+    primary_metric: "gtm_effectiveness_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      distribution_channel:
+        - content_marketing
+        - cold_outbound
+        - community
+        - partnerships
+        - product_led
+        - paid_acquisition
+      content_format:
+        - long_form_blog
+        - social_threads
+        - video_demo
+        - case_study
+        - newsletter
+      launch_strategy:
+        - soft_launch
+        - public_launch
+        - waitlist_build
+        - beta_invite
+        - community_seed
+      growth_stage:
+        - pre_launch
+        - early_traction
+        - scaling
+        - mature
+      conversion_focus:
+        - awareness
+        - activation
+        - retention
+        - referral
+        - revenue
+    open_mutation_fields:
+      - gtm_theme
+    field_patterns:
+      gtm_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - distribution_channel
+      - growth_stage
+    source_registry:
+      - name: "Reforge Growth Frameworks"
+        type: "framework"
+        people: ["Brian Balfour", "Casey Winters"]
+      - name: "Traction (Weinberg & Mares)"
+        type: "book"
+        focus: "19 channel framework"
+      - name: "Lenny Rachitsky Growth Case Studies"
+        type: "articles"
+      - name: "First Round Review Distribution Playbooks"
+        type: "articles"
+      - name: "The Cold Start Problem (Andrew Chen)"
+        type: "book"
+      - name: "YC How to Get Your First Customers"
+        type: "practitioner_talks"
+    seed_candidates:
+      - candidate_id: "content-prelaunch-awareness"
+        mutations:
+          distribution_channel: content_marketing
+          content_format: long_form_blog
+          launch_strategy: soft_launch
+          growth_stage: pre_launch
+          conversion_focus: awareness
+        hypothesis: "Long-form content marketing builds awareness before product launch"
+      - candidate_id: "outbound-early-activation"
+        mutations:
+          distribution_channel: cold_outbound
+          content_format: case_study
+          launch_strategy: beta_invite
+          growth_stage: early_traction
+          conversion_focus: activation
+        hypothesis: "Cold outbound with case studies activates early B2B customers"
+      - candidate_id: "product-led-scaling-retention"
+        mutations:
+          distribution_channel: product_led
+          content_format: video_demo
+          launch_strategy: public_launch
+          growth_stage: scaling
+          conversion_focus: retention
+        hypothesis: "Product-led growth with demos retains users at scale"
+      - candidate_id: "community-seed-referral"
+        mutations:
+          distribution_channel: community
+          content_format: social_threads
+          launch_strategy: community_seed
+          growth_stage: early_traction
+          conversion_focus: referral
+        hypothesis: "Community seeding via social threads drives organic referral loops"
+    synergies:
+      channel_x_stage:
+        content_marketing_pre_launch: 0.15
+        cold_outbound_early_traction: 0.15
+        product_led_scaling: 0.20
+        community_early_traction: 0.10
+        paid_acquisition_mature: 0.10
+        paid_acquisition_pre_launch: -0.15  # too early for paid
+      channel_x_focus:
+        content_marketing_awareness: 0.15
+        product_led_retention: 0.15
+        community_referral: 0.20
+        cold_outbound_activation: 0.10
+
+  # ─────────────────────────────────────────────────────
+  # Chip 4: Build Orchestration
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-build-orchestration"
+    agent_type: "build_orchestrator"
+    queue_name: "build"
+    description: >
+      Master development execution — knowing when to use templates vs custom
+      code, how to prioritize backlogs, when to use agent workflows vs human
+      developers, and how to maintain velocity without sacrificing quality.
+    primary_metric: "build_velocity_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      build_approach:
+        - template_factory
+        - agent_workflow
+        - custom_development
+        - low_code
+        - api_integration
+      priority_method:
+        - impact_effort_matrix
+        - user_request
+        - revenue_impact
+        - technical_debt
+        - security_first
+      quality_gate:
+        - minimal_viable
+        - production_grade
+        - enterprise_ready
+      team_composition:
+        - solo_founder
+        - founder_plus_ai
+        - small_team
+        - contractor_augmented
+      iteration_speed:
+        - daily_ship
+        - weekly_release
+        - biweekly_sprint
+    open_mutation_fields:
+      - build_theme
+    field_patterns:
+      build_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - build_approach
+      - quality_gate
+    source_registry:
+      - name: "Shape Up (Basecamp)"
+        type: "book"
+        focus: "appetite-based scoping"
+      - name: "The Lean Startup Build Chapter"
+        type: "book"
+        focus: "MVP definition"
+      - name: "AI-Assisted Development Workflows"
+        type: "methodology"
+      - name: "Vercel/Next.js Template Factory Patterns"
+        type: "framework"
+      - name: "YC Technical Founder Mistakes"
+        type: "practitioner_talks"
+    seed_candidates:
+      - candidate_id: "template-impact-mvp-solo-daily"
+        mutations:
+          build_approach: template_factory
+          priority_method: impact_effort_matrix
+          quality_gate: minimal_viable
+          team_composition: solo_founder
+          iteration_speed: daily_ship
+        hypothesis: "Template factory with impact-first priority enables solo founder daily shipping"
+      - candidate_id: "agent-workflow-revenue-production-ai"
+        mutations:
+          build_approach: agent_workflow
+          priority_method: revenue_impact
+          quality_gate: production_grade
+          team_composition: founder_plus_ai
+          iteration_speed: weekly_release
+        hypothesis: "Agent workflows driven by revenue impact produce production-grade weekly releases"
+      - candidate_id: "custom-security-enterprise-team"
+        mutations:
+          build_approach: custom_development
+          priority_method: security_first
+          quality_gate: enterprise_ready
+          team_composition: small_team
+          iteration_speed: biweekly_sprint
+        hypothesis: "Custom development with security-first priority meets enterprise quality gates"
+    synergies:
+      approach_x_team:
+        template_factory_solo_founder: 0.20
+        agent_workflow_founder_plus_ai: 0.20
+        custom_development_small_team: 0.15
+        low_code_solo_founder: 0.10
+        custom_development_solo_founder: -0.10  # solo can't sustain custom
+      quality_x_speed:
+        minimal_viable_daily_ship: 0.15
+        production_grade_weekly_release: 0.10
+        enterprise_ready_biweekly_sprint: 0.10
+        enterprise_ready_daily_ship: -0.15  # can't ship enterprise daily
+
+  # ─────────────────────────────────────────────────────
+  # Chip 5: Trust & Compliance
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-trust-compliance"
+    agent_type: "trust_diligence"
+    queue_name: "trust"
+    description: >
+      Master trust and compliance — security posture assessment, regulatory
+      awareness, data governance, and the judgment of when to escalate vs
+      when to monitor. Build doctrine on risk patterns by venture model and stage.
+    primary_metric: "trust_health_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      risk_domain:
+        - data_privacy
+        - financial_compliance
+        - security_posture
+        - legal_structure
+        - ip_protection
+      review_depth:
+        - surface_scan
+        - standard_review
+        - deep_audit
+      regulatory_context:
+        - pre_revenue_light
+        - b2b_standard
+        - fintech_regulated
+        - health_hipaa
+        - eu_gdpr
+      trust_signal:
+        - green_clear
+        - amber_watch
+        - red_escalate
+      remediation_urgency:
+        - preventive
+        - corrective
+        - emergency
+    open_mutation_fields:
+      - trust_theme
+    field_patterns:
+      trust_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - risk_domain
+      - trust_signal
+    source_registry:
+      - name: "SOC 2 Type II Compliance Frameworks"
+        type: "framework"
+      - name: "OWASP Top 10"
+        type: "standard"
+        focus: "startup security baselines"
+      - name: "YC SAFE + Legal Structure Best Practices"
+        type: "guides"
+      - name: "GDPR/CCPA Privacy Guides"
+        type: "regulation"
+      - name: "Stripe Startup Compliance Checklists"
+        type: "checklists"
+      - name: "a16z Regulatory Compliance Guides"
+        type: "articles"
+    seed_candidates:
+      - candidate_id: "privacy-standard-pre-revenue"
+        mutations:
+          risk_domain: data_privacy
+          review_depth: standard_review
+          regulatory_context: pre_revenue_light
+          trust_signal: green_clear
+          remediation_urgency: preventive
+        hypothesis: "Standard privacy review for pre-revenue startups catches issues before they scale"
+      - candidate_id: "security-deep-fintech-amber"
+        mutations:
+          risk_domain: security_posture
+          review_depth: deep_audit
+          regulatory_context: fintech_regulated
+          trust_signal: amber_watch
+          remediation_urgency: corrective
+        hypothesis: "Deep security audit for fintech with amber signals prevents regulatory action"
+      - candidate_id: "legal-surface-b2b-preventive"
+        mutations:
+          risk_domain: legal_structure
+          review_depth: surface_scan
+          regulatory_context: b2b_standard
+          trust_signal: green_clear
+          remediation_urgency: preventive
+        hypothesis: "Quick legal structure scan for B2B prevents common incorporation mistakes"
+      - candidate_id: "compliance-deep-health-emergency"
+        mutations:
+          risk_domain: financial_compliance
+          review_depth: deep_audit
+          regulatory_context: health_hipaa
+          trust_signal: red_escalate
+          remediation_urgency: emergency
+        hypothesis: "Emergency compliance deep-dive for health-regulated red-status ventures"
+    synergies:
+      signal_x_urgency:
+        red_escalate_emergency: 0.15
+        amber_watch_corrective: 0.15
+        green_clear_preventive: 0.10
+        red_escalate_preventive: -0.20  # red needs action, not prevention
+      domain_x_context:
+        data_privacy_eu_gdpr: 0.20
+        financial_compliance_fintech_regulated: 0.20
+        security_posture_b2b_standard: 0.10
+        ip_protection_pre_revenue_light: 0.05
+
+  # ─────────────────────────────────────────────────────
+  # Chip 6: Capital Readiness
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-capital-readiness"
+    agent_type: "capital_operator"
+    queue_name: "capital"
+    description: >
+      Master fundraising readiness — knowing when a venture is ready to raise,
+      which investors fit, how to structure the round, and when to delay in
+      favor of more traction.
+    primary_metric: "capital_readiness_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      round_type:
+        - pre_seed
+        - seed
+        - series_a
+        - bridge
+        - revenue_based
+      investor_fit:
+        - angel_network
+        - micro_vc
+        - institutional_vc
+        - strategic
+        - accelerator_follow_on
+      readiness_signal:
+        - revenue_milestone
+        - user_growth
+        - team_completeness
+        - market_timing
+        - competitive_pressure
+      pitch_format:
+        - deck_only
+        - memo_first
+        - data_room
+        - warm_intro
+        - cold_outreach
+      timing_strategy:
+        - raise_now
+        - build_more_traction
+        - extend_runway
+        - consider_bootstrap
+    open_mutation_fields:
+      - capital_theme
+    field_patterns:
+      capital_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - round_type
+      - timing_strategy
+    source_registry:
+      - name: "YC How to Raise Money"
+        type: "practitioner_talks"
+        people: ["Paul Graham", "Geoff Ralston"]
+      - name: "Venture Deals (Brad Feld)"
+        type: "book"
+        focus: "term sheet mechanics"
+      - name: "AngelList/Republic Fundraising Data"
+        type: "dataset"
+      - name: "First Round Review Fundraising"
+        type: "articles"
+      - name: "Angel (Jason Calacanis)"
+        type: "book"
+        focus: "investor perspective"
+      - name: "Carta Cap Table Best Practices"
+        type: "guides"
+    seed_candidates:
+      - candidate_id: "preseed-angel-revenue-deck"
+        mutations:
+          round_type: pre_seed
+          investor_fit: angel_network
+          readiness_signal: revenue_milestone
+          pitch_format: deck_only
+          timing_strategy: raise_now
+        hypothesis: "Pre-seed angel raise based on revenue milestone with deck converts quickly"
+      - candidate_id: "seed-microvc-growth-memo"
+        mutations:
+          round_type: seed
+          investor_fit: micro_vc
+          readiness_signal: user_growth
+          pitch_format: memo_first
+          timing_strategy: build_more_traction
+        hypothesis: "Seed round delayed for more traction with memo-first approach attracts micro-VCs"
+      - candidate_id: "seriesa-institutional-competitive"
+        mutations:
+          round_type: series_a
+          investor_fit: institutional_vc
+          readiness_signal: competitive_pressure
+          pitch_format: data_room
+          timing_strategy: raise_now
+        hypothesis: "Series A with competitive pressure and full data room creates urgency"
+      - candidate_id: "bridge-strategic-runway"
+        mutations:
+          round_type: bridge
+          investor_fit: strategic
+          readiness_signal: market_timing
+          pitch_format: warm_intro
+          timing_strategy: extend_runway
+        hypothesis: "Bridge round via strategic investor warm intro extends runway efficiently"
+    synergies:
+      round_x_investor:
+        pre_seed_angel_network: 0.20
+        seed_micro_vc: 0.20
+        series_a_institutional_vc: 0.20
+        bridge_strategic: 0.15
+        pre_seed_institutional_vc: -0.20  # too early for institutional
+      timing_x_signal:
+        raise_now_competitive_pressure: 0.15
+        build_more_traction_user_growth: 0.15
+        consider_bootstrap_revenue_milestone: 0.10
+        raise_now_team_completeness: -0.05  # team alone isn't enough
+
+  # ─────────────────────────────────────────────────────
+  # Chip 7: Portfolio Knowledge
+  # ─────────────────────────────────────────────────────
+  - chip_id: "domain-chip-portfolio-knowledge"
+    agent_type: "portfolio_librarian"
+    queue_name: "doctrine"
+    description: >
+      Master knowledge extraction and cross-pollination — identifying reusable
+      patterns across ventures, building institutional knowledge, and connecting
+      founders who face similar challenges.
+    primary_metric: "knowledge_utility_score"
+    eval_goal: "maximize"
+    mutation_axes:
+      pattern_type:
+        - growth_playbook
+        - failure_postmortem
+        - pivot_case_study
+        - operational_template
+        - market_insight
+      knowledge_scope:
+        - single_venture
+        - cross_portfolio
+        - industry_wide
+        - historical
+      extraction_method:
+        - kpi_trend_analysis
+        - founder_interview_synthesis
+        - agent_observation
+        - benchmark_comparison
+      sharing_format:
+        - doctrine_card
+        - playbook_chapter
+        - mentor_brief
+        - founder_digest
+      relevance_decay:
+        - evergreen
+        - seasonal
+        - time_sensitive
+    open_mutation_fields:
+      - knowledge_theme
+    field_patterns:
+      knowledge_theme: "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    required_fields:
+      - pattern_type
+      - knowledge_scope
+    source_registry:
+      - name: "YC Batch Retrospectives"
+        type: "practitioner_talks"
+      - name: "The Hard Thing About Hard Things (Horowitz)"
+        type: "book"
+        focus: "operational war stories"
+      - name: "First Round Review Knowledge Library"
+        type: "articles"
+      - name: "Kauffman Foundation Research"
+        type: "research"
+      - name: "CB Insights Startup Failure Database"
+        type: "dataset"
+    seed_candidates:
+      - candidate_id: "growth-playbook-cross-portfolio-kpi"
+        mutations:
+          pattern_type: growth_playbook
+          knowledge_scope: cross_portfolio
+          extraction_method: kpi_trend_analysis
+          sharing_format: doctrine_card
+          relevance_decay: seasonal
+        hypothesis: "Cross-portfolio KPI analysis reveals reusable growth playbooks"
+      - candidate_id: "failure-postmortem-single-interview"
+        mutations:
+          pattern_type: failure_postmortem
+          knowledge_scope: single_venture
+          extraction_method: founder_interview_synthesis
+          sharing_format: playbook_chapter
+          relevance_decay: evergreen
+        hypothesis: "Founder interview synthesis produces evergreen failure postmortems"
+      - candidate_id: "pivot-case-industry-observation"
+        mutations:
+          pattern_type: pivot_case_study
+          knowledge_scope: industry_wide
+          extraction_method: agent_observation
+          sharing_format: mentor_brief
+          relevance_decay: seasonal
+        hypothesis: "Industry-wide pivot patterns from agent observations guide mentor conversations"
+      - candidate_id: "market-insight-historical-benchmark"
+        mutations:
+          pattern_type: market_insight
+          knowledge_scope: historical
+          extraction_method: benchmark_comparison
+          sharing_format: founder_digest
+          relevance_decay: time_sensitive
+        hypothesis: "Historical benchmark comparisons surface timely market insights"
+    synergies:
+      pattern_x_scope:
+        growth_playbook_cross_portfolio: 0.20
+        failure_postmortem_single_venture: 0.15
+        pivot_case_study_industry_wide: 0.15
+        market_insight_historical: 0.10
+        failure_postmortem_industry_wide: -0.05  # too generic
+      method_x_format:
+        kpi_trend_analysis_doctrine_card: 0.15
+        founder_interview_synthesis_playbook_chapter: 0.15
+        agent_observation_mentor_brief: 0.10
+        benchmark_comparison_founder_digest: 0.10

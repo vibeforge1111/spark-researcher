@@ -1,0 +1,119 @@
+{
+  "project_name": "domain-chip-trust-compliance",
+  "eval_metric": "trust_health_score",
+  "eval_goal": "maximize",
+  "commands": {
+    "research": {
+      "args": [],
+      "cwd": ".",
+      "kind": "chip-evaluate",
+      "log_name": "domain-chip-trust-compliance.log"
+    }
+  },
+  "metrics": {
+    "trust_health_score": {
+      "kind": "float",
+      "pattern": "^trust_health_score:\\s+([0-9.]+)$"
+    },
+    "risk_coverage_score": {
+      "kind": "float",
+      "pattern": "^risk_coverage_score:\\s+([0-9.]+)$"
+    },
+    "review_thoroughness_score": {
+      "kind": "float",
+      "pattern": "^review_thoroughness_score:\\s+([0-9.]+)$"
+    },
+    "regulatory_alignment_score": {
+      "kind": "float",
+      "pattern": "^regulatory_alignment_score:\\s+([0-9.]+)$"
+    },
+    "signal_accuracy_score": {
+      "kind": "float",
+      "pattern": "^signal_accuracy_score:\\s+([0-9.]+)$"
+    },
+    "remediation_readiness_score": {
+      "kind": "float",
+      "pattern": "^remediation_readiness_score:\\s+([0-9.]+)$"
+    },
+    "compliance_maturity_score": {
+      "kind": "float",
+      "pattern": "^compliance_maturity_score:\\s+([0-9.]+)$"
+    }
+  },
+  "candidate_trials": [
+    {
+      "candidate_id": "global-baseline",
+      "candidate_summary": "Measure the trust health floor before trusting any risk domain or review configuration.",
+      "commands": ["research"],
+      "hypothesis": "Without a clear risk domain and trust signal posture, trust health cannot be assessed or improved.",
+      "mutations": {}
+    },
+    {
+      "candidate_id": "privacy-standard-b2b-green-preventive",
+      "candidate_summary": "Data privacy standard review in B2B context with green signal and preventive remediation.",
+      "commands": ["research"],
+      "hypothesis": "Proactive data privacy reviews in standard B2B contexts maintain green trust signals and prevent compliance drift.",
+      "mutations": {
+        "risk_domain": "data_privacy",
+        "review_depth": "standard_review",
+        "regulatory_context": "b2b_standard",
+        "trust_signal": "green_clear",
+        "remediation_urgency": "preventive",
+        "trust_theme": "b2b privacy preventive"
+      }
+    },
+    {
+      "candidate_id": "fincomp-deep-fintech-amber-corrective",
+      "candidate_summary": "Financial compliance deep audit in fintech regulated context with amber watch signal and corrective remediation.",
+      "commands": ["research"],
+      "hypothesis": "Fintech regulated ventures require deep financial compliance audits when trust signals turn amber.",
+      "mutations": {
+        "risk_domain": "financial_compliance",
+        "review_depth": "deep_audit",
+        "regulatory_context": "fintech_regulated",
+        "trust_signal": "amber_watch",
+        "remediation_urgency": "corrective",
+        "trust_theme": "fintech compliance corrective"
+      }
+    },
+    {
+      "candidate_id": "security-deep-gdpr-red-emergency",
+      "candidate_summary": "Security posture deep audit under EU GDPR with red escalation and emergency remediation.",
+      "commands": ["research"],
+      "hypothesis": "Red-signal security breaches under GDPR require immediate deep audit and emergency remediation protocols.",
+      "mutations": {
+        "risk_domain": "security_posture",
+        "review_depth": "deep_audit",
+        "regulatory_context": "eu_gdpr",
+        "trust_signal": "red_escalate",
+        "remediation_urgency": "emergency",
+        "trust_theme": "gdpr security emergency"
+      }
+    },
+    {
+      "candidate_id": "legal-surface-prerev-green-preventive",
+      "candidate_summary": "Legal structure surface scan at pre-revenue light context with green signal and preventive posture.",
+      "commands": ["research"],
+      "hypothesis": "Pre-revenue ventures need only surface legal scans to maintain green trust while preserving build velocity.",
+      "mutations": {
+        "risk_domain": "legal_structure",
+        "review_depth": "surface_scan",
+        "regulatory_context": "pre_revenue_light",
+        "trust_signal": "green_clear",
+        "remediation_urgency": "preventive",
+        "trust_theme": "pre revenue legal scan"
+      }
+    }
+  ],
+  "chip": {
+    "path": ".",
+    "manifest": "spark-chip.json"
+  },
+  "memory": {
+    "backend": "local"
+  },
+  "guardrails": {
+    "max_loop_rounds": 50,
+    "blocked_command_fragments": ["rm -rf", "DROP TABLE"]
+  }
+}

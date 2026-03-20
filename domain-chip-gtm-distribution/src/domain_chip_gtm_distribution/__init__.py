@@ -1,0 +1,1 @@
+"""GTM distribution Spark chip."""

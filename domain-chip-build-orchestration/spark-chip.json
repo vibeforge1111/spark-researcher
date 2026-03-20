@@ -1,0 +1,91 @@
+{
+  "schema_version": "spark-chip.v1",
+  "io_protocol": "spark-hook-io.v1",
+  "chip_name": "domain-chip-build-orchestration",
+  "domain": "build-orchestration",
+  "version": "0.1.0",
+  "description": "Agentic build orchestration chip for evaluating development approaches, priority methods, quality gates, and team compositions for startup velocity.",
+  "capabilities": [
+    "evaluate",
+    "suggest",
+    "packets",
+    "watchtower"
+  ],
+  "commands": {
+    "evaluate": [
+      "python",
+      "src/domain_chip_build_orchestration/cli.py",
+      "evaluate"
+    ],
+    "suggest": [
+      "python",
+      "src/domain_chip_build_orchestration/cli.py",
+      "suggest"
+    ],
+    "packets": [
+      "python",
+      "src/domain_chip_build_orchestration/cli.py",
+      "packets"
+    ],
+    "watchtower": [
+      "python",
+      "src/domain_chip_build_orchestration/cli.py",
+      "watchtower"
+    ]
+  },
+  "frontier": {
+    "enabled": true,
+    "model": "generic",
+    "web_search": true,
+    "allowed_mutations": {
+      "build_approach": [
+        "template_factory",
+        "agent_workflow",
+        "custom_development",
+        "low_code",
+        "api_integration"
+      ],
+      "priority_method": [
+        "impact_effort_matrix",
+        "user_request",
+        "revenue_impact",
+        "technical_debt",
+        "security_first"
+      ],
+      "quality_gate": [
+        "minimal_viable",
+        "production_grade",
+        "enterprise_ready"
+      ],
+      "team_composition": [
+        "solo_founder",
+        "founder_plus_ai",
+        "small_team",
+        "contractor_augmented"
+      ],
+      "iteration_speed": [
+        "daily_ship",
+        "weekly_release",
+        "biweekly_sprint"
+      ],
+      "build_theme": [
+        "seed_theme"
+      ]
+    },
+    "open_mutation_fields": [
+      "build_theme"
+    ],
+    "field_patterns": {
+      "build_approach": "^(template_factory|agent_workflow|custom_development|low_code|api_integration)$",
+      "priority_method": "^(impact_effort_matrix|user_request|revenue_impact|technical_debt|security_first)$",
+      "quality_gate": "^(minimal_viable|production_grade|enterprise_ready)$",
+      "team_composition": "^(solo_founder|founder_plus_ai|small_team|contractor_augmented)$",
+      "iteration_speed": "^(daily_ship|weekly_release|biweekly_sprint)$",
+      "build_theme": "^[a-z0-9][a-z0-9 _-]{2,80}$"
+    },
+    "required_fields": [
+      "build_approach",
+      "quality_gate"
+    ]
+  }
+}

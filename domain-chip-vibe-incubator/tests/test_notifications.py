@@ -57,7 +57,7 @@ def runtime_root(tmp_path: Path):
 class TestConsoleNotifier:
     def test_always_succeeds(self):
         n = ConsoleNotifier()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             n.send("Test subject", "Test body", {"severity": "info"})
         )
         assert result is True
@@ -81,7 +81,7 @@ class TestWebhookNotifier:
 
     def test_send_returns_false_when_unavailable(self):
         w = WebhookNotifier(url="")
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             w.send("test", "body")
         )
         assert result is False
@@ -225,7 +225,7 @@ class TestNotificationRouter:
 
     def test_send_test(self, runtime_root):
         router = NotificationRouter(runtime_root)
-        record = asyncio.get_event_loop().run_until_complete(
+        record = asyncio.run(
             router.send_test("console")
         )
         assert record.success is True
@@ -234,7 +234,7 @@ class TestNotificationRouter:
 
     def test_send_test_unavailable_channel(self, runtime_root):
         router = NotificationRouter(runtime_root)
-        record = asyncio.get_event_loop().run_until_complete(
+        record = asyncio.run(
             router.send_test("nonexistent")
         )
         assert record.success is False

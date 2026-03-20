@@ -648,6 +648,101 @@ async def enrich_single_venture(venture_id: str) -> dict[str, Any]:
     return {"venture_id": venture_id, "enriched": True, "record": record.to_dict()}
 
 
+# ---------------------------------------------------------------------------
+# Feedback Loop Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/feedback/status")
+def get_feedback_status() -> dict[str, Any]:
+    """Return feedback loop status and last cycle results."""
+    recent = read_log(RUNTIME_ROOT, "feedback_cycles")
+    recent.sort(key=lambda r: r.get("cycle_at", ""), reverse=True)
+
+    state = load_state(RUNTIME_ROOT)
+    return {
+        "scoring_weights": state.get("scoring_weights", {}),
+        "last_cycle": state.get("last_feedback_cycle"),
+        "total_cycles": len(recent),
+        "recent_cycles": recent[:5],
+    }
+
+
+@app.post("/api/feedback/run", dependencies=[Depends(verify_token)])
+async def run_feedback() -> dict[str, Any]:
+    """Trigger a manual feedback cycle."""
+    try:
+        from .feedback_loop import run_feedback_cycle
+    except ImportError:
+        raise HTTPException(501, "Feedback module not available")
+
+    result = await run_feedback_cycle(RUNTIME_ROOT)
+    return result
+
+
+@app.get("/api/feedback/accuracy")
+def get_accuracy() -> dict[str, Any]:
+    """Compute and return current prediction accuracy."""
+    try:
+        from .outcome_tracker import compute_accuracy
+    except ImportError:
+        raise HTTPException(501, "Outcome tracker not available")
+
+    report = compute_accuracy(RUNTIME_ROOT)
+    return report.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Agent Orchestration Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/orchestration/status")
+def get_orchestration_status() -> dict[str, Any]:
+    """Return agent orchestration status."""
+    try:
+        from .orchestrator import AgentOrchestrator, QUEUE_TO_AGENT
+        orchestrator = AgentOrchestrator()
+        agents = orchestrator.available_agents
+        llm = orchestrator.llm_available
+    except Exception:
+        agents = []
+        llm = False
+
+    recent_actions = read_log(RUNTIME_ROOT, "agent_actions")
+    recent_actions.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+
+    human_queue = read_log(RUNTIME_ROOT, "human_review_queue")
+
+    return {
+        "agents": agents,
+        "llm_available": llm,
+        "queue_mapping": dict(QUEUE_TO_AGENT) if agents else {},
+        "recent_actions": recent_actions[:20],
+        "human_review_pending": len(human_queue),
+        "human_review_items": human_queue[-10:],
+    }
+
+
+@app.post("/api/orchestration/run", dependencies=[Depends(verify_token)])
+async def run_orchestration() -> dict[str, Any]:
+    """Trigger a manual orchestration cycle."""
+    try:
+        from .orchestrator import AgentOrchestrator
+    except ImportError:
+        raise HTTPException(501, "Orchestrator module not available")
+
+    orchestrator = AgentOrchestrator()
+    result = await orchestrator.process_queues(RUNTIME_ROOT)
+    return result.to_dict()
+
+
+@app.get("/api/orchestration/human-queue")
+def get_human_queue() -> list[dict[str, Any]]:
+    """Return items waiting for human review."""
+    items = read_log(RUNTIME_ROOT, "human_review_queue")
+    items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return items
+
+
 class NotificationTestRequest(BaseModel):
     channel: str = "console"
 

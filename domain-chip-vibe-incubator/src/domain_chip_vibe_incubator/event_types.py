@@ -30,6 +30,9 @@ EXPERIMENT_STALE = "experiment.stale"
 SCHEDULER_STARTED = "scheduler.started"
 SCHEDULER_STOPPED = "scheduler.stopped"
 AGENT_EVALUATION_COMPLETE = "agent.evaluation_complete"
+FEEDBACK_CYCLE_COMPLETE = "feedback.cycle_complete"
+AGENT_ORCHESTRATION_COMPLETE = "agent.orchestration_complete"
+HUMAN_REVIEW_NEEDED = "human.review_needed"
 
 
 # ---------------------------------------------------------------------------

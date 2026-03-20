@@ -23,10 +23,13 @@ from typing import Any
 
 from .event_types import (
     AGENT_EVALUATION_COMPLETE,
+    AGENT_ORCHESTRATION_COMPLETE,
     ALERT_CRITICAL,
     ALERT_WARNING,
     APPLICATION_PENDING,
+    FEEDBACK_CYCLE_COMPLETE,
     GOVERNANCE_QUORUM,
+    HUMAN_REVIEW_NEEDED,
     KPI_MISSING,
     REVIEW_NEEDED,
     SCHEDULER_STARTED,
@@ -97,6 +100,11 @@ class IncubatorScheduler:
         self._last_llm_results: dict[str, Any] = {}
         self._enrichment_interval = int(os.environ.get("VIBE_ENRICHMENT_INTERVAL_HOURS", "6")) * 3600
         self._last_enrichment_at: float = 0.0
+        self._feedback_interval = int(os.environ.get("VIBE_FEEDBACK_INTERVAL_HOURS", "168")) * 3600  # weekly
+        self._last_feedback_at: float = 0.0
+        self._last_feedback_result: dict[str, Any] = {}
+        self._orchestration_cadence = int(os.environ.get("VIBE_ORCHESTRATION_TICK_CADENCE", "3"))
+        self._last_orchestration_result: dict[str, Any] = {}
 
         # Wire up persistent event logging
         self.bus.subscribe_all(lambda e: emit_event_log(self.runtime_root, e))
@@ -126,6 +134,9 @@ class IncubatorScheduler:
             "runtime_root": self.runtime_root,
             "llm_tick_cadence": self._llm_tick_cadence,
             "llm_last_results": self._last_llm_results,
+            "feedback_last_result": self._last_feedback_result,
+            "orchestration_cadence": self._orchestration_cadence,
+            "orchestration_last_result": self._last_orchestration_result,
         }
 
     async def run(self) -> None:
@@ -144,6 +155,8 @@ class IncubatorScheduler:
                 await self._maybe_weekly_tick()
                 await self._maybe_llm_tick()
                 await self._maybe_enrichment_tick()
+                await self._maybe_feedback_tick()
+                await self._maybe_orchestration_tick()
                 await asyncio.sleep(self.tick_interval)
         except asyncio.CancelledError:
             log.info("Scheduler cancelled")
@@ -292,6 +305,60 @@ class IncubatorScheduler:
             log.info("Enrichment completed: %d ventures enriched", len(records))
         except Exception:
             log.exception("Enrichment tick failed")
+
+    async def _maybe_feedback_tick(self) -> None:
+        """Run the feedback loop on a slow cadence (default: weekly)."""
+        import time
+        now = time.monotonic()
+        if now - self._last_feedback_at < self._feedback_interval:
+            return
+
+        try:
+            from .feedback_loop import run_feedback_cycle
+        except Exception:
+            return
+
+        self._last_feedback_at = now
+        log.info("Running feedback cycle")
+        try:
+            result = await run_feedback_cycle(self.runtime_root)
+            self._last_feedback_result = result
+            accuracy = result.get("accuracy", {})
+            self.bus.publish(IncubatorEvent(FEEDBACK_CYCLE_COMPLETE, {
+                "pair_count": accuracy.get("pair_count", 0),
+                "overall_mae": accuracy.get("overall_mae", 0),
+                "adjustments": len(result.get("calibration", {}).get("dimensions_adjusted", [])),
+                "recommendations": len(result.get("adaptation", {}).get("recommendations", [])),
+            }))
+        except Exception:
+            log.exception("Feedback cycle failed")
+
+    async def _maybe_orchestration_tick(self) -> None:
+        """Run the multi-agent orchestrator every N ticks."""
+        if self._orchestration_cadence <= 0 or self._tick_count % self._orchestration_cadence != 0:
+            return
+
+        try:
+            from .orchestrator import AgentOrchestrator
+            orchestrator = AgentOrchestrator()
+        except Exception:
+            return
+
+        log.info("Running agent orchestration tick")
+        try:
+            result = await orchestrator.process_queues(self.runtime_root)
+            self._last_orchestration_result = result.to_dict()
+            self.bus.publish(IncubatorEvent(AGENT_ORCHESTRATION_COMPLETE, {
+                "actions_generated": result.actions_generated,
+                "auto_executed": result.actions_auto_executed,
+                "human_queued": result.actions_queued_for_human,
+            }))
+            if result.actions_queued_for_human > 0:
+                self.bus.publish(IncubatorEvent(HUMAN_REVIEW_NEEDED, {
+                    "pending_count": result.actions_queued_for_human,
+                }))
+        except Exception:
+            log.exception("Orchestration tick failed")
 
     # -- event emission --
 

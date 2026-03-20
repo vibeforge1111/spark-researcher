@@ -24,6 +24,7 @@ python -m spark_researcher.cli autoloop --config spark-researcher.project.json -
 - `docs/ROBLOX_ONE_LOOP_SPEC.md`
 - `docs/ROBLOX_IMPLEMENTATION_PLAN.md`
 - `docs/ROBLOX_TASK_PLAN.md`
+- `docs/ROBLOX_VALIDATION_SNAPSHOT_2026-03-21.md`
 
 ## What The Chip Owns
 

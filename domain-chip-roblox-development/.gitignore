@@ -1,8 +1,0 @@
-artifacts/
-.spark-swarm/
-generated/
-obsidian-vault/
-docs/beliefs/
-__pycache__/
-*.pyc
-*.egg-info/

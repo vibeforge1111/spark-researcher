@@ -4,6 +4,7 @@ import json
 from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -38,6 +39,7 @@ class CandidateTrial:
     hypothesis: str = ""
     mutations: dict[str, str] = field(default_factory=dict)
     commands: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -137,6 +139,7 @@ def _candidate_to_payload(spec: CandidateTrial) -> dict[str, object]:
         "hypothesis": spec.hypothesis,
         "mutations": dict(spec.mutations),
         "commands": list(spec.commands),
+        "metadata": dict(spec.metadata),
     }
 
 
@@ -327,6 +330,12 @@ def load_config(path: Path) -> ProjectConfig:
             hypothesis=str(item.get("hypothesis", "")),
             mutations={key: str(value) for key, value in item.get("mutations", {}).items()},
             commands=[str(part) for part in item.get("commands", [])],
+            metadata={
+                str(key): value
+                for key, value in item.get("metadata", {}).items()
+            }
+            if isinstance(item.get("metadata", {}), dict)
+            else {},
         )
         for item in payload.get("candidate_trials", [])
     ]

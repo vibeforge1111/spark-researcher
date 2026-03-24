@@ -325,6 +325,12 @@ def _trial_from_packet(item: dict[str, Any], *, default_commands: list[str] | No
         hypothesis=str(item.get("hypothesis", "")),
         mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
         commands=[str(part) for part in item.get("commands", default_commands or [])],
+        metadata={
+            str(key): value
+            for key, value in item.get("metadata", {}).items()
+        }
+        if isinstance(item.get("metadata", {}), dict)
+        else {},
     )
 
 

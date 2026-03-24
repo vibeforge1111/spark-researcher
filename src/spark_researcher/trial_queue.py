@@ -43,6 +43,12 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
                 hypothesis=str(item.get("hypothesis", "")),
                 mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
                 commands=[str(part) for part in item.get("commands", [])],
+                metadata={
+                    str(key): value
+                    for key, value in item.get("metadata", {}).items()
+                }
+                if isinstance(item.get("metadata", {}), dict)
+                else {},
             )
         )
     return trials

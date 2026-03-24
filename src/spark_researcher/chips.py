@@ -337,6 +337,8 @@ def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
             mutations = item.get("mutations", {})
             if not isinstance(mutations, dict):
                 raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
+            if "metadata" in item and not isinstance(item.get("metadata"), dict):
+                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].metadata must be an object when present.")
         return
     if hook == "packets":
         documents = response.get("documents", [])

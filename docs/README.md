@@ -39,6 +39,9 @@ Use these docs first for that integration:
 - [`docs/ARCHITECTURE.md`](ARCHITECTURE.md): specialization-path runtime contract and kernel boundary
 - the path-owned repo docs in the relevant `specialization-path-*` repo for path-specific templates, guidance, and benchmark defaults
 
+For this integration, treat [`README.md`](../README.md) and [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) as the authoritative docs.
+Treat generated local files like `AUTORESEARCH.md` and `PROJECT.md` as operational residue, not architecture doctrine.
+
 ## Domain Chip Docs
 
 - [`docs/CHIPS.md`](CHIPS.md): chip contract, ownership boundary, and scaffold flow

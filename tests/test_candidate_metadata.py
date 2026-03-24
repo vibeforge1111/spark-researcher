@@ -82,6 +82,13 @@ def test_suggest_trials_preserves_candidate_metadata(tmp_path: Path) -> None:
                             "selected_target_index": 1,
                             "selected_target_path": "prompts/startup-operator-secondary.md",
                             "selected_target_reason": "Secondary doctrine target",
+                            "mutation_intent": {
+                                "summary": "Tighten the secondary doctrine prompt without widening the mutation surface.",
+                                "guardrails": [
+                                    "Keep the edit scoped to the selected prompt file.",
+                                    "Do not introduce new benchmark-facing rules.",
+                                ],
+                            },
                         }
                     },
                 }
@@ -98,6 +105,13 @@ def test_suggest_trials_preserves_candidate_metadata(tmp_path: Path) -> None:
             "selected_target_index": 1,
             "selected_target_path": "prompts/startup-operator-secondary.md",
             "selected_target_reason": "Secondary doctrine target",
+            "mutation_intent": {
+                "summary": "Tighten the secondary doctrine prompt without widening the mutation surface.",
+                "guardrails": [
+                    "Keep the edit scoped to the selected prompt file.",
+                    "Do not introduce new benchmark-facing rules.",
+                ],
+            },
         }
     }
 
@@ -118,6 +132,13 @@ def test_append_suggestions_persists_candidate_metadata_to_queue(tmp_path: Path)
                         "selected_target_index": 0,
                         "selected_target_path": "prompts/startup-operator.md",
                         "selected_target_reason": "Primary doctrine target",
+                        "mutation_intent": {
+                            "summary": "Refine the governing doctrine prompt while preserving the existing benchmark loop.",
+                            "guardrails": [
+                                "Edit only the declared target.",
+                                "Preserve benchmark compatibility.",
+                            ],
+                        },
                     }
                 },
             }
@@ -133,5 +154,12 @@ def test_append_suggestions_persists_candidate_metadata_to_queue(tmp_path: Path)
             "selected_target_index": 0,
             "selected_target_path": "prompts/startup-operator.md",
             "selected_target_reason": "Primary doctrine target",
+            "mutation_intent": {
+                "summary": "Refine the governing doctrine prompt while preserving the existing benchmark loop.",
+                "guardrails": [
+                    "Edit only the declared target.",
+                    "Preserve benchmark compatibility.",
+                ],
+            },
         }
     }

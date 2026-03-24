@@ -29,6 +29,16 @@ Read these first if you are new to the repo:
 - [`docs/OBSIDIAN.md`](OBSIDIAN.md): watchtower output and vault expectations
 - [`docs/PRESETS.md`](PRESETS.md): scaffold presets
 
+## Spark Swarm Integration
+
+Spark Researcher now also serves as the runtime core for Spark Swarm specialization paths.
+
+Use these docs first for that integration:
+
+- [`README.md`](../README.md): high-level runtime-core role
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md): specialization-path runtime contract and kernel boundary
+- the path-owned repo docs in the relevant `specialization-path-*` repo for path-specific templates, guidance, and benchmark defaults
+
 ## Domain Chip Docs
 
 - [`docs/CHIPS.md`](CHIPS.md): chip contract, ownership boundary, and scaffold flow

@@ -84,6 +84,19 @@ Spark can suggest the next trial
 - sharing portable lessons into a collective intelligence network through capsule exports
 - building domain-specific "chips" without bloating the core repo
 
+## Spark Swarm Runtime Core
+
+Spark Researcher is also the runtime core for Spark Swarm specialization paths.
+
+That means:
+
+- Spark Swarm can hand Spark Researcher a specialization-path context bundle for an auto-generated round
+- a path-owned external hook can suggest the next bounded candidate mutation through the normal chip `suggest` surface
+- suggestion packets and queued candidates preserve opaque `metadata`
+- Spark Swarm currently reads `metadata.specialization_path` to persist planner-owned target choice, target rationale, and mutation intent
+
+The important boundary is that Spark Researcher stays generic. It preserves and transports specialization-path planner metadata, but it does not hardcode startup-specific policy into the kernel.
+
 ## Real-Life Use Cases
 
 - Prompt testing:
@@ -221,6 +234,8 @@ Nothing important is hidden behind a database by default.
 - `docs/`: operator docs and design docs
 - `examples/toy-project/`: runnable demo project
 - `domain-chip-*`: optional external or sibling domain chips
+
+For Spark Swarm specialization-path work, the main architecture notes are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Where To Read Next
 

@@ -14,6 +14,25 @@ Spark Researcher is intentionally small.
 8. Emit lightweight trace artifacts for the run and related decisions.
 9. Export memory docs and rebuild the Obsidian vault when needed.
 
+## Spark Swarm Specialization-Path Contract
+
+Spark Researcher now has a second important runtime role: it is the generic execution core for Spark Swarm specialization paths.
+
+That contract is intentionally narrow:
+
+- Spark Swarm writes a specialization-path runtime bundle and invokes a normal chip `suggest` hook
+- the path-owned repo reads that bundle and returns one or more bounded candidate suggestions
+- Spark Researcher preserves suggestion `metadata` in both suggestion packets and queued candidate trials
+- Spark Swarm consumes `metadata.specialization_path` for planner-owned fields like selected target index, selected target path, selected target reason, and mutation intent
+
+The boundary matters:
+
+- Spark Researcher preserves planner semantics
+- Spark Swarm interprets them inside the specialization-path control plane
+- path-owned repos keep domain-specific doctrine, copy, templates, and benchmark defaults outside the kernel
+
+This keeps the runtime reusable for future specialization paths without turning the core repo into a startup-only system.
+
 ## Memory Flow
 
 Memory is file-first and tiered.
@@ -58,7 +77,7 @@ flowchart TD
 - `research.py`: one-pass bounded research retry that turns `research_needed` into dated web notes with lightweight source provenance plus one follow-up verifier pass
 - `verifier.py`: bounded two-draft select-and-revise loop for advisory execution, aware of active surprise-priority failure surfaces and able to escalate time-sensitive misses into `research_needed`
 - `trainers.py`: generic example-count watchers with bounded recompiles
-- `candidates.py`: now uses recent surprising failures to bias repair-oriented suggestion ordering
+- `candidates.py`: now uses recent surprising failures to bias repair-oriented suggestion ordering and preserves candidate metadata for downstream runtimes like Spark Swarm specialization paths
 - `trial_queue.py`: keeps generated frontier state out of the hand-authored project config
 - `memory.py`: tiered Markdown memory export and lexical search
 - `obsidian.py`: watchtower generation
@@ -79,5 +98,7 @@ flowchart TD
 
 - `spark-researcher.project.json` is the stable project spec
 - `artifacts/frontier/queue.json` is the generated runtime queue
+
+Candidate metadata is intentionally allowed to pass through both layers unchanged so runtime integrations can preserve planner-owned context without editing the kernel for each domain.
 
 This keeps the repo file-first and resumable without turning the main config into a residue log of every autoloop suggestion.

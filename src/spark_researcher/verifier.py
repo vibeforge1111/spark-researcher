@@ -52,6 +52,19 @@ _OVERLAP_STOPWORDS = {
     "would",
 }
 
+_FACTUAL_LOOKUP_PREFIXES = (
+    "what is",
+    "what's",
+    "who is",
+    "when is",
+    "where is",
+    "find",
+    "search",
+    "look up",
+    "tell me",
+    "give me",
+)
+
 
 def _response_text(payload: Any) -> str:
     if isinstance(payload, dict):
@@ -312,6 +325,21 @@ def _task_needs_fresh_research(advisory: dict[str, Any], critique: dict[str, Any
     )
 
 
+def _is_simple_factual_web_lookup(advisory: dict[str, Any]) -> bool:
+    intent = advisory.get("intent", {})
+    if not isinstance(intent, dict):
+        return False
+    resources = [str(item).strip().lower() for item in intent.get("resource_modes", []) if str(item).strip()]
+    if "web" not in resources:
+        return False
+    task = str(advisory.get("task") or "").strip().lower()
+    if not task:
+        return False
+    if any(task.startswith(prefix) for prefix in _FACTUAL_LOOKUP_PREFIXES):
+        return True
+    return any(marker in task for marker in _TIME_SENSITIVE_MARKERS)
+
+
 def _research_packet(advisory: dict[str, Any], critique: dict[str, Any], *, trace_id: str, trace_path: str) -> dict[str, Any]:
     intent = advisory.get("intent", {})
     epistemic = advisory.get("epistemic_status", {})
@@ -323,6 +351,16 @@ def _research_packet(advisory: dict[str, Any], critique: dict[str, Any], *, trac
     targets = ["primary sources", "recent official documentation", "recent firsthand reports"]
     if str(advisory.get("task_type") or "").endswith("_research"):
         targets = ["recent primary sources", "contradictory viewpoints", "dated citations"]
+    clarifying_questions = [
+        item
+        for item in [
+            str(critique.get("best_next_question") or "").strip(),
+            *list(epistemic.get("clarifying_questions", [])),
+        ]
+        if item
+    ]
+    if _is_simple_factual_web_lookup(advisory):
+        clarifying_questions = []
     return {
         "status": "research_needed",
         "decision": "research_needed",
@@ -334,14 +372,7 @@ def _research_packet(advisory: dict[str, Any], critique: dict[str, Any], *, trac
             "Prefer primary or official sources over secondary summaries.",
             "Return with dated evidence or keep the answer tentative.",
         ],
-        "clarifying_questions": [
-            item
-            for item in [
-                str(critique.get("best_next_question") or "").strip(),
-                *list(epistemic.get("clarifying_questions", [])),
-            ]
-            if item
-        ],
+        "clarifying_questions": clarifying_questions,
         "missing_evidence": list(critique.get("missing_evidence", [])),
         "implicated_failure_surface": str(critique.get("implicated_failure_surface") or "").strip(),
         "trace_id": trace_id,

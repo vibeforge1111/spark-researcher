@@ -23,6 +23,7 @@ def test_under_supported_web_task_escalates_to_research(tmp_path: Path) -> None:
     assert packet["status"] == "research_needed"
     assert packet["decision"] == "research_needed"
     assert packet["research_query"] == advisory["task"]
+    assert packet["clarifying_questions"] == []
 
 
 def test_under_supported_non_web_task_stays_needs_verification(tmp_path: Path) -> None:

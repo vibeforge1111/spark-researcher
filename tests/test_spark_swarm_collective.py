@@ -249,7 +249,37 @@ def test_collective_readiness_tracks_latest_payload_and_capsule(tmp_path: Path) 
     publish_latest(repo_root, runtime_root)
     readiness = collective_readiness(repo_root, runtime_root)
     assert readiness["ready"] is True
+    assert readiness["hosted_ready"] is False
+    assert readiness["hosted_checks"]["spark_swarm_payload_has_workspace_id"] is False
     assert readiness["latest_metric_run"] == record["run_id"]
+
+
+def test_collective_readiness_marks_hosted_ready_when_workspace_id_is_present(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260319-train",
+        "created_at": "2026-03-19T12:00:00+00:00",
+        "command_name": "train",
+        "status": "ok",
+        "metric_name": "score",
+        "metric_value": 1.25,
+        "verdict": "improved",
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    monkeypatch.setenv("SPARK_SWARM_WORKSPACE_ID", "ws_demo")
+    write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
+    publish_latest(repo_root, runtime_root)
+
+    readiness = collective_readiness(repo_root, runtime_root)
+    assert readiness["ready"] is True
+    assert readiness["hosted_ready"] is True
+    assert readiness["spark_swarm_workspace_id"] == "ws_demo"
 
 
 def test_publish_latest_normalizes_non_collective_verdicts(tmp_path: Path) -> None:

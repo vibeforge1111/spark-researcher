@@ -147,6 +147,10 @@ def _specialization_descriptor(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _evolution_path_id(specialization_key: str, command_name: str) -> str:
+    return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
+
+
 def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
     run_id = str(record.get("run_id") or "latest")
     refs = []
@@ -506,7 +510,7 @@ def build_spark_swarm_collective_payload(
     insight_id = f"insight:{run_id}"
     mastery_id = f"mastery:{run_id}"
     contradiction_id = f"contradiction:{run_id}"
-    path_id = f"evolution-path:{_slug(command_name)}"
+    path_id = _evolution_path_id(str(specialization["key"]), command_name)
     summary = f"{command_name} {verdict} on {metric_name}={metric_value}"
 
     insights: list[dict[str, Any]] = []

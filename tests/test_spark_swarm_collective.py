@@ -469,6 +469,37 @@ def test_collective_readiness_marks_hosted_ready_when_workspace_id_is_present(tm
     assert readiness["spark_swarm_workspace_id"] == "ws_demo"
 
 
+def test_collective_readiness_rejects_stale_unscoped_path_ids(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260319-train",
+        "created_at": "2026-03-19T12:00:00+00:00",
+        "command_name": "research",
+        "status": "ok",
+        "metric_name": "score",
+        "metric_value": 1.25,
+        "verdict": "improved",
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
+    payload_path = spark_swarm_collective_payload_path(repo_root)
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    payload["evolutionPaths"][0]["id"] = "evolution-path:research"
+    payload["outcomes"][0]["targetId"] = "evolution-path:research"
+    payload_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    readiness = collective_readiness(repo_root, runtime_root)
+    assert readiness["ready"] is False
+    assert readiness["checks"]["spark_swarm_payload_paths_match_specialization"] is False
+    assert "spark_swarm_payload_paths_match_specialization" in readiness["missing"]
+
+
 def test_collective_uses_bridge_bound_workspace_id_when_env_is_missing(tmp_path: Path, monkeypatch) -> None:
     repo_root = tmp_path
     _write_frontmatter_manifest(repo_root)

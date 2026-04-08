@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -367,6 +368,22 @@ def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
         return
 
 
+def _build_hook_env(context: ChipContext) -> dict[str, str]:
+    env = os.environ.copy()
+    pythonpath_parts: list[str] = []
+    spark_src = Path(__file__).resolve().parents[1]
+    chip_src = context.chip_root / "src"
+    for path in (spark_src, chip_src, context.chip_root):
+        if path.exists():
+            pythonpath_parts.append(str(path))
+    existing = env.get("PYTHONPATH", "").strip()
+    if existing:
+        pythonpath_parts.append(existing)
+    if pythonpath_parts:
+        env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+    return env
+
+
 def invoke_chip_hook(
     config_path: Path,
     hook: str,
@@ -411,6 +428,7 @@ def invoke_chip_hook(
     result = subprocess.run(
         invoked,
         cwd=str(context.chip_root),
+        env=_build_hook_env(context),
         capture_output=True,
         text=True,
         encoding="utf-8",

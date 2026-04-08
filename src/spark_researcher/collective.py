@@ -98,7 +98,7 @@ def latest_metric_run(runtime_root: Path) -> dict[str, Any] | None:
     return metric_rows[-1] if metric_rows else None
 
 
-def _runtime_source(record: dict[str, Any]) -> dict[str, Any]:
+def _runtime_source(record: dict[str, Any], *, agent_id: str, run_id: str) -> dict[str, Any]:
     chip_result = record.get("chip_result", {})
     comparison_class = ""
     if isinstance(chip_result, dict):
@@ -109,6 +109,8 @@ def _runtime_source(record: dict[str, Any]) -> dict[str, Any]:
         "kind": "spark_researcher",
         "version": "0.1.0",
         "loopKind": loop_kind,
+        "sourceInstanceId": agent_id,
+        "sourceRunId": f"spark-researcher:{run_id}",
         "chipKey": None,
         "chipLabel": None,
     }
@@ -395,7 +397,7 @@ def build_spark_swarm_collective_payload(
     return {
         "workspaceId": workspace_id,
         "agentId": agent_id,
-        "runtimeSource": _runtime_source(record),
+        "runtimeSource": _runtime_source(record, agent_id=agent_id, run_id=run_id),
         "specialization": specialization,
         "runtimePulse": {
             "agentId": agent_id,

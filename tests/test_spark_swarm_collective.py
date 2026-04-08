@@ -129,6 +129,8 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     assert payload["agentId"] == "agent:loopsmith"
     assert payload["specialization"]["key"] == "starter-lab"
+    assert payload["runtimeSource"]["sourceInstanceId"] == "agent:loopsmith"
+    assert payload["runtimeSource"]["sourceRunId"] == "spark-researcher:20260319-train"
     assert payload["insights"][0]["status"] == "benchmark_supported"
     assert payload["outcomes"][0]["verdict"] == "improved"
     assert payload["outcomes"][0]["evidenceLane"] == "benchmark_evidence"

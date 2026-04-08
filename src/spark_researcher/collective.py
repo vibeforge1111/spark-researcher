@@ -378,15 +378,19 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     capsule_id = f"{now_stamp()}-{run.get('run_id')}"
     root = capsule_root(repo_root)
     root.mkdir(parents=True, exist_ok=True)
+    verdict = _normalized_collective_verdict(
+        str(run.get("verdict") or ""),
+        status=str(run.get("status") or ""),
+    )
     payload = {
         "capsule_id": capsule_id,
         "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "title": f"{run.get('project_name')} {run.get('candidate_id') or run.get('run_id')}",
-        "summary": f"{run.get('verdict')} on {run.get('metric_name')}={run.get('metric_value')}",
+        "summary": f"{verdict} on {run.get('metric_name')}={run.get('metric_value')}",
         "metric_name": run.get("metric_name"),
         "metric_value": run.get("metric_value"),
         "baseline_value": run.get("baseline_value"),
-        "verdict": run.get("verdict"),
+        "verdict": verdict,
         "run_id": run.get("run_id"),
         "artifact_paths": [run.get("run_dir"), run.get("log_path")],
     }
@@ -443,6 +447,18 @@ def _capsule_run_ids(root: Path) -> set[str]:
         if run_id:
             run_ids.add(run_id)
     return run_ids
+
+
+def _normalized_collective_verdict(verdict: str | None, *, status: str | None = None) -> str:
+    raw = str(verdict or "").strip().lower()
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status not in {"", "ok"}:
+        return "regressed"
+    if raw == "improved":
+        return "improved"
+    if raw in {"flat", "baseline", "near_best"}:
+        return "flat"
+    return "regressed"
 
 
 def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:

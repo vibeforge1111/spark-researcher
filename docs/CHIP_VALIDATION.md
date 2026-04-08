@@ -45,6 +45,7 @@ python -m spark_researcher.cli summary
 - the first `collective ready` call identifies any missing collective surfaces accurately
 - `collective publish` succeeds
 - the final `collective ready` call returns `ready: true`
+- the final `collective ready` call confirms `spark_swarm_payload_paths_match_specialization: true`
 - `summary` reports the expected best metric for the chip
 
 ## What To Report
@@ -58,6 +59,7 @@ python -m spark_researcher.cli summary
 - Spark Swarm readiness verdict
 - whether suggestions were appended or the chip exhausted its current frontier
 - any regressions, plateaus, or system errors
+- whether the payload path ids are specialization-scoped or stale
 
 ## Current Reference Results
 
@@ -79,3 +81,15 @@ Validation on March 10, 2026:
 ## Rule
 
 If a chip requires extra one-off steps outside this flow, fix the chip or raise the chip standard explicitly. Do not let hidden operator rituals become part of the protocol.
+
+## Swarm Repair Rule
+
+If `collective ready` reports a stale payload path such as `evolution-path:research`, regenerate the payload before trusting hosted Spark Swarm state:
+
+```powershell
+python -m spark_researcher.cli collective spark-swarm-payload
+python -m spark_researcher.cli collective publish
+python -m spark_researcher.cli collective ready
+```
+
+The repaired payload should use a specialization-scoped path such as `evolution-path:startup-yc:research` or `evolution-path:trading-crypto:research`.

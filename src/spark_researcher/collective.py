@@ -169,6 +169,58 @@ def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
     return refs
 
 
+def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
+    chip_result = record.get("chip_result", {})
+    if not isinstance(chip_result, dict):
+        return None
+    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
+        return None
+
+    metrics: dict[str, Any] = {}
+    scalar_fields = (
+        ("benchmark_profile", "benchmarkProfile"),
+        ("benchmark_profile_label", "benchmarkProfileLabel"),
+        ("baseline_id", "baselineId"),
+        ("benchmark_pass_rate", "benchmarkPassRate"),
+        ("outcome_score", "outcomeScore"),
+        ("constraint_score", "constraintScore"),
+        ("track_count", "trackCount"),
+        ("evidence_count", "evidenceCount"),
+        ("total_tool_calls_mean", "totalToolCallsMean"),
+    )
+    for source_key, target_key in scalar_fields:
+        value = chip_result.get(source_key)
+        if value is None:
+            continue
+        metrics[target_key] = value
+
+    track_summaries = chip_result.get("track_summaries", [])
+    if isinstance(track_summaries, list) and track_summaries:
+        metrics["trackSummaries"] = track_summaries
+        strongest = max(
+            (item for item in track_summaries if isinstance(item, dict)),
+            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            default=None,
+        )
+        weakest = min(
+            (item for item in track_summaries if isinstance(item, dict)),
+            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            default=None,
+        )
+        if isinstance(strongest, dict):
+            metrics["strongestTrack"] = strongest
+        if isinstance(weakest, dict):
+            metrics["weakestTrack"] = weakest
+
+    suite_report = chip_result.get("suite_report")
+    if isinstance(suite_report, dict):
+        metrics["benchmarkVersion"] = suite_report.get("benchmark_version")
+        metrics["scenarioPackVersion"] = suite_report.get("scenario_pack_version")
+        metrics["benchmarkSplit"] = suite_report.get("split")
+
+    return metrics or None
+
+
 def build_spark_swarm_collective_payload(
     repo_root: Path,
     runtime_root: Path,
@@ -187,6 +239,7 @@ def build_spark_swarm_collective_payload(
     chip_result = record.get("chip_result", {})
     if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
         evidence_lane = "benchmark_evidence"
+    benchmark_metrics = _benchmark_metrics(record)
 
     workspace_id = os.environ.get("SPARK_SWARM_WORKSPACE_ID", "").strip()
     agent_id, agent_label = _agent_identity(repo_root)
@@ -213,6 +266,7 @@ def build_spark_swarm_collective_payload(
             "support": "strong" if evidence_lane == "benchmark_evidence" and improvement_like else "moderate" if improvement_like else "weak",
             "summary": summary,
             "artifactRefs": _artifact_refs(record),
+            **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
         }
     ]
 
@@ -233,6 +287,7 @@ def build_spark_swarm_collective_payload(
                     if evidence_lane == "benchmark_evidence"
                     else "live_supported" if verdict in {"improved", "near_best"} else "captured"
                 ),
+                **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
                 "createdAt": emitted_at,
                 "updatedAt": emitted_at,
             }
@@ -250,6 +305,7 @@ def build_spark_swarm_collective_payload(
                     "benchmarkStrength": 0.9,
                     "liveStrength": None,
                     "summary": f"{command_name} benchmark-backed mastery candidate",
+                    **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
                     "createdAt": emitted_at,
                     "updatedAt": emitted_at,
                 }
@@ -331,6 +387,7 @@ def build_spark_swarm_collective_payload(
                 "summary": summary,
                 "metricName": metric_name,
                 "metricValue": float(metric_value) if isinstance(metric_value, (int, float)) else None,
+                **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
                 "createdAt": emitted_at,
             }
         ],

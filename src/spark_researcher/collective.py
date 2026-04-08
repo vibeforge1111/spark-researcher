@@ -344,6 +344,109 @@ def _trading_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str
     }
 
 
+def _scorecard_component(key: str, label: str, value: Any, *, goal: str = "higher") -> dict[str, Any] | None:
+    if not isinstance(value, (int, float)):
+        return None
+    normalized = float(value)
+    if normalized < 0.0 or normalized > 1.0:
+        return None
+    return {
+        "key": key,
+        "label": label,
+        "value": normalized,
+        "goal": goal,
+    }
+
+
+def _scorecard_detail(key: str, label: str, value: Any) -> dict[str, Any] | None:
+    if value in {None, ""}:
+        return None
+    return {
+        "key": key,
+        "label": label,
+        "value": str(value),
+    }
+
+
+def _outcome_scorecard(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    metric_name = str(record.get("metric_name") or "").strip()
+    metric_value = record.get("metric_value")
+    chip_result = record.get("chip_result", {})
+    record_metrics = record.get("metrics", {})
+    headline_value = float(metric_value) if isinstance(metric_value, (int, float)) else None
+    headline_label = metric_name.replace("_", " ") if metric_name else None
+    headline_goal = "higher"
+    model_label = "Spark normalized score"
+
+    if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
+        benchmark_headline = benchmark_metrics.get("outcomeScore") if isinstance(benchmark_metrics, dict) else None
+        if isinstance(benchmark_headline, (int, float)):
+            headline_value = float(benchmark_headline)
+            headline_label = "Outcome score"
+        model_label = "Benchmark weighted score"
+
+    if headline_value is None or headline_value < 0.0 or headline_value > 1.0:
+        return None
+
+    scorecard: dict[str, Any] = {
+        "headlineLabel": headline_label,
+        "headlineValue": headline_value,
+        "headlineGoal": headline_goal,
+        "modelLabel": model_label,
+        "components": [],
+        "details": [],
+    }
+
+    components: list[dict[str, Any]] = []
+    details: list[dict[str, Any]] = []
+
+    if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
+        if benchmark_metrics:
+            for item in (
+                _scorecard_component("outcome_score", "Outcome score", benchmark_metrics.get("outcomeScore")),
+                _scorecard_component("constraint_score", "Constraint score", benchmark_metrics.get("constraintScore")),
+                _scorecard_component("benchmark_pass_rate", "Benchmark pass rate", benchmark_metrics.get("benchmarkPassRate")),
+            ):
+                if item:
+                    components.append(item)
+        for item in (
+            _scorecard_detail("benchmark_name", "Benchmark", "TheStartupBench"),
+            _scorecard_detail("scenario_pack", "Scenario pack", benchmark_metrics.get("scenarioPackVersion") if benchmark_metrics else None),
+            _scorecard_detail("baseline_id", "Baseline", benchmark_metrics.get("baselineId") if benchmark_metrics else None),
+        ):
+            if item:
+                details.append(item)
+    elif isinstance(chip_result, dict) and str(chip_result.get("data_mode", "")).strip() == "contract_window_backtest":
+        scorecard["modelLabel"] = "Trading backtest quality"
+        if isinstance(record_metrics, dict):
+            for item in (
+                _scorecard_component("profitability_score", "Profitability score", metric_value),
+                _scorecard_component("win_rate", "Win rate", record_metrics.get("win_rate")),
+                _scorecard_component("paper_trade_readiness", "Paper trade readiness", record_metrics.get("paper_trade_readiness")),
+                _scorecard_component("holdout_profitability", "Holdout profitability", chip_result.get("holdout_profitability_score")),
+                _scorecard_component("walk_forward_consistency", "Walk-forward consistency", chip_result.get("walk_forward_consistency")),
+                _scorecard_component("stress_resilience", "Stress resilience", chip_result.get("stress_resilience")),
+                _scorecard_component("max_drawdown", "Max drawdown", record_metrics.get("max_drawdown"), goal="lower"),
+            ):
+                if item:
+                    components.append(item)
+        for item in (
+            _scorecard_detail("trade_count", "Trade count", chip_result.get("trade_count")),
+            _scorecard_detail("minimum_trade_count", "Minimum trade count", chip_result.get("minimum_trade_count")),
+            _scorecard_detail("evaluated_asset", "Evaluated asset", chip_result.get("evaluated_asset")),
+            _scorecard_detail("evaluated_timeframe", "Evaluated timeframe", chip_result.get("evaluated_timeframe")),
+            _scorecard_detail("fallback_reason", "Fallback", chip_result.get("data_fallback_reason")),
+        ):
+            if item:
+                details.append(item)
+
+    if not components and not details:
+        return None
+    scorecard["components"] = components
+    scorecard["details"] = details
+    return scorecard
+
+
 def _spark_swarm_bridge_state_path() -> Path:
     return Path.home() / ".spark-swarm" / "bridge-state.json"
 
@@ -388,6 +491,7 @@ def build_spark_swarm_collective_payload(
         evidence_lane = "benchmark_evidence"
     benchmark_metrics = _benchmark_metrics(record) or _trading_benchmark_metrics(record)
     benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics) or _trading_outcome_context(record, benchmark_metrics)
+    outcome_scorecard = _outcome_scorecard(record, benchmark_metrics)
 
     workspace_id = _resolved_spark_swarm_workspace_id() or ""
     agent_id, agent_label = _agent_identity(repo_root)
@@ -535,7 +639,7 @@ def build_spark_swarm_collective_payload(
                 "summary": summary,
                 "metricName": metric_name,
                 "metricValue": float(metric_value) if isinstance(metric_value, (int, float)) else None,
-                **({"context": benchmark_outcome_context} if benchmark_outcome_context else {}),
+                **({"context": {**(benchmark_outcome_context or {}), **({"scorecard": outcome_scorecard} if outcome_scorecard else {})}} if benchmark_outcome_context or outcome_scorecard else {}),
                 **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
                 "createdAt": emitted_at,
             }

@@ -146,6 +146,9 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     assert payload["outcomes"][0]["benchmarkMetrics"]["benchmarkPassRate"] == 1.0
     assert payload["outcomes"][0]["benchmarkMetrics"]["strongestTrack"]["track"] == "scale"
     assert payload["masteries"][0]["benchmarkMetrics"]["benchmarkVersion"] == "0.2.0-draft"
+    assert payload["outcomes"][0]["context"]["scorecard"]["headlineValue"] == 0.81
+    assert payload["outcomes"][0]["context"]["scorecard"]["headlineLabel"] == "Outcome score"
+    assert payload["outcomes"][0]["context"]["scorecard"]["components"][0]["key"] == "outcome_score"
 
 
 def test_frontmatter_manifest_drives_identity(tmp_path: Path) -> None:
@@ -269,6 +272,9 @@ def test_write_spark_swarm_collective_payload_from_trading_backtest(tmp_path: Pa
     assert outcome["context"]["trading"]["evaluatedAsset"] == "BTC"
     assert outcome["context"]["trading"]["evaluatedTimeframe"] == "1h"
     assert outcome["context"]["trading"]["fallbackReason"] == "requested timeframe `4h` unavailable"
+    assert outcome["context"]["scorecard"]["modelLabel"] == "Trading backtest quality"
+    assert outcome["context"]["scorecard"]["components"][1]["key"] == "win_rate"
+    assert outcome["context"]["scorecard"]["details"][0]["key"] == "trade_count"
     assert outcome["benchmarkMetrics"]["requestedAssetUniverse"] == "BTC,ETH"
     assert outcome["benchmarkMetrics"]["tradeCount"] == 35
     assert outcome["benchmarkMetrics"]["paperTradeReadiness"] == 0.024

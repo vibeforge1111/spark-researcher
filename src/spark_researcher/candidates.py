@@ -466,8 +466,21 @@ def _chip_suggestion_packet(
         config=config,
     )
     suggestions = [_trial_from_packet(item, default_commands=[command_name]) for item in packet.get("suggestions", [])]
+    passthrough_keys = (
+        "progression",
+        "research_refresh",
+        "research_frontier",
+        "research_selection",
+    )
+
+    def with_passthrough(base: dict[str, Any]) -> dict[str, Any]:
+        for key in passthrough_keys:
+            if key in packet:
+                base[key] = packet[key]
+        return base
+
     if suggestions:
-        return {
+        return with_passthrough({
             "command_name": command_name,
             "baseline_metric": packet.get("baseline_metric"),
             "beneficial_primitives": packet.get("beneficial_primitives", []),
@@ -477,11 +490,23 @@ def _chip_suggestion_packet(
             "suggestions": _serialize_trials(suggestions, limit=limit),
             "source": "chip",
             "chip_name": packet.get("chip_name"),
-        }
+        })
+    if any(packet.get(key) for key in ("reasons", *passthrough_keys)):
+        return with_passthrough({
+            "command_name": command_name,
+            "baseline_metric": packet.get("baseline_metric"),
+            "beneficial_primitives": packet.get("beneficial_primitives", []),
+            "failure_priorities": failure_priorities,
+            "suggestion_count": 0,
+            "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
+            "suggestions": [],
+            "source": "chip",
+            "chip_name": packet.get("chip_name"),
+        })
     frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
     if int(frontier_packet.get("suggestion_count", 0)) > 0:
         return frontier_packet
-    return {
+    return with_passthrough({
         "command_name": command_name,
         "baseline_metric": packet.get("baseline_metric"),
         "beneficial_primitives": packet.get("beneficial_primitives", []),
@@ -491,7 +516,7 @@ def _chip_suggestion_packet(
         "suggestions": [],
         "source": "chip",
         "chip_name": packet.get("chip_name"),
-    }
+    })
 
 
 def _core_suggestion_packet(config: Any, runtime_root: Path, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:

@@ -851,7 +851,43 @@ def _normalized_collective_verdict(verdict: str | None, *, status: str | None = 
     return "regressed"
 
 
+def _collective_readiness_actions(
+    *,
+    config_path: Path,
+    checks: dict[str, bool],
+    hosted_checks: dict[str, bool],
+    payload_path_diagnostics: dict[str, Any],
+) -> list[str]:
+    config_arg = str(config_path)
+    actions: list[str] = []
+    if not checks.get("manifest_present", False):
+        actions.append("Add AUTORESEARCH.md with repo identity, run_command, and publish_command.")
+    if not checks.get("manifest_has_run_command", False):
+        actions.append("Add run_command to AUTORESEARCH.md.")
+    if not checks.get("manifest_has_publish_command", False):
+        actions.append("Add publish_command to AUTORESEARCH.md.")
+    if not checks.get("latest_metric_run_present", False):
+        actions.append(f"Run a metric pass first, then rerun `spark-researcher collective ready --config {config_arg}`.")
+    if not checks.get("spark_swarm_payload_present", False):
+        actions.append(f"Generate a Spark Swarm payload with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+    if not checks.get("spark_swarm_payload_current", False) and checks.get("latest_metric_run_present", False):
+        actions.append(f"Regenerate the Spark Swarm payload for the latest run with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+    if not checks.get("spark_swarm_payload_paths_match_specialization", False):
+        reason = str(payload_path_diagnostics.get('reason') or 'stale_payload')
+        actions.append(
+            f"Regenerate the Spark Swarm payload because the current one has `{reason}`: `spark-researcher collective spark-swarm-payload --config {config_arg}`."
+        )
+    if not checks.get("capsule_present_for_latest_run", False) and checks.get("latest_metric_run_present", False):
+        actions.append(f"Publish the latest capsule with `spark-researcher collective publish --config {config_arg}`.")
+    if not hosted_checks.get("spark_swarm_workspace_binding_present", False):
+        actions.append("Bind the repo to a Spark Swarm workspace or set SPARK_SWARM_WORKSPACE_ID before hosted sync.")
+    elif not hosted_checks.get("spark_swarm_payload_has_workspace_id", False):
+        actions.append(f"Regenerate the Spark Swarm payload after workspace binding so it captures workspaceId: `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+    return actions
+
+
 def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
+    config_path = repo_root / "spark-researcher.project.json"
     manifest_path = repo_root / "AUTORESEARCH.md"
     manifest = _load_manifest(repo_root)
     manifest_metadata = _manifest_metadata(repo_root)
@@ -886,6 +922,12 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "spark_swarm_workspace_binding_present": effective_workspace_id is not None,
     }
     hosted_missing = [name for name, ok in hosted_checks.items() if not ok and name != "spark_swarm_payload_has_workspace_id"]
+    recommended_actions = _collective_readiness_actions(
+        config_path=config_path,
+        checks=checks,
+        hosted_checks=hosted_checks,
+        payload_path_diagnostics=payload_path_diagnostics,
+    )
     local_collective = repo_root.parent / "autoresearch-collective"
     return {
         "ready": not missing,
@@ -894,6 +936,7 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "missing": missing,
         "hosted_checks": hosted_checks,
         "hosted_missing": hosted_missing,
+        "recommended_actions": recommended_actions,
         "manifest_path": str(manifest_path),
         "latest_metric_run": latest_run_id,
         "spark_swarm_payload_path": str(spark_swarm_path),

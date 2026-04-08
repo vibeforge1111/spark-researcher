@@ -498,6 +498,9 @@ def test_collective_readiness_rejects_stale_unscoped_path_ids(tmp_path: Path) ->
     assert readiness["ready"] is False
     assert readiness["checks"]["spark_swarm_payload_paths_match_specialization"] is False
     assert "spark_swarm_payload_paths_match_specialization" in readiness["missing"]
+    assert readiness["spark_swarm_payload_path_diagnostics"]["reason"] == "unexpected_evolution_path_id"
+    assert readiness["spark_swarm_payload_path_diagnostics"]["actual_path_id"] == "evolution-path:research"
+    assert readiness["spark_swarm_payload_path_diagnostics"]["expected_path_id"] == "evolution-path:starter-lab:research"
 
 
 def test_collective_uses_bridge_bound_workspace_id_when_env_is_missing(tmp_path: Path, monkeypatch) -> None:

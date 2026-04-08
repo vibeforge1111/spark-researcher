@@ -132,6 +132,13 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     assert payload["insights"][0]["status"] == "benchmark_supported"
     assert payload["outcomes"][0]["verdict"] == "improved"
     assert payload["outcomes"][0]["evidenceLane"] == "benchmark_evidence"
+    assert payload["outcomes"][0]["context"]["benchmark"]["benchmarkName"] == "TheStartupBench"
+    assert payload["outcomes"][0]["context"]["benchmark"]["scenarioId"] == "baseline"
+    assert payload["outcomes"][0]["context"]["benchmark"]["scenarioPack"] == "strategy-test-pack-0.9.0"
+    assert payload["outcomes"][0]["context"]["benchmark"]["baselineId"] == "heuristic_governance_operator"
+    assert payload["outcomes"][0]["context"]["benchmark"]["strongestComponent"] == "scale"
+    assert payload["outcomes"][0]["context"]["benchmark"]["weakestComponent"] == "board"
+    assert payload["outcomes"][0]["context"]["benchmark"]["componentScores"]["scale"] == 0.84
     assert payload["outcomes"][0]["benchmarkMetrics"]["outcomeScore"] == 0.81
     assert payload["outcomes"][0]["benchmarkMetrics"]["constraintScore"] == 1.0
     assert payload["outcomes"][0]["benchmarkMetrics"]["benchmarkPassRate"] == 1.0

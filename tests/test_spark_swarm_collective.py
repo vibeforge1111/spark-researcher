@@ -93,6 +93,27 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
         "verdict": "improved",
         "candidate_id": "baseline",
         "candidate_summary": "A stronger training lane",
+        "chip_result": {
+            "comparison_class": "benchmark_grounded",
+            "benchmark_profile": "strategy_test",
+            "benchmark_profile_label": "Hidden strategy suite",
+            "baseline_id": "heuristic_governance_operator",
+            "benchmark_pass_rate": 1.0,
+            "outcome_score": 0.81,
+            "constraint_score": 1.0,
+            "track_count": 2,
+            "evidence_count": 7,
+            "total_tool_calls_mean": 24.5,
+            "track_summaries": [
+                {"track": "board", "scenario_score_mean": 0.72, "pass_rate_mean": 1.0},
+                {"track": "scale", "scenario_score_mean": 0.84, "pass_rate_mean": 1.0},
+            ],
+            "suite_report": {
+                "benchmark_version": "0.2.0-draft",
+                "scenario_pack_version": "strategy-test-pack-0.9.0",
+                "split": "test",
+            },
+        },
         "run_dir": str(repo_root / "artifacts" / "runs" / "20260319-train"),
         "log_path": str(repo_root / "artifacts" / "runs" / "20260319-train" / "train.log"),
         "trace_path": str(repo_root / "artifacts" / "traces" / "run.jsonl"),
@@ -108,8 +129,14 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     assert payload["agentId"] == "agent:loopsmith"
     assert payload["specialization"]["key"] == "starter-lab"
-    assert payload["insights"][0]["status"] == "live_supported"
+    assert payload["insights"][0]["status"] == "benchmark_supported"
     assert payload["outcomes"][0]["verdict"] == "improved"
+    assert payload["outcomes"][0]["evidenceLane"] == "benchmark_evidence"
+    assert payload["outcomes"][0]["benchmarkMetrics"]["outcomeScore"] == 0.81
+    assert payload["outcomes"][0]["benchmarkMetrics"]["constraintScore"] == 1.0
+    assert payload["outcomes"][0]["benchmarkMetrics"]["benchmarkPassRate"] == 1.0
+    assert payload["outcomes"][0]["benchmarkMetrics"]["strongestTrack"]["track"] == "scale"
+    assert payload["masteries"][0]["benchmarkMetrics"]["benchmarkVersion"] == "0.2.0-draft"
 
 
 def test_frontmatter_manifest_drives_identity(tmp_path: Path) -> None:
@@ -192,6 +219,7 @@ def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     assert payload["outcomes"][0]["metricValue"] == 1.5
     assert payload["runtimePulse"]["stageKey"] == "train"
     assert payload["insights"][0]["id"] == f"insight:{record['run_id']}"
+    assert "benchmarkMetrics" not in payload["outcomes"][0]
 
 
 def test_collective_readiness_tracks_latest_payload_and_capsule(tmp_path: Path) -> None:

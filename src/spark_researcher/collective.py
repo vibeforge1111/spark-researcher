@@ -759,6 +759,54 @@ def _payload_workspace_id(path: Path) -> str | None:
     return workspace_id or None
 
 
+def _payload_paths_match_specialization(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    specialization = payload.get("specialization", {})
+    if not isinstance(specialization, dict):
+        return False
+    specialization_key = str(specialization.get("key") or "").strip()
+    if not specialization_key:
+        return False
+
+    evolution_paths = payload.get("evolutionPaths", [])
+    outcomes = payload.get("outcomes", [])
+    if not isinstance(evolution_paths, list) or not evolution_paths:
+        return False
+    if not isinstance(outcomes, list) or not outcomes:
+        return False
+
+    expected_path_ids: set[str] = set()
+    for entry in evolution_paths:
+        if not isinstance(entry, dict):
+            return False
+        path_id = str(entry.get("id") or "").strip()
+        summary = str(entry.get("summary") or "").strip()
+        command_name = ""
+        if summary.startswith("Improve ") and " on " in summary:
+            command_name = summary[len("Improve ") :].split(" on ", 1)[0].strip()
+        if not path_id or not command_name:
+            return False
+        expected_path_id = _evolution_path_id(specialization_key, command_name)
+        if path_id != expected_path_id:
+            return False
+        expected_path_ids.add(expected_path_id)
+
+    for outcome in outcomes:
+        if not isinstance(outcome, dict):
+            return False
+        if str(outcome.get("targetType") or "").strip() != "evolution_path":
+            return False
+        target_id = str(outcome.get("targetId") or "").strip()
+        if target_id not in expected_path_ids:
+            return False
+    return True
+
+
 def _capsule_run_ids(root: Path) -> set[str]:
     run_ids: set[str] = set()
     if not root.exists():
@@ -811,6 +859,7 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "latest_metric_run_present": latest is not None,
         "spark_swarm_payload_present": spark_swarm_path.exists(),
         "spark_swarm_payload_current": latest_run_id is not None and payload_run_id == latest_run_id,
+        "spark_swarm_payload_paths_match_specialization": _payload_paths_match_specialization(spark_swarm_path),
         "capsule_present_for_latest_run": latest_run_id is not None and latest_run_id in capsule_ids,
     }
     missing = [name for name, ok in checks.items() if not ok]

@@ -192,6 +192,7 @@ A chip is only Spark Swarm ready when all of these are true:
 - the manifest has identity plus `run_command` and `publish_command`
 - the chip has at least one numeric metric run in the ledger
 - `.spark-swarm/collective-sync.json` exists and matches the latest run
+- `.spark-swarm/collective-sync.json` uses specialization-scoped evolution path ids such as `evolution-path:startup-yc:research` instead of a shared `evolution-path:research`
 - `.autoresearch/capsules/` contains a capsule for the latest run
 
 Use:
@@ -201,6 +202,30 @@ spark-researcher collective ready
 ```
 
 This reports the exact missing surfaces instead of treating partial wiring as success.
+
+If the payload is stale, `collective ready` now also reports:
+
+- the exact stale `path_id` or `targetId`
+- the expected specialization-scoped path id
+- the next command to run to regenerate the payload
+
+## Swarm Resync
+
+If a chip looks connected locally but the hosted Spark Swarm lane is wrong, resync from the chip repo root:
+
+```powershell
+$env:PYTHONPATH='C:\Users\USER\Desktop\spark-researcher\src;src'
+python -m spark_researcher.cli collective ready
+python -m spark_researcher.cli collective spark-swarm-payload
+python -m spark_researcher.cli collective publish
+python -m spark_researcher.cli collective ready
+```
+
+Interpretation:
+
+- if the first `collective ready` call reports `spark_swarm_payload_paths_match_specialization: false`, the chip is still carrying a stale payload and must regenerate `.spark-swarm/collective-sync.json`
+- if `spark_swarm_payload_has_workspace_id: false`, bind the chip to a Spark Swarm workspace first, then regenerate the payload
+- if the final `collective ready` call still reports `ready: false`, fix the listed missing surfaces before syncing hosted state
 
 ## Commit Rule
 

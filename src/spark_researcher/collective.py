@@ -29,18 +29,53 @@ def _slug(value: str) -> str:
     return normalized or "generalist"
 
 
-def _manifest_fields(repo_root: Path) -> dict[str, str]:
-    path = repo_root / "AUTORESEARCH.md"
-    if not path.exists():
+def _repo_key(value: str) -> str:
+    repo_name = value.strip().split("/")[-1]
+    if repo_name.startswith("domain-chip-"):
+        repo_name = repo_name[len("domain-chip-") :]
+    return _slug(repo_name)
+
+
+def _parse_frontmatter(raw: str) -> dict[str, Any]:
+    lines = raw.splitlines()
+    if not lines or lines[0].strip() != "---":
         return {}
 
+    payload: dict[str, Any] = {}
+    current_key: str | None = None
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if line.startswith("  - ") and current_key is not None:
+            payload.setdefault(current_key, [])
+            payload[current_key].append(line[4:].strip())
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        current_key = key.strip()
+        parsed = value.strip()
+        if parsed == "":
+            payload[current_key] = []
+            continue
+        if parsed in {"true", "false"}:
+            payload[current_key] = parsed == "true"
+            continue
+        try:
+            payload[current_key] = json.loads(parsed)
+        except json.JSONDecodeError:
+            payload[current_key] = parsed
+    return payload
+
+
+def _parse_legacy_manifest_fields(raw: str) -> dict[str, str]:
     payload: dict[str, str] = {}
     current_section: str | None = None
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.rstrip()
+    for raw_line in raw.splitlines():
+        line = raw_line.rstrip()
         if not line or line.lstrip().startswith("#"):
             continue
-        if not raw.startswith(" "):
+        if not raw_line.startswith(" "):
             current_section = line[:-1].strip() if line.endswith(":") else None
             continue
         if not current_section or ":" not in line:
@@ -48,6 +83,17 @@ def _manifest_fields(repo_root: Path) -> dict[str, str]:
         key, value = line.strip().split(":", 1)
         payload[f"{current_section}.{key.strip()}"] = value.strip()
     return payload
+
+
+def _manifest_metadata(repo_root: Path) -> dict[str, Any]:
+    path = repo_root / "AUTORESEARCH.md"
+    if not path.exists():
+        return {}
+
+    raw = path.read_text(encoding="utf-8")
+    metadata = _parse_frontmatter(raw)
+    metadata.update(_parse_legacy_manifest_fields(raw))
+    return metadata
 
 
 def latest_metric_run(runtime_root: Path) -> dict[str, Any] | None:
@@ -73,23 +119,32 @@ def _runtime_source(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _agent_identity(repo_root: Path) -> tuple[str, str]:
-    fields = _manifest_fields(repo_root)
-    agent_name = (
-        fields.get("agent.name")
+    fields = _manifest_metadata(repo_root)
+    agent_label = (
+        str(fields.get("agent.name") or "").strip()
+        or str(fields.get("name") or "").strip()
         or os.environ.get("SPARK_SWARM_AGENT_NAME")
         or repo_root.name
     )
-    return f"agent:{_slug(agent_name)}", agent_name
+    repo_value = str(fields.get("repo") or "").strip()
+    agent_key = _repo_key(repo_value) if repo_value else _slug(agent_label)
+    return f"agent:{agent_key}", agent_label
 
 
 def _specialization_descriptor(repo_root: Path) -> dict[str, Any]:
-    fields = _manifest_fields(repo_root)
-    repo_name = fields.get("repo.name") or repo_root.name
-    key = _slug(repo_name)
+    fields = _manifest_metadata(repo_root)
+    repo_label = (
+        str(fields.get("name") or "").strip()
+        or str(fields.get("repo.name") or "").strip()
+        or str(fields.get("repo") or "").strip().split("/")[-1]
+        or repo_root.name
+    )
+    repo_value = str(fields.get("repo") or "").strip()
+    key = _repo_key(repo_value) if repo_value else _slug(repo_label)
     return {
         "id": f"specialization:{key}",
         "key": key,
-        "label": repo_name,
+        "label": repo_label,
         "memoryPolicy": "selective",
     }
 

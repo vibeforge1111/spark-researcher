@@ -215,3 +215,31 @@ def test_collective_readiness_tracks_latest_payload_and_capsule(tmp_path: Path) 
     readiness = collective_readiness(repo_root, runtime_root)
     assert readiness["ready"] is True
     assert readiness["latest_metric_run"] == record["run_id"]
+
+
+def test_publish_latest_normalizes_non_collective_verdicts(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260319-train",
+        "created_at": "2026-03-19T12:00:00+00:00",
+        "command_name": "train",
+        "status": "ok",
+        "metric_name": "score",
+        "metric_value": 1.25,
+        "baseline_value": 1.25,
+        "verdict": "near_best",
+        "candidate_id": "baseline",
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    published = publish_latest(repo_root, runtime_root)
+
+    payload = json.loads(Path(published["manifest_path"]).read_text(encoding="utf-8"))
+    assert payload["verdict"] == "flat"
+    markdown = Path(published["markdown_path"]).read_text(encoding="utf-8")
+    assert "verdict: flat" in markdown

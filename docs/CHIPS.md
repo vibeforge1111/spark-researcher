@@ -7,12 +7,21 @@ Domain chips keep `spark-researcher` small.
 A chip is an external repo with:
 
 - `spark-chip.json`
+- `AUTORESEARCH.md`
 - one or more command hooks
 - its own source code and tests
 
 The manifest now follows `spark-chip.v1` with `spark-hook-io.v1` hook I/O.
 
 Spark calls chip hooks with `--input <json> --output <json>`.
+
+`AUTORESEARCH.md` is the collective bridge contract. It should declare at least:
+
+- repo identity
+- display name or agent identity
+- `run_command`
+- `publish_command`
+- collective and adoption policy
 
 Supported hooks:
 
@@ -25,6 +34,7 @@ Validate a configured chip with:
 
 ```powershell
 spark-researcher chips validate
+spark-researcher collective ready
 ```
 
 The canonical schema lives at `schemas/spark-chip.schema.json`.
@@ -138,6 +148,7 @@ The chip owns:
 - domain suggestions
 - domain packets
 - domain watchtower pages
+- collective identity and publish policy through `AUTORESEARCH.md`
 
 ## Packet Rule
 
@@ -172,6 +183,24 @@ Do this through the existing `suggest` hook rather than inventing a new orchestr
 Generated chip suggestions now land in `artifacts/frontier/queue.json`. Keep `spark-researcher.project.json` for stable seed candidates and promote queue items back into the main config only when you want them to become part of the standing project spec.
 
 This keeps the kernel portable while letting domains evolve in separate repos.
+
+## Swarm Readiness
+
+A chip is only Spark Swarm ready when all of these are true:
+
+- `AUTORESEARCH.md` exists
+- the manifest has identity plus `run_command` and `publish_command`
+- the chip has at least one numeric metric run in the ledger
+- `.spark-swarm/collective-sync.json` exists and matches the latest run
+- `.autoresearch/capsules/` contains a capsule for the latest run
+
+Use:
+
+```powershell
+spark-researcher collective ready
+```
+
+This reports the exact missing surfaces instead of treating partial wiring as success.
 
 ## Commit Rule
 

@@ -11,6 +11,7 @@ Prove four things:
 - the chip produces memory and watchtower output correctly
 - the chip converges cleanly without hidden system errors
 - the chip can reopen the frontier from winners and failures instead of only replaying a fixed candidate list
+- the chip is actually ready to publish into Spark Swarm rather than only producing local run state
 
 ## Use A Clean Repo
 
@@ -28,6 +29,9 @@ python -m spark_researcher.cli chips validate
 python -m spark_researcher.cli autoloop --command research
 python -m spark_researcher.cli memory sync
 python -m spark_researcher.cli obsidian build
+python -m spark_researcher.cli collective ready
+python -m spark_researcher.cli collective publish
+python -m spark_researcher.cli collective ready
 python -m spark_researcher.cli summary
 ```
 
@@ -38,6 +42,9 @@ python -m spark_researcher.cli summary
 - every run returns exit code `0`
 - `memory sync` succeeds and emits domain documents
 - `obsidian build` succeeds and emits domain pages
+- the first `collective ready` call identifies any missing collective surfaces accurately
+- `collective publish` succeeds
+- the final `collective ready` call returns `ready: true`
 - `summary` reports the expected best metric for the chip
 
 ## What To Report
@@ -48,6 +55,7 @@ python -m spark_researcher.cli summary
 - run count
 - memory document count
 - domain page count
+- Spark Swarm readiness verdict
 - whether suggestions were appended or the chip exhausted its current frontier
 - any regressions, plateaus, or system errors
 

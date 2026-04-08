@@ -534,6 +534,17 @@ def _payload_run_id(path: Path) -> str | None:
     return None
 
 
+def _payload_workspace_id(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    workspace_id = str(payload.get("workspaceId") or "").strip()
+    return workspace_id or None
+
+
 def _capsule_run_ids(root: Path) -> set[str]:
     run_ids: set[str] = set()
     if not root.exists():
@@ -569,6 +580,7 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
     latest_run_id = str(latest.get("run_id") or "").strip() if latest else None
     payload_run_id = _payload_run_id(spark_swarm_path)
+    payload_workspace_id = _payload_workspace_id(spark_swarm_path)
     capsule_ids = _capsule_run_ids(capsule_root(repo_root))
     has_agent_identity = bool(
         str(manifest_metadata.get("agent.name") or "").strip()
@@ -586,14 +598,22 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "capsule_present_for_latest_run": latest_run_id is not None and latest_run_id in capsule_ids,
     }
     missing = [name for name, ok in checks.items() if not ok]
+    hosted_checks = {
+        "spark_swarm_payload_has_workspace_id": payload_workspace_id is not None,
+    }
+    hosted_missing = [name for name, ok in hosted_checks.items() if not ok]
     local_collective = repo_root.parent / "autoresearch-collective"
     return {
         "ready": not missing,
+        "hosted_ready": not missing and not hosted_missing,
         "checks": checks,
         "missing": missing,
+        "hosted_checks": hosted_checks,
+        "hosted_missing": hosted_missing,
         "manifest_path": str(manifest_path),
         "latest_metric_run": latest_run_id,
         "spark_swarm_payload_path": str(spark_swarm_path),
+        "spark_swarm_workspace_id": payload_workspace_id,
         "capsule_root": str(capsule_root(repo_root)),
         "local_collective_repo_present": local_collective.exists(),
         "local_collective_repo_path": str(local_collective),

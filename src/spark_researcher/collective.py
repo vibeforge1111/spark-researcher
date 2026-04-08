@@ -262,6 +262,30 @@ def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[s
     }
 
 
+def _spark_swarm_bridge_state_path() -> Path:
+    return Path.home() / ".spark-swarm" / "bridge-state.json"
+
+
+def _load_spark_swarm_bridge_state() -> dict[str, Any]:
+    path = _spark_swarm_bridge_state_path()
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _resolved_spark_swarm_workspace_id() -> str | None:
+    explicit = os.environ.get("SPARK_SWARM_WORKSPACE_ID", "").strip()
+    if explicit:
+        return explicit
+    bridge_state = _load_spark_swarm_bridge_state()
+    workspace_id = str(bridge_state.get("workspace_id") or bridge_state.get("workspaceId") or "").strip()
+    return workspace_id or None
+
+
 def build_spark_swarm_collective_payload(
     repo_root: Path,
     runtime_root: Path,
@@ -283,7 +307,7 @@ def build_spark_swarm_collective_payload(
     benchmark_metrics = _benchmark_metrics(record)
     benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics)
 
-    workspace_id = os.environ.get("SPARK_SWARM_WORKSPACE_ID", "").strip()
+    workspace_id = _resolved_spark_swarm_workspace_id() or ""
     agent_id, agent_label = _agent_identity(repo_root)
     specialization = _specialization_descriptor(repo_root)
     specialization_id = str(specialization["id"])
@@ -581,6 +605,8 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     latest_run_id = str(latest.get("run_id") or "").strip() if latest else None
     payload_run_id = _payload_run_id(spark_swarm_path)
     payload_workspace_id = _payload_workspace_id(spark_swarm_path)
+    bound_workspace_id = _resolved_spark_swarm_workspace_id()
+    effective_workspace_id = payload_workspace_id or bound_workspace_id
     capsule_ids = _capsule_run_ids(capsule_root(repo_root))
     has_agent_identity = bool(
         str(manifest_metadata.get("agent.name") or "").strip()
@@ -600,8 +626,9 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     missing = [name for name, ok in checks.items() if not ok]
     hosted_checks = {
         "spark_swarm_payload_has_workspace_id": payload_workspace_id is not None,
+        "spark_swarm_workspace_binding_present": effective_workspace_id is not None,
     }
-    hosted_missing = [name for name, ok in hosted_checks.items() if not ok]
+    hosted_missing = [name for name, ok in hosted_checks.items() if not ok and name != "spark_swarm_payload_has_workspace_id"]
     local_collective = repo_root.parent / "autoresearch-collective"
     return {
         "ready": not missing,
@@ -613,7 +640,9 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "manifest_path": str(manifest_path),
         "latest_metric_run": latest_run_id,
         "spark_swarm_payload_path": str(spark_swarm_path),
-        "spark_swarm_workspace_id": payload_workspace_id,
+        "spark_swarm_workspace_id": effective_workspace_id,
+        "spark_swarm_payload_workspace_id": payload_workspace_id,
+        "spark_swarm_bound_workspace_id": bound_workspace_id,
         "capsule_root": str(capsule_root(repo_root)),
         "local_collective_repo_present": local_collective.exists(),
         "local_collective_repo_path": str(local_collective),

@@ -83,10 +83,7 @@ Treat generated local files like `AUTORESEARCH.md` and `PROJECT.md` as operation
 
 ## Domain Repo Docs
 
-These stay with the chip repos and should not be duplicated into the core docs unless the content becomes cross-domain policy:
-
-- `domain-chip-vibe-incubator/docs/`
-- `domain-chip-trading-crypto-private/docs/`
+These stay with the external chip repos and should not be duplicated into the core docs unless the content becomes cross-domain policy.
 
 ## Consolidation Rule
 

@@ -6,3 +6,4 @@ __pycache__/
 compiled.json
 *.egg-info/
 .env.dspy.local
+.gstack/

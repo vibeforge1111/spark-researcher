@@ -214,6 +214,64 @@ def test_repo_identity_stays_stable_when_manifest_label_changes(tmp_path: Path) 
     assert payload["agentId"] == "agent:trading-crypto"
     assert payload["specialization"]["id"] == "specialization:trading-crypto"
     assert payload["specialization"]["label"] == "Crypto Trading"
+
+
+def test_write_spark_swarm_collective_payload_from_trading_backtest(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260408-trading",
+        "created_at": "2026-04-08T14:43:59+00:00",
+        "command_name": "research",
+        "status": "ok",
+        "metric_name": "profitability_score",
+        "metric_value": 0.4086,
+        "verdict": "improved",
+        "candidate_id": "trend-ema-btceth-4h",
+        "candidate_summary": "Trend doctrine with EMA pullback continuation on BTC and ETH 4h.",
+        "baseline_value": 0.3883,
+        "metrics": {
+            "paper_trade_readiness": 0.024,
+            "max_drawdown": 0.99,
+            "win_rate": 0.4286,
+            "sharpe_ratio": -1.093,
+        },
+        "chip_result": {
+            "data_mode": "contract_window_backtest",
+            "requested_asset_universe": "BTC,ETH",
+            "requested_timeframe": "4h",
+            "evaluated_asset": "BTC",
+            "evaluated_timeframe": "1h",
+            "data_fallback_reason": "requested timeframe `4h` unavailable",
+            "trade_count": 35,
+            "minimum_trade_count": 25,
+            "trade_count_gate_pass": True,
+            "holdout_profitability_score": 0.4086,
+            "walk_forward_consistency": 0.2,
+            "stress_resilience": 0.0,
+        },
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
+
+    payload = json.loads(spark_swarm_collective_payload_path(repo_root).read_text(encoding="utf-8"))
+    outcome = payload["outcomes"][0]
+    assert outcome["context"]["benchmark"]["benchmarkName"] == "TradingBacktest"
+    assert outcome["context"]["benchmark"]["scenarioId"] == "trend-ema-btceth-4h"
+    assert outcome["context"]["benchmark"]["scenarioPack"] == "contract_window_backtest"
+    assert outcome["context"]["benchmark"]["baselineId"] == "global-baseline"
+    assert outcome["context"]["benchmark"]["strongestComponent"] == "holdout"
+    assert outcome["context"]["trading"]["evaluatedAsset"] == "BTC"
+    assert outcome["context"]["trading"]["evaluatedTimeframe"] == "1h"
+    assert outcome["context"]["trading"]["fallbackReason"] == "requested timeframe `4h` unavailable"
+    assert outcome["benchmarkMetrics"]["requestedAssetUniverse"] == "BTC,ETH"
+    assert outcome["benchmarkMetrics"]["tradeCount"] == 35
+    assert outcome["benchmarkMetrics"]["paperTradeReadiness"] == 0.024
 def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_manifest(repo_root)

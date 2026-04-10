@@ -24,6 +24,7 @@ platforms:
 safety_boundaries:
   - do not auto-apply self edits
   - do not write outside declared mutable targets
+  - do not create or keep domain-chip repos inside spark-researcher; domain chips must live as sibling Desktop repos
   - keep the counted codebase below the explicit line budget
   - keep the ledger and generated packets visible to the owner
   - external coding agents must follow the repo contract in AGENTS.md

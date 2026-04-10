@@ -4,7 +4,12 @@ import json
 import sys
 from pathlib import Path
 
-from spark_researcher.collective import collective_readiness, publish_latest, write_spark_swarm_collective_payload_from_latest
+from spark_researcher.collective import (
+    build_spark_swarm_collective_payload,
+    collective_readiness,
+    publish_latest,
+    write_spark_swarm_collective_payload_from_latest,
+)
 from spark_researcher.config import load_config
 from spark_researcher.paths import ledger_path, resolve_runtime_root, spark_swarm_collective_payload_path
 from spark_researcher.runner import run_once
@@ -278,6 +283,117 @@ def test_write_spark_swarm_collective_payload_from_trading_backtest(tmp_path: Pa
     assert outcome["benchmarkMetrics"]["requestedAssetUniverse"] == "BTC,ETH"
     assert outcome["benchmarkMetrics"]["tradeCount"] == 35
     assert outcome["benchmarkMetrics"]["paperTradeReadiness"] == 0.024
+def test_repo_identity_stays_stable_when_manifest_label_changes(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    (repo_root / "AUTORESEARCH.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "schema_version: 1",
+                "repo: vibeforge1111/domain-chip-trading-crypto",
+                "name: Crypto Trading",
+                "run_command: spark-researcher run --command train",
+                "publish_command: spark-researcher collective publish",
+                "---",
+                "",
+                "# AUTORESEARCH",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260408-train",
+        "created_at": "2026-04-08T16:00:00+00:00",
+        "command_name": "train",
+        "status": "ok",
+        "metric_name": "score",
+        "metric_value": 0.5,
+        "verdict": "flat",
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
+
+    payload = json.loads(spark_swarm_collective_payload_path(repo_root).read_text(encoding="utf-8"))
+    assert payload["agentId"] == "agent:trading-crypto"
+    assert payload["specialization"]["id"] == "specialization:trading-crypto"
+    assert payload["specialization"]["label"] == "Crypto Trading"
+
+
+def test_evolution_path_ids_are_scoped_by_specialization(tmp_path: Path) -> None:
+    startup_root = tmp_path / "startup"
+    startup_root.mkdir()
+    (startup_root / "AUTORESEARCH.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "schema_version: 1",
+                "repo: vibeforge1111/domain-chip-startup-yc",
+                "name: Startup YC",
+                "run_command: spark-researcher run --command research",
+                "publish_command: spark-researcher collective publish",
+                "---",
+                "",
+                "# AUTORESEARCH",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    trading_root = tmp_path / "trading"
+    trading_root.mkdir()
+    (trading_root / "AUTORESEARCH.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "schema_version: 1",
+                "repo: vibeforge1111/domain-chip-trading-crypto",
+                "name: Crypto Trading",
+                "run_command: spark-researcher run --command research",
+                "publish_command: spark-researcher collective publish",
+                "---",
+                "",
+                "# AUTORESEARCH",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    startup_config = load_config(_write_config(startup_root))
+    trading_config = load_config(_write_config(trading_root))
+    startup_record = {
+        "run_id": "startup-run",
+        "created_at": "2026-04-08T16:00:00+00:00",
+        "command_name": "research",
+        "status": "ok",
+        "metric_name": "score",
+        "metric_value": 0.71,
+        "verdict": "improved",
+    }
+    trading_record = {
+        "run_id": "trading-run",
+        "created_at": "2026-04-08T16:05:00+00:00",
+        "command_name": "research",
+        "status": "ok",
+        "metric_name": "profitability_score",
+        "metric_value": 0.41,
+        "verdict": "flat",
+    }
+
+    startup_payload = build_spark_swarm_collective_payload(startup_root, startup_root, startup_config, startup_record)
+    trading_payload = build_spark_swarm_collective_payload(trading_root, trading_root, trading_config, trading_record)
+
+    assert startup_payload["evolutionPaths"][0]["id"] == "evolution-path:startup-yc:research"
+    assert trading_payload["evolutionPaths"][0]["id"] == "evolution-path:trading-crypto:research"
+    assert startup_payload["evolutionPaths"][0]["id"] != trading_payload["evolutionPaths"][0]["id"]
+    assert startup_payload["outcomes"][0]["targetId"] == startup_payload["evolutionPaths"][0]["id"]
+    assert trading_payload["outcomes"][0]["targetId"] == trading_payload["evolutionPaths"][0]["id"]
 def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_manifest(repo_root)

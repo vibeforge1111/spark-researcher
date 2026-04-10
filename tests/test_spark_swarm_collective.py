@@ -4,9 +4,9 @@ import json
 import sys
 from pathlib import Path
 
-from spark_researcher.collective import write_spark_swarm_collective_payload_from_latest
+from spark_researcher.collective import collective_readiness, publish_latest, write_spark_swarm_collective_payload_from_latest
 from spark_researcher.config import load_config
-from spark_researcher.paths import ledger_path, spark_swarm_collective_payload_path
+from spark_researcher.paths import ledger_path, resolve_runtime_root, spark_swarm_collective_payload_path
 from spark_researcher.runner import run_once
 
 
@@ -178,8 +178,6 @@ def test_repo_identity_stays_stable_when_manifest_label_changes(tmp_path: Path) 
     assert payload["agentId"] == "agent:trading-crypto"
     assert payload["specialization"]["id"] == "specialization:trading-crypto"
     assert payload["specialization"]["label"] == "Crypto Trading"
-
-
 def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_manifest(repo_root)
@@ -194,3 +192,26 @@ def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     assert payload["outcomes"][0]["metricValue"] == 1.5
     assert payload["runtimePulse"]["stageKey"] == "train"
     assert payload["insights"][0]["id"] == f"insight:{record['run_id']}"
+
+
+def test_collective_readiness_tracks_latest_payload_and_capsule(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    (repo_root / "train.py").write_text("print('score=1.5')\n", encoding="utf-8")
+    config_path = _write_config(repo_root)
+    runtime_root = resolve_runtime_root(config_path)
+
+    readiness = collective_readiness(repo_root, runtime_root)
+    assert readiness["ready"] is False
+    assert "latest_metric_run_present" in readiness["missing"]
+
+    record = run_once(config_path, "train")
+    assert record["status"] == "ok"
+    readiness = collective_readiness(repo_root, runtime_root)
+    assert readiness["checks"]["spark_swarm_payload_current"] is True, readiness
+    assert readiness["checks"]["capsule_present_for_latest_run"] is False
+
+    publish_latest(repo_root, runtime_root)
+    readiness = collective_readiness(repo_root, runtime_root)
+    assert readiness["ready"] is True
+    assert readiness["latest_metric_run"] == record["run_id"]

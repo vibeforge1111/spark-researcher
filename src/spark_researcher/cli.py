@@ -10,7 +10,7 @@ from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, run_continuous_autoloop, suggest_trials
 from .chip_starter import init_chip, normalize_chip_name, resolve_chip_target
 from .chips import chip_status, chip_validation
-from .collective import absorb, collective_status, publish_latest, sync_local_collective, write_spark_swarm_collective_payload_from_latest
+from .collective import absorb, collective_readiness, collective_status, publish_latest, sync_local_collective, write_spark_swarm_collective_payload_from_latest
 from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
 from .failures import surprise_status
 from .intent import build_intent_brief
@@ -208,6 +208,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(collective_publish)
     collective_status_parser = collective_sub.add_parser("status")
     add_config_argument(collective_status_parser)
+    collective_ready_parser = collective_sub.add_parser("ready")
+    add_config_argument(collective_ready_parser)
     collective_spark_swarm_payload = collective_sub.add_parser("spark-swarm-payload")
     add_config_argument(collective_spark_swarm_payload)
     collective_sync_parser = collective_sub.add_parser("sync-local")
@@ -384,6 +386,9 @@ def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Pa
 def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
     if args.collective_command == "publish":
         print_json(publish_latest(repo_root, runtime_root))
+        return
+    if args.collective_command == "ready":
+        print_json(collective_readiness(repo_root, runtime_root))
         return
     if args.collective_command == "sync-local":
         print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))

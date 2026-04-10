@@ -237,6 +237,10 @@ Nothing important is hidden behind a database by default.
 
 For Spark Swarm specialization-path work, the main architecture notes are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+Rule:
+- never place a `domain-chip-*` repo inside the `spark-researcher` repo tree
+- create chips as sibling Desktop repos, for example `C:\Users\USER\Desktop\domain-chip-foo`
+
 ## Where To Read Next
 
 If you are new:

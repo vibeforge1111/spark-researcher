@@ -14,6 +14,7 @@ This repo may be edited by external coding agents such as Codex, Claude, OpenCod
 - only edit files inside the mutable targets listed in the self-edit request
 - only work inside the copied workspace Spark provides
 - do not write outside the workspace unless the owner explicitly requests exporting or moving a completed self-contained artifact to a declared destination
+- do not create, recreate, copy, or move any `domain-chip-*` repo inside the `spark-researcher` repo tree; domain chips must live as sibling Desktop repos such as `C:\Users\USER\Desktop\domain-chip-foo`
 - do not bypass declared guardrails
 - do not add hidden services, daemons, or background processes
 - once the owner has enabled autonomous shipping, git state changes needed to complete the task are allowed after the requested changes are implemented and verified

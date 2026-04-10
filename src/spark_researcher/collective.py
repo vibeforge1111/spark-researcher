@@ -223,11 +223,45 @@ def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
     return metrics or None
 
 
+def _trading_benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
+    chip_result = record.get("chip_result", {})
+    if not isinstance(chip_result, dict):
+        return None
+    if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
+        return None
+
+    metrics: dict[str, Any] = {
+        "benchmarkProfile": "contract_window_backtest",
+        "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
+        "requestedTimeframe": chip_result.get("requested_timeframe"),
+        "evaluatedAsset": chip_result.get("evaluated_asset"),
+        "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
+        "fallbackReason": chip_result.get("data_fallback_reason"),
+        "contractCount": chip_result.get("contract_count"),
+        "coveredContractCount": chip_result.get("covered_contract_count"),
+        "tradeCount": chip_result.get("trade_count"),
+        "minimumTradeCount": chip_result.get("minimum_trade_count"),
+        "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
+        "holdoutProfitability": chip_result.get("holdout_profitability_score"),
+        "walkForwardConsistency": chip_result.get("walk_forward_consistency"),
+        "stressResilience": chip_result.get("stress_resilience"),
+    }
+    record_metrics = record.get("metrics", {})
+    if isinstance(record_metrics, dict):
+        metrics["paperTradeReadiness"] = record_metrics.get("paper_trade_readiness")
+        metrics["maxDrawdown"] = record_metrics.get("max_drawdown")
+        metrics["winRate"] = record_metrics.get("win_rate")
+        metrics["sharpeRatio"] = record_metrics.get("sharpe_ratio")
+    return {key: value for key, value in metrics.items() if value is not None} or None
+
+
 def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     if not benchmark_metrics:
         return None
     chip_result = record.get("chip_result", {})
     if not isinstance(chip_result, dict):
+        return None
+    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
         return None
 
     component_scores: dict[str, float] = {}
@@ -261,6 +295,52 @@ def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[s
             "componentScores": component_scores,
             "planner": None,
         }
+    }
+
+
+def _trading_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    chip_result = record.get("chip_result", {})
+    if not isinstance(chip_result, dict):
+        return None
+    if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
+        return None
+
+    component_scores: dict[str, float] = {}
+    metric_sources = {
+        "holdout": chip_result.get("holdout_profitability_score"),
+        "walk_forward": chip_result.get("walk_forward_consistency"),
+        "stress": chip_result.get("stress_resilience"),
+    }
+    record_metrics = record.get("metrics", {})
+    if isinstance(record_metrics, dict):
+        metric_sources["readiness"] = record_metrics.get("paper_trade_readiness")
+    for key, value in metric_sources.items():
+        if isinstance(value, (int, float)):
+            component_scores[key] = float(value)
+    strongest = max(component_scores, key=component_scores.get) if component_scores else None
+    weakest = min(component_scores, key=component_scores.get) if component_scores else None
+
+    return {
+        "benchmark": {
+            "benchmarkName": "TradingBacktest",
+            "scenarioId": record.get("candidate_id") or chip_result.get("evaluated_asset"),
+            "scenarioPack": chip_result.get("data_mode"),
+            "baselineId": "global-baseline" if record.get("baseline_value") is not None else None,
+            "strongestComponent": strongest,
+            "weakestComponent": weakest,
+            "componentScores": component_scores,
+            "planner": None,
+        },
+        "trading": {
+            "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
+            "requestedTimeframe": chip_result.get("requested_timeframe"),
+            "evaluatedAsset": chip_result.get("evaluated_asset"),
+            "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
+            "fallbackReason": chip_result.get("data_fallback_reason"),
+            "tradeCount": chip_result.get("trade_count"),
+            "minimumTradeCount": chip_result.get("minimum_trade_count"),
+            "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
+        },
     }
 
 
@@ -306,8 +386,8 @@ def build_spark_swarm_collective_payload(
     chip_result = record.get("chip_result", {})
     if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
         evidence_lane = "benchmark_evidence"
-    benchmark_metrics = _benchmark_metrics(record)
-    benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics)
+    benchmark_metrics = _benchmark_metrics(record) or _trading_benchmark_metrics(record)
+    benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics) or _trading_outcome_context(record, benchmark_metrics)
 
     workspace_id = _resolved_spark_swarm_workspace_id() or ""
     agent_id, agent_label = _agent_identity(repo_root)

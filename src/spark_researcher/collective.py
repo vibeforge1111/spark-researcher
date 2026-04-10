@@ -34,14 +34,11 @@ def _repo_key(value: str) -> str:
     if repo_name.startswith("domain-chip-"):
         repo_name = repo_name[len("domain-chip-") :]
     return _slug(repo_name)
-
-
 def _parse_frontmatter(raw: str) -> dict[str, Any]:
     lines = raw.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
-
-    payload: dict[str, Any] = {}
+    payload: dict[str, str] = {}
     current_key: str | None = None
     for line in lines[1:]:
         if line.strip() == "---":
@@ -67,7 +64,6 @@ def _parse_frontmatter(raw: str) -> dict[str, Any]:
             payload[current_key] = parsed
     return payload
 
-
 def _parse_legacy_manifest_fields(raw: str) -> dict[str, str]:
     payload: dict[str, str] = {}
     current_section: str | None = None
@@ -89,10 +85,10 @@ def _manifest_metadata(repo_root: Path) -> dict[str, Any]:
     path = repo_root / "AUTORESEARCH.md"
     if not path.exists():
         return {}
-
     raw = path.read_text(encoding="utf-8")
     metadata = _parse_frontmatter(raw)
-    metadata.update(_parse_legacy_manifest_fields(raw))
+    legacy_fields = _parse_legacy_manifest_fields(raw)
+    metadata.update(legacy_fields)
     return metadata
 
 
@@ -418,6 +414,76 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
 
 
+def _payload_run_id(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    for outcome in payload.get("outcomes", []):
+        if not isinstance(outcome, dict):
+            continue
+        outcome_id = str(outcome.get("id") or "")
+        if outcome_id.startswith("outcome:"):
+            return outcome_id.split(":", 1)[1]
+    return None
+
+
+def _capsule_run_ids(root: Path) -> set[str]:
+    run_ids: set[str] = set()
+    if not root.exists():
+        return run_ids
+    for path in root.glob("*.manifest.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        run_id = str(payload.get("run_id") or "").strip()
+        if run_id:
+            run_ids.add(run_id)
+    return run_ids
+
+
+def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
+    manifest_path = repo_root / "AUTORESEARCH.md"
+    manifest = _load_manifest(repo_root)
+    manifest_metadata = _manifest_metadata(repo_root)
+    latest = latest_metric_run(runtime_root)
+    spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
+    latest_run_id = str(latest.get("run_id") or "").strip() if latest else None
+    payload_run_id = _payload_run_id(spark_swarm_path)
+    capsule_ids = _capsule_run_ids(capsule_root(repo_root))
+    has_agent_identity = bool(
+        str(manifest_metadata.get("agent.name") or "").strip()
+        or str(manifest_metadata.get("name") or "").strip()
+        or os.environ.get("SPARK_SWARM_AGENT_NAME", "").strip()
+    )
+    checks = {
+        "manifest_present": manifest_path.exists(),
+        "manifest_has_run_command": bool(str(manifest.get("run_command") or "").strip()),
+        "manifest_has_publish_command": bool(str(manifest.get("publish_command") or "").strip()),
+        "manifest_has_identity": has_agent_identity,
+        "latest_metric_run_present": latest is not None,
+        "spark_swarm_payload_present": spark_swarm_path.exists(),
+        "spark_swarm_payload_current": latest_run_id is not None and payload_run_id == latest_run_id,
+        "capsule_present_for_latest_run": latest_run_id is not None and latest_run_id in capsule_ids,
+    }
+    missing = [name for name, ok in checks.items() if not ok]
+    local_collective = repo_root.parent / "autoresearch-collective"
+    return {
+        "ready": not missing,
+        "checks": checks,
+        "missing": missing,
+        "manifest_path": str(manifest_path),
+        "latest_metric_run": latest_run_id,
+        "spark_swarm_payload_path": str(spark_swarm_path),
+        "capsule_root": str(capsule_root(repo_root)),
+        "local_collective_repo_present": local_collective.exists(),
+        "local_collective_repo_path": str(local_collective),
+    }
+
+
 def collective_status(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     root = capsule_root(repo_root)
     sibling_collective = repo_root.parent / "autoresearch-collective"
@@ -431,6 +497,7 @@ def collective_status(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "collective_repo_path": str(sibling_collective),
         "spark_swarm_payload_path": str(spark_swarm_path),
         "spark_swarm_payload_present": spark_swarm_path.exists(),
+        "readiness": collective_readiness(repo_root, runtime_root),
     }
 
 
@@ -563,37 +630,6 @@ def _default_base_branch(repo_root: Path) -> str:
     if current and not current.startswith("absorb/"):
         return current
     return "main"
-
-
-def _parse_frontmatter(raw: str) -> dict[str, Any]:
-    lines = raw.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-    payload: dict[str, Any] = {}
-    current_key: str | None = None
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if line.startswith("  - ") and current_key is not None:
-            payload.setdefault(current_key, [])
-            payload[current_key].append(line[4:].strip())
-            continue
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        current_key = key.strip()
-        parsed = value.strip()
-        if parsed == "":
-            payload[current_key] = []
-            continue
-        if parsed in {"true", "false"}:
-            payload[current_key] = parsed == "true"
-            continue
-        try:
-            payload[current_key] = json.loads(parsed)
-        except json.JSONDecodeError:
-            payload[current_key] = parsed
-    return payload
 
 
 def _load_manifest(repo_root: Path) -> dict[str, Any]:
@@ -901,6 +937,10 @@ def main(argv: list[str] | None = None) -> int:
     status_parser.add_argument("--config", default="spark-researcher.project.json")
     status_parser.add_argument("--stdout", action="store_true")
 
+    ready_parser = subparsers.add_parser("ready")
+    ready_parser.add_argument("--config", default="spark-researcher.project.json")
+    ready_parser.add_argument("--stdout", action="store_true")
+
     sync_parser = subparsers.add_parser("sync-local")
     sync_parser.add_argument("--config", default="spark-researcher.project.json")
     sync_parser.add_argument("--label")
@@ -925,6 +965,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = publish_latest(repo_root, runtime_root)
     elif args.command == "status":
         payload = collective_status(repo_root, runtime_root)
+    elif args.command == "ready":
+        payload = collective_readiness(repo_root, runtime_root)
     elif args.command == "sync-local":
         payload = sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild)
     elif args.command == "absorb":

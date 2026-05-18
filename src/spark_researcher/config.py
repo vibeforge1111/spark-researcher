@@ -297,7 +297,29 @@ def update_intent_policy(
 
 
 def load_config(path: Path) -> ProjectConfig:
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not path.exists():
+        raise SystemExit(
+            f"Config file not found: {path}\n"
+            "Run `spark-researcher init --path . --preset toy --project-name my-project` "
+            "to create a project config."
+        )
+
+    try:
+        raw = path.read_text(encoding="utf-8-sig")
+    except PermissionError:
+        raise SystemExit(
+            f"Permission denied reading config file: {path}\n"
+            "Check file permissions and try again."
+        ) from None
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Invalid JSON in config file: {path}\n"
+            f"Parse error: {exc}\n"
+            "Fix the file or re-create it with `spark-researcher init`."
+        ) from None
     commands = {
         name: CommandSpec(
             args=list(spec["args"]),

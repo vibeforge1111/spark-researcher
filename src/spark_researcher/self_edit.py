@@ -254,13 +254,34 @@ def render_request(prompt: str, preamble: str, mutable_targets: list[str]) -> st
     )
 
 
+_SELF_EDIT_ALLOWED_EXECUTABLES = frozenset({
+    "python3", "python", "uv", "pip3", "pip",
+    "git", "node", "npx", "pnpm",
+})
+
+
+def _validate_command_executable(command: list[str]) -> None:
+    if not command:
+        return
+    executable = Path(command[0]).name
+    if executable not in _SELF_EDIT_ALLOWED_EXECUTABLES:
+        raise RuntimeError(
+            f"Self-edit command executable '{command[0]}' is not allowed. "
+            f"Allowed executables: {sorted(_SELF_EDIT_ALLOWED_EXECUTABLES)}"
+        )
+
+
 def _resolve_command_override(command_override: list[str] | None) -> list[str]:
     if command_override:
-        return [str(item) for item in command_override]
+        result = [str(item) for item in command_override]
+        _validate_command_executable(result)
+        return result
     raw = os.environ.get("SPARK_RESEARCHER_SELF_EDIT_COMMAND", "").strip()
     if not raw:
         return []
-    return shlex.split(raw, posix=False)
+    result = shlex.split(raw, posix=False)
+    _validate_command_executable(result)
+    return result
 
 
 def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:

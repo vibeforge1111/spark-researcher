@@ -72,9 +72,27 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
 def safe_urlopen(request: Request | str, *, timeout: float):
     url = request.full_url if isinstance(request, Request) else str(request)
     assert_safe_url(url)
+    parsed = urlparse(url)
+    hostname = parsed.hostname.rstrip(".").lower() if parsed.hostname else ""
+    try:
+        literal = ipaddress.ip_address(hostname)
+    except ValueError:
+        addresses = _host_ips(hostname, parsed.port)
+        public = [a for a in addresses if _is_public_ip(a)]
+        if not public:
+            raise UnsafeURL("URL host resolves to a non-public address")
+        resolved_ip = str(public[0])
+        resolved_url = parsed._replace(netloc=f"{resolved_ip}:{parsed.port}" if parsed.port else resolved_ip).geturl()
+        req = Request(resolved_url)
+        if isinstance(request, Request):
+            for key, value in request.headers.items():
+                req.add_header(key, value)
+        req.add_header("Host", parsed.netloc)
+    else:
+        req = request if isinstance(request, Request) else Request(url)
     opener = build_opener(_SafeRedirectHandler)
     try:
-        return opener.open(request, timeout=timeout)
+        return opener.open(req, timeout=timeout)
     except UnsafeURL:
         raise
     except URLError:

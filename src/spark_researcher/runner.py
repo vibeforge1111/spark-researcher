@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -37,14 +38,20 @@ def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+logger = logging.getLogger(__name__)
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
-        rows.append(json.loads(line))
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            logger.warning("Skipping malformed JSON at %s:%d", path, line_number)
     return rows
 
 

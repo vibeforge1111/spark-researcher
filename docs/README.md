@@ -8,6 +8,33 @@ This repo now uses a simple documentation split:
 
 Keep detailed procedures in `docs/`. Keep [`README.md`](../README.md) short and oriented around entry, not duplication.
 
+## Installation / Getting Started
+
+To set up the project locally:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-org/spark-swarm.git
+   cd spark-swarm
+   ```
+
+2. Install dependencies (if applicable):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Run the initial setup:
+   ```bash
+   python setup.py
+   ```
+
+4. Verify the installation:
+   ```bash
+   python -m pytest tests/
+   ```
+
+For more details, see the [`README.md`](../README.md) landing page.
+
 ## Start Here
 
 Read these first if you are new to the repo:

@@ -85,6 +85,7 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=600,
     )
     updated = {
         "name": spec.name,

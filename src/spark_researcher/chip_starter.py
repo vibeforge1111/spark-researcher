@@ -25,8 +25,8 @@ def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
 
 
 def _desktop_root() -> Path:
-    desktop = Path.home() / "Desktop"
-    return desktop if desktop.exists() else Path.home()
+    spark_home = Path.home() / ".spark"
+    return spark_home if spark_home.exists() else Path.home()
 
 
 def _spark_repo_root() -> Path:

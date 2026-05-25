@@ -135,7 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
     chips_init_parser = chips_sub.add_parser("init")
     chips_init_parser.add_argument(
         "--path",
-        help="Optional external chip target. Defaults to Desktop/domain-chip-<domain>. Relative paths resolve under Desktop; in-repo targets are refused.",
+        help="Optional external chip target. Defaults to ~/.spark/domain-chip-<domain>. Relative paths resolve under ~/.spark; in-repo targets are refused.",
     )
     chips_init_parser.add_argument(
         "--chip-name",

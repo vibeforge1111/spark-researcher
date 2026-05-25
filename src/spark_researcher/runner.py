@@ -169,6 +169,11 @@ def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+def _escape_format_braces(text: str) -> str:
+    """Escape curly braces in user input to prevent format string injection."""
+    return text.replace("{", "{{").replace("}", "}}")
+
+
 def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict[str, str]) -> list[dict[str, str]]:
     applied: list[dict[str, str]] = []
     lookup = mutation_lookup(config)
@@ -178,7 +183,8 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
         spec = lookup[name]
         target_path = (workspace_root / spec.file).resolve()
         text = target_path.read_text(encoding="utf-8-sig")
-        replacement = spec.template.format(value=value)
+        safe_value = _escape_format_braces(value)
+        replacement = spec.template.format(value=safe_value)
         updated, count = re.subn(spec.pattern, replacement, text, count=1)
         if count != 1:
             raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")

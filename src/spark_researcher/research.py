@@ -53,7 +53,7 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     try:
         with safe_urlopen(request, timeout=6) as response:
             page = response.read().decode("utf-8", errors="replace")
-    except (URLError, OSError, ValueError):
+    except (URLError, OSError, ValueError, UnicodeDecodeError):
         return []
     links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)

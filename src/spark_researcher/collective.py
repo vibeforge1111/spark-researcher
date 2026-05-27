@@ -1107,7 +1107,7 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
     collective_root = repo_root.parent / "autoresearch-collective"
     path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
     if not path.exists():
-        raise FileNotFoundError(f"Could not locate collective.generated.json at {path}")
+        return path, {"repoDirectory": [], "capsuleLibrary": []}
     return path, json.loads(path.read_text(encoding="utf-8"))
 
 

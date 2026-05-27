@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from spark_researcher.collective import (
+    absorb,
     build_spark_swarm_collective_payload,
     collective_readiness,
     publish_latest,
@@ -81,6 +86,45 @@ def _write_frontmatter_manifest(repo_root: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def test_absorb_without_collective_index_fails_without_local_path_leak(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo_root = tmp_path / "repo"
+    runtime_root = tmp_path / "runtime"
+    repo_root.mkdir()
+
+    with pytest.raises(RuntimeError, match="No improved Insights available"):
+        absorb(repo_root, runtime_root, source_repo="vibeforge1111/example")
+
+    captured = capsys.readouterr()
+    assert str(tmp_path) not in captured.out
+    assert str(tmp_path) not in captured.err
+
+
+def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    source_root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(source_root / "src")}
+
+    result = subprocess.run(
+        [sys.executable, "-m", "spark_researcher.cli", "collective", "absorb", "--repo", "vibeforge1111/example"],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "error": "No improved Insights available to absorb from `vibeforge1111/example`.",
+        "ok": False,
+    }
+    assert "Traceback" not in result.stderr
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
 
 
 def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> None:

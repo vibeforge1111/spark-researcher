@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
     autoloop_parser.add_argument("--continuous", action="store_true")
     autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
-    autoloop_parser.add_argument("--max-passes", type=int)
+    autoloop_parser.add_argument("--max-passes", type=_positive_int)
     autoloop_parser.add_argument("--max-seconds", type=int)
     autoloop_parser.add_argument("--stop-file")
 
@@ -496,6 +496,21 @@ def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
         )
         return
     print_json(proposal_status(config_path))
+
+
+def _positive_int(value: str) -> int:
+    """argparse type: accept positive integers only (>=1)."""
+    try:
+        ivalue = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}") from exc
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(
+            f"value must be a positive integer (>=1), got {ivalue}. "
+            "Use --max-passes 1 to run a single pass or omit the flag for unlimited."
+        )
+    return ivalue
+
 
 
 def main() -> None:

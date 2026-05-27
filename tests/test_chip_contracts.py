@@ -11,6 +11,34 @@ from spark_researcher.chips import chip_validation, invoke_chip_hook, validate_m
 from spark_researcher.config import ChipSpec, CommandSpec, MetricSpec, ProjectConfig, save_config
 
 
+def test_chip_validation_unconfigured_output_omits_local_schema_path(tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "no-chip",
+                "project_root": ".",
+                "eval_metric": "score",
+                "eval_goal": "maximize",
+                "commands": {"research": {"args": ["python", "-c", "print('noop')"]}},
+                "metrics": {"score": {"pattern": r"^score:\s+([0-9.]+)$"}},
+                "chip": {"path": "", "manifest": "spark-chip.json"},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = chip_validation(config_path)
+
+    assert result["configured"] is False
+    assert result["valid"] is False
+    assert "schema_path" not in result
+    assert result["schema_version"] == "spark-chip.v1"
+    assert result["io_protocol"] == "spark-hook-io.v1"
+
+
 def test_validate_manifest_rejects_misplaced_frontier_keys(tmp_path: Path) -> None:
     manifest = {
         "schema_version": "spark-chip.v1",

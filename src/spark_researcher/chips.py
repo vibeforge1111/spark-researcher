@@ -187,7 +187,8 @@ def chip_validation(config_path: Path) -> dict[str, Any]:
             "configured": False,
             "valid": False,
             "errors": ["No chip is configured for this project."],
-            "schema_path": str(schema_path()),
+            "schema_version": CHIP_SCHEMA_VERSION,
+            "io_protocol": CHIP_IO_PROTOCOL,
         }
     result = validate_manifest(context.manifest, context.manifest_path)
     command_checks = _command_preflight(context.manifest, context.chip_root)

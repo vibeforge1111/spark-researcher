@@ -520,6 +520,12 @@ def main() -> None:
         config = load_config(config_path)
         trials = merged_candidate_trials(config_path, config=config)
         trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
+        if args.candidate_id and trial is None:
+            known = ", ".join(sorted(item.candidate_id for item in trials)) or "(none queued)"
+            raise SystemExit(
+                f"Candidate id {args.candidate_id!r} not found in the trial queue; "
+                f"the run would silently fall back to a baseline. Known candidate ids: {known}."
+            )
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
         return
     if args.action == "loop":

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from spark_researcher.research import _research_task, sanitize_untrusted_research_text, scan_untrusted_research_text
+from urllib.error import URLError
+
+import pytest
+
+from spark_researcher import frontier
+from spark_researcher.research import _bounded_web_results, _research_task, sanitize_untrusted_research_text, scan_untrusted_research_text
 
 
 def test_research_task_fences_and_escapes_web_notes() -> None:
@@ -63,3 +68,21 @@ def test_research_note_sanitizer_replaces_dangerous_content() -> None:
         "[blocked stored prompt-injection content: instruction-override]"
     )
     assert "[blocked invisible unicode U+200B ZERO WIDTH SPACE]" in sanitize_untrusted_research_text("a\u200bb")
+
+
+def test_web_research_returns_empty_on_expected_network_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*args: object, **kwargs: object) -> object:
+        raise URLError("offline")
+
+    monkeypatch.setattr("spark_researcher.research.safe_urlopen", fail)
+
+    assert _bounded_web_results("latest docs") == []
+
+
+def test_frontier_web_notes_returns_empty_on_expected_network_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*args: object, **kwargs: object) -> object:
+        raise ValueError("blocked private address")
+
+    monkeypatch.setattr("spark_researcher.frontier.safe_urlopen", fail)
+
+    assert frontier._web_notes("latest docs") == []

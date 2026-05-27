@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -203,6 +205,55 @@ def test_invoke_chip_hook_supports_src_layout_module_commands(tmp_path: Path) ->
     response = invoke_chip_hook(config_path, "suggest", {"limit": 1, "command_name": "research"})
 
     assert response["suggestions"][0]["candidate_id"] == "trend-ema-btceth-4h"
+
+
+def test_invoke_chip_hook_uses_bounded_utf8_subprocess(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(
+        tmp_path / "chip",
+        response_payload={
+            "documents": [
+                {
+                    "kind": "benchmark_evidence",
+                    "title": "Bounded hook",
+                    "content": "# Bounded hook",
+                    "slug": "bounded-hook",
+                    "memory_tier": "benchmark_evidence",
+                }
+            ]
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        output_path = Path(command[-1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "documents": [
+                        {
+                            "kind": "benchmark_evidence",
+                            "title": "Bounded hook",
+                            "content": "# Bounded hook",
+                            "slug": "bounded-hook",
+                            "memory_tier": "benchmark_evidence",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    response = invoke_chip_hook(config_path, "packets", {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")})
+
+    assert response["documents"][0]["title"] == "Bounded hook"
+    assert captured["kwargs"]["timeout"] == 300
+    assert captured["kwargs"]["encoding"] == "utf-8"
+    assert captured["kwargs"]["errors"] == "replace"
 
 
 def test_chip_validation_rejects_missing_local_hook_paths(tmp_path: Path) -> None:

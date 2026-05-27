@@ -433,6 +433,7 @@ def invoke_chip_hook(
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=300,
     )
     log_path.write_text(
         json.dumps(

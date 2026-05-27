@@ -5,6 +5,7 @@ import re
 from html import unescape
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request
 
@@ -73,7 +74,7 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         page = safe_urlopen(request, timeout=6).read().decode("utf-8", errors="replace")
-    except Exception:
+    except (URLError, OSError, ValueError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     notes = []

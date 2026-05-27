@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from html import escape, unescape
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request
 
@@ -51,7 +52,7 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         page = safe_urlopen(request, timeout=6).read().decode("utf-8", errors="replace")
-    except Exception:
+    except (URLError, OSError, ValueError):
         return []
     links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)

@@ -12,7 +12,7 @@ from typing import Any
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .paths import beliefs_root, memory_root, self_edit_root
-from .runner import read_jsonl
+from .runner import locked_file, read_jsonl
 from .ruvector import run_search as run_ruvector_search
 from .ruvector import ruvector_status
 
@@ -450,8 +450,8 @@ def write_working_memory(
         "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
     }
     path = _working_path(runtime_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with locked_file(path):
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
 
 

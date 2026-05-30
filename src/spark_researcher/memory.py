@@ -683,8 +683,10 @@ def search_memory(
     backend: str = "local",
     goal: str = "minimize",
     config_path: Path | None = None,
+    force_sync: bool = False,
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
+    if force_sync or not _manifest_path(runtime_root).exists():
+        sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
     docs_root = _documents_root(runtime_root)
     local_results = _local_search_results(
         runtime_root,

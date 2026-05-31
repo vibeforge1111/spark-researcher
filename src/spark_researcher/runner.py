@@ -53,6 +53,21 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _lock_holder_alive(lock_path: Path) -> bool:
+    """Check if the process that created the lock file is still running."""
+    try:
+        pid_text = lock_path.read_text(encoding="ascii").strip()
+        if not pid_text:
+            return False
+        pid = int(pid_text)
+        if pid <= 0:
+            return False
+        os.kill(pid, 0)
+        return True
+    except (ValueError, ProcessLookupError, OSError):
+        return False
+
+
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     ensure_parent(path)
@@ -64,6 +79,13 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             if time.monotonic() >= deadline:
+                # Before giving up, check if the lock holder is still alive
+                if not _lock_holder_alive(lock_path):
+                    try:
+                        lock_path.unlink()
+                    except FileNotFoundError:
+                        pass
+                    continue  # Retry after removing stale lock
                 raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}")
             time.sleep(0.05)
     try:

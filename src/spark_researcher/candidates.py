@@ -135,7 +135,7 @@ def _best_value(values: list[float], goal: str) -> float | None:
 
 
 def _format_value(value: str) -> str:
-    return value.replace(".", "").replace("-", "m")
+    return value.replace(".", "d").replace("-", "m")
 
 
 def _parse_decimal(value: str) -> Decimal | None:

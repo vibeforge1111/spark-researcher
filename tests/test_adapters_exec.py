@@ -27,6 +27,15 @@ class AdapterExecTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not allowed"):
                 _resolve_command("codex")
 
+    def test_resolve_command_unknown_model_lists_supported_models(self) -> None:
+        with self.assertRaises(RuntimeError) as error:
+            _resolve_command("nonexistent")
+        message = str(error.exception)
+        self.assertIn("Unsupported execution model `nonexistent`", message)
+        self.assertIn("claude", message)
+        self.assertIn("codex", message)
+        self.assertIn("openclaw", message)
+
     def test_generic_adapter_is_disabled_by_default(self) -> None:
         with patch.dict(os.environ, {"SPARK_RESEARCHER_ADAPTER_GENERIC_COMMAND": "runner --input {request_path}"}, clear=False):
             with self.assertRaisesRegex(RuntimeError, "disabled by default"):

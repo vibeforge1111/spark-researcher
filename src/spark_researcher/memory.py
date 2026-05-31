@@ -684,7 +684,19 @@ def search_memory(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
+    docs_root = _documents_root(runtime_root)
+    ledger_path = runtime_root / "artifacts" / "ledger" / "runs.jsonl"
+    sync_marker = docs_root / ".last_sync_mtime"
+    ledger_mtime = ledger_path.stat().st_mtime if ledger_path.exists() else 0
+    needs_sync = (
+        not sync_marker.exists()
+        or not docs_root.exists()
+        or ledger_mtime > float(sync_marker.read_text(encoding="utf-8").strip() or "0")
+    )
+    if needs_sync:
+        sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
+        docs_root.mkdir(parents=True, exist_ok=True)
+        sync_marker.write_text(str(ledger_mtime), encoding="utf-8")
     docs_root = _documents_root(runtime_root)
     local_results = _local_search_results(
         runtime_root,

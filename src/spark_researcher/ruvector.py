@@ -61,7 +61,7 @@ def ruvector_status() -> dict[str, Any]:
 
 def run_search(query: str, *, timeout_seconds: int = 60) -> dict[str, Any]:
     normalized_query = _normalize_query(query)
-    command = [*_resolve_command(), "brain", "search", normalized_query, "--json"]
+    command = [*_resolve_command(), "brain", "search", "--", normalized_query, "--json"]
     executable = shutil.which(command[0])
     if executable is None:
         raise RuntimeError(

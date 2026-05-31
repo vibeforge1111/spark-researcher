@@ -4,6 +4,7 @@ import json
 import os
 import time
 import ctypes
+import fcntl
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -55,16 +56,22 @@ def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
 def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
     path = _continuous_status_path(runtime_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    lock_path = path.with_suffix(".lock")
+    with open(lock_path, "w") as lock_fd:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
     path = _continuous_status_path(runtime_root)
     if not path.exists():
         return {}
+    lock_path = path.with_suffix(".lock")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        with open(lock_path, "w") as lock_fd:
+            fcntl.flock(lock_fd, fcntl.LOCK_SH)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, FileNotFoundError):
         return {}
     return payload if isinstance(payload, dict) else {}
 

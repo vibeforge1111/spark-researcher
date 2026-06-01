@@ -462,6 +462,7 @@ def load_working_memory(runtime_root: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
+        # A concurrent memory sync may briefly leave the file half-written.
         return {}
 
 

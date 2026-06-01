@@ -144,6 +144,26 @@ def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Pat
     assert str(tmp_path) not in result.stderr
 
 
+def test_collective_read_jsonl_skips_malformed_and_non_object_rows(tmp_path: Path) -> None:
+    path = tmp_path / "runs.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                '{"run_id":"one","metric_value":1}',
+                "not-json",
+                '["not", "an", "object"]',
+                '{"run_id":"two","metric_value":2}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rows = collective_module.read_jsonl(path)
+
+    assert [row["run_id"] for row in rows] == ["one", "two"]
+
+
 def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_manifest(repo_root)

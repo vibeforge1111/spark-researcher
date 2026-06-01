@@ -59,7 +59,15 @@ def load_failures(runtime_root: Path) -> list[dict[str, Any]]:
     path = failures_path(runtime_root)
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    results: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            results.append(json.loads(line))
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return results
 
 
 def _parse_created_at(value: str) -> datetime | None:

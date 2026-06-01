@@ -520,6 +520,11 @@ def main() -> None:
         config = load_config(config_path)
         trials = merged_candidate_trials(config_path, config=config)
         trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
+        if args.candidate_id and args.candidate_id != "baseline" and trial is None:
+            raise SystemExit(
+                f"Unknown candidate_id: {args.candidate_id}\n"
+                "Run `spark-researcher candidates --command <command>` to list available candidate_ids."
+            )
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
         return
     if args.action == "loop":

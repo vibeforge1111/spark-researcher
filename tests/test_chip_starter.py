@@ -179,3 +179,68 @@ def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> No
     assert payload["next_steps"][0] == f"cd {(tmp_path / 'bootstrap-chip').resolve()}"
     assert "git init" in payload["next_steps"]
     assert any("chips validate --config" in step for step in payload["next_steps"])
+
+
+def test_cli_unknown_candidate_id_is_user_friendly(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    config_path = repo_root / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "demo",
+                "project_root": ".",
+                "eval_metric": "test_score",
+                "eval_goal": "maximize",
+                "commands": {
+                    "train": {
+                        "args": ["python", "-c", "print('test_score: 1')"],
+                        "cwd": ".",
+                        "kind": "train-once",
+                        "log_name": "train.log",
+                    }
+                },
+                "metrics": {"test_score": {"pattern": r"^test_score:\\s+([0-9.]+)$", "kind": "float"}},
+                "mutable_parameters": [],
+                "candidate_trials": [{"candidate_id": "baseline", "candidate_summary": "", "hypothesis": "", "mutations": {}}],
+                "trainers": [],
+                "mutable_targets": [],
+                "memory": {"backend": "local"},
+                "self_edit": {"command": [], "mutable_targets": [], "prompt_preamble": ""},
+                "guardrails": {
+                    "max_loop_iterations": 1,
+                    "consecutive_discard_limit": 1,
+                    "require_clean_git_for_self_edit": True,
+                    "require_human_approval_for_self_edit": True,
+                    "blocked_command_fragments": [],
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "run",
+            "--command",
+            "train",
+            "--candidate-id",
+            "definitely-not-real",
+            "--config",
+            str(config_path),
+            "--dry-run",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown candidate_id" in result.stderr
+    assert "candidates --command" in result.stderr
+    assert "Traceback" not in result.stderr

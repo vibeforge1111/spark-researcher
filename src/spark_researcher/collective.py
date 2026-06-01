@@ -1021,6 +1021,7 @@ def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | N
                 encoding="utf-8",
                 errors="replace",
                 check=False,
+                timeout=300,
             )
             commands_run.append(
                 {

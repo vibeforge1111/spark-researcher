@@ -10,6 +10,7 @@ import pytest
 
 import spark_researcher.collective as collective_module
 from spark_researcher.collective import (
+    _parse_frontmatter,
     absorb,
     build_spark_swarm_collective_payload,
     collective_readiness,
@@ -87,6 +88,21 @@ def _write_frontmatter_manifest(repo_root: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def test_frontmatter_list_continuation_after_scalar_is_recoverable() -> None:
+    payload = _parse_frontmatter(
+        "\n".join(
+            [
+                "---",
+                "name: Loopsmith Lab",
+                "  - fallback label",
+                "---",
+            ]
+        )
+    )
+
+    assert payload["name"] == ["Loopsmith Lab", "fallback label"]
 
 
 def test_absorb_without_collective_index_fails_without_local_path_leak(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

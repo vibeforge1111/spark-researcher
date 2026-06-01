@@ -8,6 +8,21 @@ from spark_researcher import frontier
 from spark_researcher.research import _bounded_web_results, _research_task, sanitize_untrusted_research_text, scan_untrusted_research_text
 
 
+class _FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+        self.closed = False
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.closed = True
+
+    def read(self) -> bytes:
+        return self.body
+
+
 def test_research_task_fences_and_escapes_web_notes() -> None:
     task = _research_task(
         "Summarize latest docs",
@@ -86,3 +101,24 @@ def test_frontier_web_notes_returns_empty_on_expected_network_failures(monkeypat
     monkeypatch.setattr("spark_researcher.frontier.safe_urlopen", fail)
 
     assert frontier._web_notes("latest docs") == []
+
+
+def test_web_research_closes_http_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = _FakeResponse(
+        b'<a class="result__a" href="https://example.com">Example <b>result</b></a>'
+        b'<a class="result__snippet">Useful snippet</a>'
+    )
+
+    monkeypatch.setattr("spark_researcher.research.safe_urlopen", lambda *args, **kwargs: response)
+
+    assert _bounded_web_results("latest docs")[0]["title"] == "Example result"
+    assert response.closed is True
+
+
+def test_frontier_web_notes_closes_http_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = _FakeResponse(b'<a class="result__a" href="https://example.com">Example <b>note</b></a>')
+
+    monkeypatch.setattr("spark_researcher.frontier.safe_urlopen", lambda *args, **kwargs: response)
+
+    assert frontier._web_notes("latest docs") == ["Example note"]
+    assert response.closed is True

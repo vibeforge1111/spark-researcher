@@ -41,13 +41,15 @@ def _parse_frontmatter(raw: str) -> dict[str, Any]:
     lines = raw.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
-    payload: dict[str, str] = {}
+    payload: dict[str, Any] = {}
     current_key: str | None = None
     for line in lines[1:]:
         if line.strip() == "---":
             break
         if line.startswith("  - ") and current_key is not None:
-            payload.setdefault(current_key, [])
+            existing = payload.get(current_key)
+            if not isinstance(existing, list):
+                payload[current_key] = [] if existing is None else [existing]
             payload[current_key].append(line[4:].strip())
             continue
         if ":" not in line:

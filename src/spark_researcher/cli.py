@@ -38,6 +38,16 @@ def add_config_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", default="spark-researcher.project.json")
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
     sub = parser.add_subparsers(dest="action")
@@ -69,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
     autoloop_parser.add_argument("--continuous", action="store_true")
     autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
-    autoloop_parser.add_argument("--max-passes", type=int)
+    autoloop_parser.add_argument("--max-passes", type=_positive_int)
     autoloop_parser.add_argument("--max-seconds", type=int)
     autoloop_parser.add_argument("--stop-file")
 
@@ -520,6 +530,12 @@ def main() -> None:
         config = load_config(config_path)
         trials = merged_candidate_trials(config_path, config=config)
         trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
+        if args.candidate_id and trial is None:
+            known = ", ".join(sorted(item.candidate_id for item in trials)) or "(none queued)"
+            raise SystemExit(
+                f"Candidate id {args.candidate_id!r} was not found in the trial queue. "
+                f"Known candidate ids: {known}."
+            )
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
         return
     if args.action == "loop":

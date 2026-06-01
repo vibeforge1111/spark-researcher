@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from spark_researcher.adapters.base import adapter_request
 from spark_researcher.adapters.exec import _default_command, _expand_command_template, _resolve_command, execute_advisory, execution_status
 
 
@@ -26,6 +27,22 @@ class AdapterExecTests(unittest.TestCase):
         with patch.dict(os.environ, {"SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND": "powershell -NoProfile -Command Invoke-Thing"}, clear=False):
             with self.assertRaisesRegex(RuntimeError, "not allowed"):
                 _resolve_command("codex")
+
+    def test_unknown_adapter_lists_known_adapters(self) -> None:
+        with self.assertRaises(RuntimeError) as error:
+            adapter_request("missing", "task", {})
+        message = str(error.exception)
+        self.assertIn("Unknown adapter: missing", message)
+        self.assertIn("claude", message)
+        self.assertIn("codex", message)
+
+    def test_resolve_command_unknown_model_lists_supported_models(self) -> None:
+        with self.assertRaises(RuntimeError) as error:
+            _resolve_command("nonexistent")
+        message = str(error.exception)
+        self.assertIn("Unsupported execution model `nonexistent`", message)
+        self.assertIn("claude", message)
+        self.assertIn("codex", message)
 
     def test_generic_adapter_is_disabled_by_default(self) -> None:
         with patch.dict(os.environ, {"SPARK_RESEARCHER_ADAPTER_GENERIC_COMMAND": "runner --input {request_path}"}, clear=False):

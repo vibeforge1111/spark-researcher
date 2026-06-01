@@ -57,8 +57,11 @@ def load_chip_context(config_path: Path, config: ProjectConfig | None = None) ->
         return None
     manifest_path = chip_root / str(loaded.chip.manifest or "spark-chip.json")
     if not manifest_path.exists():
-        raise RuntimeError("Chip manifest not found")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        raise RuntimeError(f"Chip manifest not found: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise RuntimeError(f"Chip manifest is not valid JSON: {manifest_path}") from exc
     if not isinstance(manifest, dict):
         raise RuntimeError("Chip manifest must be a JSON object")
     return ChipContext(

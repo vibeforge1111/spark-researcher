@@ -92,7 +92,12 @@ def _apply_result_ledger_path(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def _harness_artifact_ref(kind: str, path_or_uri: str, summary: str) -> dict[str, Any]:
@@ -931,7 +936,10 @@ def proposal_status(config_path: Path) -> dict[str, Any]:
     proposals = []
     if root.exists():
         for path in sorted(root.glob("*/proposal.json"), reverse=True):
-            proposal = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
             review = _load_json(path.parent / "review.json")
             proposals.append(_proposal_summary(proposal, review))
     return {"proposal_count": len(proposals), "proposals": proposals}

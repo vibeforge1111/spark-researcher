@@ -179,3 +179,26 @@ def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> No
     assert payload["next_steps"][0] == f"cd {(tmp_path / 'bootstrap-chip').resolve()}"
     assert "git init" in payload["next_steps"]
     assert any("chips validate --config" in step for step in payload["next_steps"])
+
+
+def test_cli_missing_config_is_user_friendly(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    missing = tmp_path / "spark-researcher.project.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "summary",
+            "--config",
+            str(missing),
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Missing config" in result.stderr
+    assert "spark-researcher init" in result.stderr
+    assert "Traceback" not in result.stderr

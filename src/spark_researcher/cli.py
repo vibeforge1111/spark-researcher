@@ -316,7 +316,7 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
 
 
 def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
-    config = load_config(config_path)
+    config = _load_config_or_exit(config_path)
     if args.intent_command == "clear":
         update_intent_policy(
             config,
@@ -349,7 +349,7 @@ def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
 
 
 def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
-    config = load_config(config_path)
+    config = _load_config_or_exit(config_path)
     selected_backend = getattr(args, "backend", None) or config.memory.backend
     if args.memory_command == "backend-policy":
         updated = args.backend is not None
@@ -397,7 +397,7 @@ def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root
         print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
         return
     if args.collective_command == "spark-swarm-payload":
-        print_json(write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path)))
+        print_json(write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, _load_config_or_exit(config_path)))
         return
     if args.collective_command == "absorb":
         print_json(
@@ -413,6 +413,20 @@ def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root
         )
         return
     print_json(collective_status(repo_root, runtime_root))
+
+
+def _load_config_or_exit(config_path: Path):
+    if not config_path.exists():
+        raise SystemExit(
+            f"Missing config: {config_path}\n"
+            "Run `spark-researcher init --path <repo-root>` first (or pass --config to an existing project file)."
+        )
+    try:
+        return load_config(config_path)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid config JSON: {config_path} ({exc.msg})")
+    except OSError as exc:
+        raise SystemExit(f"Failed to read config: {config_path} ({exc})")
 
 
 def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
@@ -431,7 +445,7 @@ def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
         print_json({"profiles": backend_profiles()})
         return
     if args.self_edit_command == "policy":
-        config = load_config(config_path)
+        config = _load_config_or_exit(config_path)
         push_override = None
         if args.push and args.no_push:
             raise RuntimeError("Choose only one of --push or --no-push.")
@@ -517,7 +531,7 @@ def main() -> None:
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
     if args.action == "run":
-        config = load_config(config_path)
+        config = _load_config_or_exit(config_path)
         trials = merged_candidate_trials(config_path, config=config)
         trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
@@ -605,7 +619,7 @@ def main() -> None:
         print_json(build_beliefs(repo_root, runtime_root))
         return
     if args.action == "obsidian":
-        print_json(build_vault(repo_root, runtime_root, load_config(config_path), config_path=config_path))
+        print_json(build_vault(repo_root, runtime_root, _load_config_or_exit(config_path), config_path=config_path))
         return
     if args.action == "collective":
         _handle_collective(args, config_path=config_path, repo_root=repo_root, runtime_root=runtime_root)
@@ -614,9 +628,10 @@ def main() -> None:
         _handle_self_edit(args, config_path=config_path)
         return
     if args.action == "summary":
+        config = _load_config_or_exit(config_path)
         print_json(
             {
-                "ledger": ledger_summary(runtime_root, goal=load_config(config_path).eval_goal),
+                "ledger": ledger_summary(runtime_root, goal=config.eval_goal),
                 "traces": trace_status(runtime_root),
             }
         )

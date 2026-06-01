@@ -163,11 +163,14 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     index_path = _index_path(runtime_root)
     if not index_path.exists():
         return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "verifier_selection_count": 0, "packet_selection_count": 0, "recent": []}}
-    rows = [
-        json.loads(line)
-        for line in index_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = []
+    for line in index_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except (json.JSONDecodeError, ValueError):
+            continue
     research_retry_count = 0
     research_escalation_count = 0
     citation_check_count = 0
@@ -185,11 +188,14 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
         path = Path(path_value)
         if not path.exists():
             continue
-        events = [
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        events = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except (json.JSONDecodeError, ValueError):
+                continue
         for event in events:
             if event.get("event_type") != "event":
                 continue

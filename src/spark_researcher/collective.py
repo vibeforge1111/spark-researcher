@@ -1021,6 +1021,7 @@ def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | N
                 encoding="utf-8",
                 errors="replace",
                 check=False,
+                timeout=120,
             )
             commands_run.append(
                 {
@@ -1061,6 +1062,7 @@ def _run_command(
             capture_output=True,
             text=True,
             encoding="utf-8",
+            timeout=120,
         )
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()

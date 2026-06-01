@@ -30,9 +30,7 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
         return []
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(payload, dict):
+    except (json.JSONDecodeError, OSError):
         return []
     items = payload.get("candidate_trials", [])
     if not isinstance(items, list):

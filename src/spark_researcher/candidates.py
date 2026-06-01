@@ -15,7 +15,7 @@ from .config import CandidateTrial, MutationSpec, intent_policy, load_config, tr
 from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
-from .runner import read_jsonl, run_once
+from .runner import locked_file, read_jsonl, run_once
 from .trial_queue import append_queue_trials, merged_candidate_trials
 
 
@@ -55,7 +55,8 @@ def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
 def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
     path = _continuous_status_path(runtime_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with locked_file(path):
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
@@ -63,7 +64,8 @@ def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        with locked_file(path):
+            payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}

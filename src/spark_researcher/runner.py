@@ -553,7 +553,8 @@ def parse_overrides(items: list[str] | None) -> dict[str, str]:
 
 def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, limit: int | None = None) -> dict[str, Any]:
     config = load_config(config_path)
-    max_iterations = min(limit or config.guardrails.max_loop_iterations, config.guardrails.max_loop_iterations)
+    requested_limit = limit or config.guardrails.max_loop_iterations
+    max_iterations = min(requested_limit, config.guardrails.max_loop_iterations)
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
@@ -570,6 +571,9 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
         "project_name": config.project_name,
         "command_name": command_name,
         "run_count": len(results),
+        "requested_limit": requested_limit,
+        "max_iterations": max_iterations,
+        "limit_clamped_to_guardrail": requested_limit > max_iterations,
         "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
         "results": results,
     }

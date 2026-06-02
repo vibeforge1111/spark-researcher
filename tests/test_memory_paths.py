@@ -5,7 +5,7 @@ from pathlib import Path
 
 from spark_researcher.beliefs import build_beliefs
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
-from spark_researcher.memory import sync_memory
+from spark_researcher.memory import load_working_memory, sync_memory
 
 
 def _write_config(repo_root: Path) -> Path:
@@ -120,3 +120,12 @@ def test_sync_memory_dedupes_duplicate_chip_docs_and_bounds_paths(monkeypatch, t
     assert all(path.exists() for path in paths)
     assert len({str(path) for path in paths}) == 2
     assert all(len(path.stem) <= 82 for path in paths)
+
+
+def test_load_working_memory_returns_empty_for_corrupt_json(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "runtime"
+    working_path = runtime_root / "artifacts" / "memory" / "working-memory.json"
+    working_path.parent.mkdir(parents=True)
+    working_path.write_text("{not-json", encoding="utf-8")
+
+    assert load_working_memory(runtime_root) == {}

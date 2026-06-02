@@ -459,7 +459,10 @@ def load_working_memory(runtime_root: Path) -> dict[str, Any]:
     path = _working_path(runtime_root)
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
 
 
 def record_episode(

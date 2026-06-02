@@ -114,8 +114,9 @@ def _now_iso() -> str:
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:

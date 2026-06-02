@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from datetime import UTC, datetime
 from html import escape, unescape
 from pathlib import Path
@@ -28,6 +29,21 @@ INVISIBLE_UNICODE_CHARS = {
     "\u202c": "POP DIRECTIONAL FORMATTING",
     "\u202d": "LEFT-TO-RIGHT OVERRIDE",
     "\u202e": "RIGHT-TO-LEFT OVERRIDE",
+    # Additional Unicode format/invisible characters not in the original list
+    "\u200e": "LEFT-TO-RIGHT MARK",
+    "\u200f": "RIGHT-TO-LEFT MARK",
+    "\u061c": "ARABIC LETTER MARK",
+    "\ufff9": "INTERLINEAR ANNOTATION ANCHOR",
+    "\ufffa": "INTERLINEAR ANNOTATION SEPARATOR",
+    "\ufffb": "INTERLINEAR ANNOTATION TERMINATOR",
+    "\u2061": "FUNCTION APPLICATION",
+    "\u2062": "INVISIBLE TIMES",
+    "\u2063": "INVISIBLE SEPARATOR",
+    "\u2064": "INVISIBLE PLUS",
+    "\u2066": "LEFT-TO-RIGHT ISOLATE",
+    "\u2067": "RIGHT-TO-LEFT ISOLATE",
+    "\u2068": "FIRST STRONG ISOLATE",
+    "\u2069": "POP DIRECTIONAL ISOLATE",
 }
 STORED_PROMPT_INJECTION_PATTERNS = (
     ("instruction-override", re.compile(r"\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+instructions\b", re.I)),

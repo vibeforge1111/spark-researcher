@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 from spark_researcher.beliefs import build_beliefs
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
+from spark_researcher import memory
 from spark_researcher.memory import load_working_memory, sync_memory
 
 
@@ -129,3 +131,21 @@ def test_load_working_memory_returns_empty_for_corrupt_json(tmp_path: Path) -> N
     working_path.write_text("{not-json", encoding="utf-8")
 
     assert load_working_memory(runtime_root) == {}
+
+
+def test_append_jsonl_uses_locked_file(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "runtime" / "artifacts" / "memory" / "episodes.jsonl"
+    locked_paths: list[Path] = []
+
+    @contextmanager
+    def fake_locked_file(target: Path):
+        locked_paths.append(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        yield
+
+    monkeypatch.setattr(memory, "locked_file", fake_locked_file)
+
+    memory._append_jsonl(path, {"event": "kept"})
+
+    assert locked_paths == [path]
+    assert [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] == [{"event": "kept"}]

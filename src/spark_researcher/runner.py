@@ -185,7 +185,14 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
     lookup = mutation_lookup(config)
     for name, value in mutations.items():
         if name not in lookup:
-            raise KeyError(f"Unknown mutable parameter: {name}")
+            known = sorted(lookup)
+            if known:
+                raise KeyError(
+                    f"Unknown mutable parameter: {name}. Known mutable parameters: {', '.join(known)}."
+                )
+            raise KeyError(
+                f"Unknown mutable parameter: {name}. No mutable parameters are defined in this project config (see `mutable_parameters` in spark-researcher.project.json)."
+            )
         spec = lookup[name]
         target_path = (workspace_root / spec.file).resolve()
         text = target_path.read_text(encoding="utf-8-sig")

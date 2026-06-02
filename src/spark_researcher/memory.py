@@ -544,11 +544,15 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     for path in docs_root.glob("*"):
         if path.is_file():
             _safe_unlink(path)
+    # Re-glob after deletion: collect any locked files that could not be removed.
+    # Seed used_paths with them so _unique_document_path never collides, and
+    # exclude them from the written manifest so stale content is not searched.
+    locked_files: set[Path] = {p for p in docs_root.glob("*") if p.is_file()}
     build_beliefs(repo_root, runtime_root)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
     tier_counts: dict[str, int] = defaultdict(int)
-    used_paths: set[str] = set()
+    used_paths: set[str] = {str(p) for p in locked_files}
 
     for record in rows:
         path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)

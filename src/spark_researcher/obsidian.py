@@ -4,6 +4,16 @@ import json
 import shutil
 from pathlib import Path
 
+
+def _safe_vault_page_path(output_root: Path, page_path: str) -> Path:
+    rel = Path(str(page_path).strip().replace("\\", "/"))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("Vault page path must be relative without traversal")
+    target = (output_root.resolve() / rel).resolve()
+    if output_root.resolve() not in target.parents and target != output_root.resolve():
+        raise ValueError("Vault page path escapes output root")
+    return target
+
 from .config import ProjectConfig
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
@@ -402,7 +412,7 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
             page_path = str(item.get("path") or "").strip().replace("\\", "/")
             if not page_path:
                 continue
-            write_text(output_root / page_path, str(item.get("content") or ""))
+            write_text(_safe_vault_page_path(output_root, page_path), str(item.get("content") or ""))
             domain_pages.append(page_path.removesuffix(".md"))
     copy_docs(repo_root, output_root / "06-References")
     copy_runtime_beliefs(runtime_root, output_root / "06-References" / "beliefs")

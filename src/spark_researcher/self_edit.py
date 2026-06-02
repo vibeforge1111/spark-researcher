@@ -268,7 +268,10 @@ def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:
         return None
     key = profile_name.strip().lower()
     if key not in BUILTIN_BACKEND_PROFILES:
-        raise RuntimeError(f"Unknown backend profile: {profile_name}")
+        known = sorted(BUILTIN_BACKEND_PROFILES)
+        raise RuntimeError(
+            f"Unknown backend profile: {profile_name}. Known backend profiles: {', '.join(known)}."
+        )
     spec = BUILTIN_BACKEND_PROFILES[key]
     executable = str(spec["command"][0])
     resolved_executable = shutil.which(executable)
@@ -472,8 +475,11 @@ def apply_proposal(
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
-    if git_mode not in {"manual", "branch", "main"}:
-        raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")
+    allowed_git_modes = ("manual", "branch", "main")
+    if git_mode not in allowed_git_modes:
+        raise RuntimeError(
+            f"Unsupported self-edit git mode: {git_mode}. Supported git modes: {', '.join(allowed_git_modes)}."
+        )
     branch_name = _current_branch(repo_root)
     original_branch = branch_name
     created_branch = False

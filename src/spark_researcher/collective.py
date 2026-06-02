@@ -1009,7 +1009,12 @@ def _manifest_repo_slug(repo_root: Path) -> str:
 def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | None = None, rebuild: bool = True) -> dict[str, Any]:
     collective_root = repo_root.parent / "autoresearch-collective"
     if not collective_root.exists():
-        raise RuntimeError(f"Collective repo not found: {collective_root}")
+        raise RuntimeError(
+            f"Collective repo not found: {collective_root}. "
+            "sync_local_collective looks for an `autoresearch-collective` checkout "
+            f"as a sibling of the spark-researcher repo at {repo_root.parent}. "
+            "Clone or place the autoresearch-collective repo there, then retry."
+        )
     config_path = _repo_sources_path(collective_root)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     payload = _load_json(config_path) if config_path.exists() else {"sources": []}

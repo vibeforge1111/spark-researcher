@@ -1049,16 +1049,24 @@ def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | N
     if rebuild:
         for script_name in ("build-collective-data.mjs", "build-graph-data.mjs"):
             command = ["node", f"./scripts/{script_name}"]
-            process = subprocess.run(
-                command,
-                cwd=str(collective_root / "dashboard"),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-                timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
-            )
+            try:
+                process = subprocess.run(
+                    command,
+                    cwd=str(collective_root / "dashboard"),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                    timeout=120
+                )
+            except subprocess.TimeoutExpired:
+                process = subprocess.CompletedProcess(
+                    command,
+                    returncode=1,
+                    stdout="",
+                    stderr=f"Build script timed out after 120s"
+                )
             commands_run.append(
                 {
                     "command": command,
@@ -1089,6 +1097,7 @@ def _run_command(
     *,
     cwd: Path,
     check: bool = True,
+    timeout: int = 60,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -1098,8 +1107,12 @@ def _run_command(
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired as error:
+        detail = (error.stderr or error.stdout or "").strip()
+        message = detail or f"Command timed out after {timeout}s: {' '.join(command)}"
+        raise RuntimeError(message) from error
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()
         message = detail or f"Command failed: {' '.join(command)}"

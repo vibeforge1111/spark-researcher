@@ -232,13 +232,16 @@ def safe_finish_trace(trace: Any, *, status: str, attributes: dict[str, Any] | N
         return
 
 
-def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool = False) -> CommandResult:
+def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool = False, timeout_seconds: int = 300) -> CommandResult:
     ensure_parent(log_path)
     if dry_run:
         preview = {"cwd": str(cwd), "command": command}
         log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
         return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+    try:
+        result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"Command timed out after {timeout_seconds}s: {' '.join(command)}")
     log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
     return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 

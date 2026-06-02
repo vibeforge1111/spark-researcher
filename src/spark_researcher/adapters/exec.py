@@ -32,6 +32,11 @@ ALLOWED_ADAPTER_EXECUTABLES = {
 }
 
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+_PUBLIC_SECRET_PATTERNS = [
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.IGNORECASE),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\b\d{5,}:[A-Za-z0-9_-]{20,}\b"),
+]
 
 
 def _now_slug() -> str:
@@ -131,6 +136,13 @@ def _expand_command_template(command: list[str], replacements: dict[str, str]) -
             next_part = next_part.replace(f"{{{name}}}", value)
         expanded.append(next_part)
     return expanded
+
+
+def _public_raw_response(text: str) -> str:
+    redacted = text
+    for pattern in _PUBLIC_SECRET_PATTERNS:
+        redacted = pattern.sub("[redacted]", redacted)
+    return redacted
 
 
 def execution_status() -> dict[str, Any]:
@@ -237,9 +249,9 @@ def execute_advisory(
         try:
             response_payload = json.loads(response_path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
-            response_payload = {"raw_response": response_path.read_text(encoding="utf-8", errors="replace")}
+            response_payload = {"raw_response": _public_raw_response(response_path.read_text(encoding="utf-8", errors="replace"))}
     else:
-        response_payload = {"raw_response": result.stdout.strip()}
+        response_payload = {"raw_response": _public_raw_response(result.stdout.strip())}
     trace.finish(status="ok" if result.returncode == 0 else "error", attributes={"returncode": result.returncode, "response_path": str(response_path)})
     return {
         "model": model,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -99,6 +100,73 @@ class AdapterExecTests(unittest.TestCase):
                     self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
                     self.assertEqual(Path(result["user_prompt_path"]).read_text(encoding="utf-8"), "user")
                     self.assertEqual(result["command"][0].lower(), "powershell")
+
+    def test_execute_advisory_redacts_malformed_response_raw_output(self) -> None:
+        advisory = {
+            "trace_id": "trace-raw",
+            "adapter_request": {
+                "system_prompt": "system",
+                "user_prompt": "user",
+            },
+        }
+
+        def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            response_path = Path(command[command.index("--out") + 1])
+            response_path.write_text(
+                "adapter leaked Bearer sk-live-secret-1234567890abcdef and 12345:abcdefghijklmnopqrstuvwxyz",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        env = {
+            "SPARK_RESEARCHER_ENABLE_GENERIC_ADAPTER": "1",
+            "SPARK_RESEARCHER_ADAPTER_ALLOWED_EXECUTABLES": "runner",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, env, clear=False), patch(
+                "spark_researcher.adapters.exec.subprocess.run",
+                side_effect=fake_run,
+            ):
+                result = execute_advisory(
+                    Path(tmp),
+                    advisory=advisory,
+                    model="generic",
+                    command_override=["runner", "--out", "{response_path}"],
+                )
+
+        raw_response = result["response"]["raw_response"]
+        self.assertIn("[redacted]", raw_response)
+        self.assertNotIn("sk-live-secret-1234567890abcdef", raw_response)
+        self.assertNotIn("12345:abcdefghijklmnopqrstuvwxyz", raw_response)
+
+    def test_execute_advisory_redacts_stdout_raw_response_fallback(self) -> None:
+        advisory = {
+            "trace_id": "trace-stdout",
+            "adapter_request": {
+                "system_prompt": "system",
+                "user_prompt": "user",
+            },
+        }
+        stdout = "stdout leaked sk-client-secret-1234567890abcdef"
+        env = {
+            "SPARK_RESEARCHER_ENABLE_GENERIC_ADAPTER": "1",
+            "SPARK_RESEARCHER_ADAPTER_ALLOWED_EXECUTABLES": "runner",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, env, clear=False), patch(
+                "spark_researcher.adapters.exec.subprocess.run",
+                return_value=subprocess.CompletedProcess(["runner"], 0, stdout=stdout, stderr=""),
+            ):
+                result = execute_advisory(
+                    Path(tmp),
+                    advisory=advisory,
+                    model="generic",
+                    command_override=["runner", "--no-response-file"],
+                )
+
+        raw_response = result["response"]["raw_response"]
+        self.assertIn("[redacted]", raw_response)
+        self.assertNotIn("sk-client-secret-1234567890abcdef", raw_response)
 
 
 if __name__ == "__main__":

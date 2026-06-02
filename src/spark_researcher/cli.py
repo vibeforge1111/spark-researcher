@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from . import __version__
 from .adapters import adapter_status, execute_advisory, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
@@ -50,6 +51,7 @@ def _positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
+    parser.add_argument("--version", action="version", version=f"spark-researcher {__version__}")
     sub = parser.add_subparsers(dest="action")
 
     init_parser = sub.add_parser("init")

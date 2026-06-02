@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -92,10 +93,17 @@ def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, conf
         appended.append(asdict(trial))
     if appended:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
+        # Atomic write: temp + os.replace so a crash mid-write cannot truncate
+        # the candidate-trials queue file. load_queue_trials swallows
+        # json.JSONDecodeError and returns [], so a corrupt queue would silently
+        # drop every pending trial -- the researcher auto-loop would then run
+        # zero trials thinking the queue is empty.
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(
             json.dumps({"candidate_trials": [asdict(item) for item in queue_trials]}, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        os.replace(tmp, path)
     return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}
 
 

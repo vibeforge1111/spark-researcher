@@ -74,9 +74,12 @@ def load_failures(runtime_root: Path) -> list[dict[str, Any]]:
 
 def _parse_created_at(value: str) -> datetime | None:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def surprise_status(runtime_root: Path, *, limit: int = 10) -> dict[str, Any]:

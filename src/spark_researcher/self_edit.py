@@ -50,11 +50,22 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     write_text(path, json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _validate_proposal_id(proposal_id: str) -> None:
+    if not proposal_id or not proposal_id.strip():
+        raise ValueError("proposal_id must not be empty")
+    if ".." in Path(proposal_id).parts:
+        raise ValueError(f"proposal_id must not contain path traversal segments: {proposal_id!r}")
+    if "/" in proposal_id or "\\" in proposal_id:
+        raise ValueError(f"proposal_id must not contain path separators: {proposal_id!r}")
+
+
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
+    _validate_proposal_id(proposal_id)
     return self_edit_root(runtime_root) / proposal_id
 
 
 def _workspace_dir(proposal_id: str) -> Path:
+    _validate_proposal_id(proposal_id)
     return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / proposal_id / "workspace"
 
 

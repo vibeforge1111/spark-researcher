@@ -433,16 +433,19 @@ def invoke_chip_hook(
         }
         log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return preview
-    result = subprocess.run(
-        invoked,
-        cwd=str(context.chip_root),
-        env=_build_hook_env(context),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=300,
-    )
+    try:
+        result = subprocess.run(
+            invoked,
+            cwd=str(context.chip_root),
+            env=_build_hook_env(context),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
     log_path.write_text(
         json.dumps(
             {

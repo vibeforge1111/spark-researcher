@@ -317,6 +317,38 @@ def test_invoke_chip_hook_failure_returns_public_safe_error(monkeypatch: pytest.
     assert "token=abc123" not in message
 
 
+def test_invoke_chip_hook_timeout_returns_public_safe_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(
+        tmp_path / "chip",
+        response_payload={
+            "documents": [
+                {
+                    "kind": "benchmark_evidence",
+                    "title": "Unused",
+                    "content": "# Unused",
+                }
+            ]
+        },
+    )
+
+    def fake_run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        raise subprocess.TimeoutExpired(command, timeout=300, output="token=abc123", stderr="secret=hidden")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(
+            config_path,
+            "packets",
+            {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")},
+        )
+
+    message = str(error.value)
+    assert "timed out after 300s" in message
+    assert "token=abc123" not in message
+    assert "secret=hidden" not in message
+
+
 def test_chip_validation_rejects_missing_local_hook_paths(tmp_path: Path) -> None:
     chip_root = tmp_path / "chip"
     chip_root.mkdir(parents=True, exist_ok=True)

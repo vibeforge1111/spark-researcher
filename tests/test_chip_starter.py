@@ -6,6 +6,7 @@ import sys
 import json
 
 from spark_researcher import chip_starter
+from spark_researcher.chips import validate_manifest
 
 
 def test_normalize_chip_name_uses_domain_prefix_by_default() -> None:
@@ -74,6 +75,18 @@ def test_preset_readmes_reference_chip_systems_and_relative_spark_repo() -> None
     assert "docs/CHIPS.md" in xcontent_readme
     assert "python -m pip install -e ..\\spark-researcher" in xcontent_readme
     assert "$env:PYTHONPATH='..\\spark-researcher\\src;src'" in xcontent_readme
+
+
+def test_crypto_manifest_frontier_shape_validates(tmp_path: Path) -> None:
+    manifest = json.loads(chip_starter._crypto_manifest("domain-chip-trading-crypto", "domain_chip_trading_crypto"))
+
+    result = validate_manifest(manifest, tmp_path / "spark-chip.json")
+
+    assert result["valid"] is True
+    assert "frontier" in manifest
+    assert "allowed_mutations" not in manifest
+    assert "asset_universe" in manifest["frontier"]["allowed_mutations"]
+    assert manifest["frontier"]["open_mutation_fields"] == ["asset_universe"]
 
 
 def test_xcontent_watchtower_handles_scalar_best_by_metric_values() -> None:

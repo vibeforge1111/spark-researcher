@@ -287,26 +287,29 @@ def _crypto_manifest(chip_name: str, package_name: str) -> str:
             "packets": ["python", "-m", f"{package_name}.cli", "packets"],
             "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
         },
-        "allowed_mutations": {
-            "doctrine_id": [
-                "trend_regime_following",
-                "mean_reversion_liquidity_reclaim",
-                "breakout_volatility_expansion",
-                "risk_first_asymmetric_capture",
-            ],
-            "strategy_id": [
-                "ema_pullback_long",
-                "range_reclaim_scalp",
-                "breakout_open_interest_confirmation",
-                "funding_mean_revert",
-            ],
-            "market_regime": ["trend", "range", "high_vol", "event_driven"],
-            "timeframe": ["15m", "1h", "4h"],
-            "venue": ["binance", "bybit", "hyperliquid"],
-            "paper_gate": ["strict", "balanced"],
+        "frontier": {
+            "allowed_mutations": {
+                "doctrine_id": [
+                    "trend_regime_following",
+                    "mean_reversion_liquidity_reclaim",
+                    "breakout_volatility_expansion",
+                    "risk_first_asymmetric_capture",
+                ],
+                "strategy_id": [
+                    "ema_pullback_long",
+                    "range_reclaim_scalp",
+                    "breakout_open_interest_confirmation",
+                    "funding_mean_revert",
+                ],
+                "market_regime": ["trend", "range", "high_vol", "event_driven"],
+                "timeframe": ["15m", "1h", "4h"],
+                "venue": ["binance", "bybit", "hyperliquid"],
+                "paper_gate": ["strict", "balanced"],
+                "asset_universe": ["BTC,ETH", "BTC,ETH,SOL", "SOL"],
+            },
+            "open_mutation_fields": ["asset_universe"],
+            "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
         },
-        "open_mutation_fields": ["asset_universe"],
-        "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
     }
     return json.dumps(payload, indent=2, sort_keys=True)
 

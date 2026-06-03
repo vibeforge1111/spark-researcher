@@ -237,3 +237,5 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
     except Exception as exc:
         trace.finish(status="error", attributes={"error": str(exc)})
         raise
+
+# json guard

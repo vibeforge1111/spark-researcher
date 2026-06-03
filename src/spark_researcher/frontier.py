@@ -127,8 +127,9 @@ def frontier_suggest(
         for row in rows
         if row.get("command_name") == command_name
     }
-    best_rows = [row for row in rows if row.get("command_name") == command_name and row.get("applied_mutations")][-3:]
-    best_rows = sorted(best_rows, key=lambda item: float(item.get("metric_value", 0.0) or 0.0), reverse=config.eval_goal == "maximize")[:3]
+    # Sort the full filtered ledger by metric before truncating; slicing first
+    # would drop the actual top performers when the ledger has more than 3 rows.
+    best_rows = sorted([row for row in rows if row.get("command_name") == command_name and row.get("applied_mutations")], key=lambda item: float(item.get("metric_value", 0.0) or 0.0), reverse=config.eval_goal == "maximize")[:3]
     winner_text = [
         {"candidate_id": row.get("candidate_id"), "metric_value": row.get("metric_value"), "verdict": row.get("verdict"), "mutations": {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}}
         for row in best_rows

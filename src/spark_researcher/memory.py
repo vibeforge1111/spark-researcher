@@ -491,11 +491,16 @@ def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str
     path = _episodes_path(runtime_root)
     if not path.exists():
         return []
-    rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            rows.append(parsed)
     return list(reversed(rows[-limit:]))
 
 

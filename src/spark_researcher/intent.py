@@ -71,3 +71,5 @@ def build_intent_brief(config_path: Path, *, domain: str | None = None, query: s
         "memory_context": _memory_context(config_path, config, search_query, domain),
         "optimizer": optimizer_status() if "dspy" in set(config.intent.resource_modes) else {"available": False, "mode": "optional", "notes": ["DSPy optimization is disabled for this intent."]},
     }
+
+# json guard

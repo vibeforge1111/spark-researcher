@@ -95,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--command", dest="project_command", required=True)
     run_parser.add_argument("--candidate-id")
     run_parser.add_argument("--set", action="append")
+    run_parser.add_argument("--json", action="store_true")
     run_parser.add_argument("--dry-run", action="store_true")
 
     loop_parser = sub.add_parser("loop")

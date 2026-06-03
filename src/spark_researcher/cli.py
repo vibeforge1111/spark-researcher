@@ -242,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
     beliefs_build = beliefs_sub.add_parser("build")
     add_config_argument(beliefs_build)
+    beliefs_build.add_argument("--output")
 
     obsidian_parser = sub.add_parser("obsidian")
     obsidian_sub = obsidian_parser.add_subparsers(dest="obsidian_command")

@@ -455,3 +455,5 @@ def mutation_lookup(config: ProjectConfig) -> dict[str, MutationSpec]:
 
 def trial_applies_to_command(trial: CandidateTrial, command_name: str) -> bool:
     return not trial.commands or command_name in trial.commands
+
+# json guard

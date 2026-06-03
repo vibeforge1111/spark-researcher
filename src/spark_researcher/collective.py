@@ -1129,7 +1129,11 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
     path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
     if not path.exists():
         return path, {"repoDirectory": [], "capsuleLibrary": []}
-    return path, json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load swarm payload from {path}: {exc}") from exc
+    return path, data
 
 
 def _slugify(value: str) -> str:

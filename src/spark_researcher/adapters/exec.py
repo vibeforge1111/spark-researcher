@@ -180,13 +180,14 @@ def execute_advisory(
     model: str,
     command_override: list[str] | None = None,
     dry_run: bool = False,
+    timeout: float = 300.0,
 ) -> dict[str, Any]:
     trace = start_trace(
         runtime_root,
         kind="advisory_execute",
         name=model,
         parent_trace_id=str(advisory.get("trace_id") or "") or None,
-        attributes={"model": model, "dry_run": dry_run},
+        attributes={"model": model, "dry_run": dry_run, "timeout": timeout},
     )
     command = _resolve_command(model, command_override)
     if not command:
@@ -228,8 +229,8 @@ def execute_advisory(
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
-    with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    with trace.span("subprocess", attributes={"command": expanded, "timeout": timeout}):
+        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

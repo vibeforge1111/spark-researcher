@@ -25,7 +25,12 @@ def _read_request() -> dict[str, Any]:
     raw = sys.stdin.read()
     if not raw.strip():
         raise SystemExit("spark_codez_bridge.py expects a JSON request on stdin.")
-    parsed = json.loads(raw)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"spark_codez_bridge.py received malformed JSON on stdin (first 80 chars: {raw[:80]!r}): {exc.msg}"
+        ) from exc
     if not isinstance(parsed, dict):
         raise SystemExit("Spark Codez bridge request must be a JSON object.")
     return parsed

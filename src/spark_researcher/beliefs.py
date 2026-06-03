@@ -24,8 +24,10 @@ def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
     except FileNotFoundError:
+        logging.warning("Silent error caught: %s", exc)
         pass
     except PermissionError:
+        logging.warning("Silent error caught: %s", exc)
         pass
 
 

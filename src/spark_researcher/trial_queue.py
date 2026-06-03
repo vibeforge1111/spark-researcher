@@ -114,6 +114,7 @@ def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, conf
                 try:
                     os.unlink(tmp_name)
                 except OSError:
+                    logging.warning("Silent error caught: %s", exc)
                     pass
             raise
     return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}

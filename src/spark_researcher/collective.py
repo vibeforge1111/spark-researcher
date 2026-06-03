@@ -1110,6 +1110,7 @@ def _default_base_branch(repo_root: Path) -> str:
         if "/" in head:
             return head.rsplit("/", 1)[-1]
     except RuntimeError:
+        logging.warning("Silent error caught: %s", exc)
         pass
     try:
         current = _git_output(repo_root, "branch", "--show-current")

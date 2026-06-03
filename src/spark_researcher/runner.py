@@ -81,6 +81,7 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
         try:
             lock_path.unlink()
         except FileNotFoundError:
+            logging.warning("Silent error caught: %s", exc)
             pass
 
 

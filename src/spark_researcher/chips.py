@@ -19,6 +19,16 @@ FRONTIER_MODELS = ("claude", "codex", "openclaw", "generic")
 FRONTIER_KEYS = ("allowed_mutations", "open_mutation_fields", "field_patterns", "prompt_hints", "required_fields", "model", "web_search", "enabled")
 LOCAL_STATE_DIR_NAMES = (".paperclip-data", ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache")
 LOCAL_PATH_SUFFIXES = (".py", ".sh", ".ps1", ".cmd", ".bat", ".exe")
+
+# Allowlist of binaries permitted in chip hook commands.
+# Only these base commands may be invoked via subprocess from chip manifests.
+ALLOWED_HOOK_BINARIES: frozenset[str] = frozenset({
+    "python", "python3",
+    "node", "node20",
+    "bash", "sh", "zsh",
+    "deno", "bun",
+    "uv", "pip",
+})
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -369,6 +379,18 @@ def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
         return
 
 
+
+def _validate_hook_command(command: list[str]) -> None:
+    """Reject chip hook commands whose binary is not in the allowlist."""
+    if not command:
+        raise RuntimeError("Chip hook command is empty.")
+    binary = Path(command[0]).name
+    if binary not in ALLOWED_HOOK_BINARIES:
+        raise RuntimeError(
+            f"Chip hook binary '{binary}' is not in the allowed list. "
+            f"Permitted binaries: {', '.join(sorted(ALLOWED_HOOK_BINARIES))}."
+        )
+
 def _build_hook_env(context: ChipContext) -> dict[str, str]:
     env = os.environ.copy()
     pythonpath_parts: list[str] = []
@@ -415,6 +437,7 @@ def invoke_chip_hook(
             f"Defined hooks: {defined_hooks}."
         )
     command = _command_parts(commands[hook])
+    _validate_hook_command(command)
     hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
     hook_root.mkdir(parents=True, exist_ok=True)
     stamp = _now_slug()

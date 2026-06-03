@@ -541,10 +541,13 @@ def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, 
 def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", config_path: Path | None = None) -> dict[str, Any]:
     rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
     docs_root = _documents_root(runtime_root)
-    docs_root.mkdir(parents=True, exist_ok=True)
-    for path in docs_root.glob("*"):
-        if path.is_file():
-            _safe_unlink(path)
+    # Write to a temp directory first to avoid data loss if the process
+    # crashes mid-rebuild.  The old docs_root is preserved until all new
+    # documents have been written, then we swap atomically.
+    work_dir = docs_root.parent / f".{docs_root.name}.tmp"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True, exist_ok=True)
     build_beliefs(repo_root, runtime_root)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
@@ -552,7 +555,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     used_paths: set[str] = set()
 
     for record in rows:
-        path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)
+        path = _unique_document_path(work_dir, f"run-{record.get('run_id', 'run')}", used_paths)
         write_text(path, build_run_doc(record))
         memory_tier = "raw_run"
         written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
@@ -564,7 +567,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         for path in sorted(belief_docs_root.glob("*.md")):
             if path.name.upper() == "INDEX.MD":
                 continue
-            target = _unique_document_path(docs_root, f"belief-{path.stem}", used_paths)
+            target = _unique_document_path(work_dir, f"belief-{path.stem}", used_paths)
             shutil.copyfile(path, target)
             written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
             kind_counts["belief"] += 1
@@ -577,7 +580,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
             review_path = proposal_path.parent / "review.json"
             review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
-            target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
+            target = _unique_document_path(work_dir, f"self-edit-{proposal.get('proposal_id')}", used_paths)
             write_text(target, build_self_edit_doc(proposal, review))
             written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
             kind_counts["self_edit"] += 1
@@ -586,7 +589,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
 
     working = load_working_memory(runtime_root)
     if working:
-        target = docs_root / "working-memory.md"
+        target = work_dir / "working-memory.md"
         used_paths.add(str(target))
         write_text(target, build_working_memory_doc(working))
         working_tier = "state_snapshot"
@@ -596,7 +599,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
 
     episodes = load_episode_memory(runtime_root)
     if episodes:
-        target = docs_root / "episode-memory.md"
+        target = work_dir / "episode-memory.md"
         used_paths.add(str(target))
         write_text(target, build_episode_memory_doc(episodes))
         written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
@@ -605,7 +608,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
 
     outcomes = _build_outcomes(rows, goal=goal)
     for outcome in outcomes:
-        path = _unique_document_path(docs_root, outcome["outcome_id"], used_paths)
+        path = _unique_document_path(work_dir, outcome["outcome_id"], used_paths)
         write_text(path, build_outcome_doc(outcome))
         written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
         kind_counts["outcome"] += 1
@@ -620,7 +623,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
                 "project_name": repo_root.name,
                 "ledger_rows": rows,
                 "outcomes": outcomes,
-                "documents_root": str(docs_root),
+                "documents_root": str(work_dir),
             },
         )
         seen_chip_documents: set[tuple[str, str, str, str]] = set()
@@ -634,7 +637,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
             if signature in seen_chip_documents:
                 continue
             seen_chip_documents.add(signature)
-            path = _unique_document_path(docs_root, f"{kind}-{slug}", used_paths)
+            path = _unique_document_path(work_dir, f"{kind}-{slug}", used_paths)
             write_text(path, content)
             record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
             written.append(record)
@@ -660,7 +663,7 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         "",
     ]
     index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
-    write_text(docs_root / "INDEX.md", "\n".join(index_lines))
+    write_text(work_dir / "INDEX.md", "\n".join(index_lines))
     manifest = {
         "backend": "local",
         "document_count": len(written),
@@ -675,6 +678,14 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
         "episode_count": len(episodes),
     }
     write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
+    # --- Atomic swap: replace old docs_root with the newly-built work_dir ---
+    if docs_root.exists():
+        backup = docs_root.parent / f".{docs_root.name}.old"
+        if backup.exists():
+            shutil.rmtree(backup)
+        docs_root.rename(backup)
+        shutil.rmtree(backup)
+    work_dir.rename(docs_root)
     return manifest
 
 

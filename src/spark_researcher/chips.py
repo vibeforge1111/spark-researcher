@@ -432,6 +432,7 @@ def invoke_chip_hook(
         "manifest_path": str(context.manifest_path),
         **payload,
     }
+    input_path.parent.mkdir(parents=True, exist_ok=True)
     input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     invoked = command + ["--input", str(input_path), "--output", str(output_path)]
     if dry_run:
@@ -442,6 +443,7 @@ def invoke_chip_hook(
             "input_path": str(input_path),
             "output_path": str(output_path),
         }
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return preview
     try:

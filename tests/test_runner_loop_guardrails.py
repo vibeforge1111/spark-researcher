@@ -119,3 +119,29 @@ def test_run_loop_reports_unclamped_default_limit(
     assert result["requested_limit"] == 3
     assert result["max_iterations"] == 3
     assert result["limit_clamped_to_guardrail"] is False
+
+
+def test_run_loop_emits_progress_step_counter_to_stderr_between_trials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = _write_loop_config(tmp_path, max_loop_iterations=3)
+
+    monkeypatch.setattr(
+        runner,
+        "run_once",
+        lambda *args, trial, **kwargs: {"verdict": "flat", "status": "ok"},
+    )
+
+    runner.run_loop(config_path, "train")
+
+    captured = capsys.readouterr()
+    # The step counter goes to stderr so the CLI's stdout JSON payload is unaffected.
+    assert captured.out == ""
+    stderr_lines = [line for line in captured.err.splitlines() if line.strip()]
+    assert stderr_lines == [
+        "[1/3] candidate=trial-0 verdict=flat",
+        "[2/3] candidate=trial-1 verdict=flat",
+        "[3/3] candidate=trial-2 verdict=flat",
+    ]

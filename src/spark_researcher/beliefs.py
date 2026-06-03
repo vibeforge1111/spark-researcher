@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -16,8 +17,26 @@ MAX_BELIEF_FILENAME_STEM = 80
 
 
 def _write_text(path: Path, content: str) -> None:
+    """Persist text content atomically: sibling temp file + os.replace.
+
+    Used to write the beliefs output root (manifest.json, INDEX.md,
+    CONTRADICTIONS.md, and the per-run belief markdown files). manifest.json
+    in particular is a persistent state file read by downstream beliefs
+    consumers — a torn write (process killed mid-flush) would leave a
+    half-written manifest that breaks the next reader with a
+    JSONDecodeError. os.replace is atomic on POSIX.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    try:
+        tmp.write_text(content.rstrip() + "\n", encoding="utf-8")
+        os.replace(str(tmp), str(path))
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 def _safe_unlink(path: Path) -> None:

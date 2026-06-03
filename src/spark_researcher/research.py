@@ -87,7 +87,7 @@ def _citation_rows(results: list[dict[str, str]]) -> list[dict[str, str]]:
             continue
         rows.append(
             {
-                "note_id": f"note-{index}",
+                "note_id": f"note-{index:02d}",
                 "title": title,
                 "snippet": snippet,
                 "url": str(item.get("url") or "").strip(),

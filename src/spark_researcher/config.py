@@ -324,7 +324,10 @@ def update_intent_policy(
 
 def load_config(path: Path) -> ProjectConfig:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            payload = {}
     except FileNotFoundError as exc:
         raise SystemExit(f"Config file not found: {public_config_path(path)}") from exc
     except json.JSONDecodeError as exc:

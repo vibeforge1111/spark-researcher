@@ -146,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     packets_search_parser.add_argument("query")
     packets_search_parser.add_argument("--limit", type=int, default=5)
     packets_search_parser.add_argument("--domain")
+    packets_search_parser.add_argument("--output", "-o", metavar="FILE", default=None, help="write JSON output to FILE instead of stdout")
 
     advisory_parser = sub.add_parser("advisory")
     advisory_sub = advisory_parser.add_subparsers(dest="advisory_command")
@@ -658,7 +659,13 @@ def main() -> None:
         return
     if args.action == "packets":
         if args.packets_command == "search":
-            print_json(search_packets(config_path, args.query, limit=args.limit, domain=args.domain))
+            payload = search_packets(config_path, args.query, limit=args.limit, domain=args.domain)
+            output_path = getattr(args, "output", None)
+            if output_path:
+                with open(output_path, "w", encoding="utf-8") as fh:
+                    fh.write(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print_json(payload)
             return
         print_json(packet_status(config_path))
         return

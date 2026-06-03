@@ -222,6 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
     intent_set.add_argument("--notes")
     intent_clear = intent_sub.add_parser("clear")
     add_config_argument(intent_clear)
+    intent_clear.add_argument("--dry-run", action="store_true", help="Print the current intent without clearing it")
 
     trainer_parser = sub.add_parser("trainers")
     trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
@@ -391,6 +392,9 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
 def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
     config = load_config(config_path)
     if args.intent_command == "clear":
+        if getattr(args, "dry_run", False):
+            print_json({"config_path": str(config_path), "would_clear": True, "current_intent": intent_policy(config)})
+            return
         update_intent_policy(
             config,
             goal="",

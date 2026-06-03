@@ -79,7 +79,7 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
         os.close(handle)
         try:
             lock_path.unlink()
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError):
             pass
 
 

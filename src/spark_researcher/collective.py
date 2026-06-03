@@ -21,15 +21,18 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            rows.append(parsed)
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                rows.append(parsed)
+    except OSError:
+        return []
     return rows
 
 
@@ -476,7 +479,7 @@ def _load_spark_swarm_bridge_state() -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, OSError):
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -677,7 +680,12 @@ def write_spark_swarm_collective_payload(
     payload = build_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
     path = spark_swarm_collective_payload_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return {
         "payload_path": str(path),
         "workspace_id": payload.get("workspaceId") or None,

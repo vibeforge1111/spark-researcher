@@ -67,7 +67,12 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load self-edit JSON {path}: {exc}") from exc
 
 
 def backend_profiles() -> list[dict[str, Any]]:
@@ -451,7 +456,10 @@ def apply_proposal(
     if not proposal_path.exists():
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
-    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load proposal {proposal_path}: {exc}") from exc
     review = _load_json(_review_path(runtime_root, proposal_id))
     if not review:
         trace.finish(status="error", attributes={"error": "Proposal must be reviewed before apply."})
@@ -562,7 +570,10 @@ def proposal_status(config_path: Path) -> dict[str, Any]:
     proposals = []
     if root.exists():
         for path in sorted(root.glob("*/proposal.json"), reverse=True):
-            proposal = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"Failed to load proposal {path}: {exc}") from exc
             review = _load_json(path.parent / "review.json")
             proposals.append(_proposal_summary(proposal, review))
     return {"proposal_count": len(proposals), "proposals": proposals}

@@ -89,6 +89,11 @@ def _load_governor_decision(path: str | None) -> dict | None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s 0.1.0",
+    )
     sub = parser.add_subparsers(dest="action")
 
     init_parser = sub.add_parser("init")

@@ -101,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(loop_parser)
     loop_parser.add_argument("--command", dest="project_command", required=True)
     loop_parser.add_argument("--limit", type=int)
+    loop_parser.add_argument("--json", action="store_true")
     loop_parser.add_argument("--dry-run", action="store_true")
 
     autoloop_parser = sub.add_parser("autoloop")

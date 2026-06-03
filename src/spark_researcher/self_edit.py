@@ -490,6 +490,8 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
     applied = []
+    # Track original state for rollback on failure
+    _originals: dict[str, bytes | None] = {}
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
         source = workspace_root / rel
@@ -497,8 +499,12 @@ def apply_proposal(
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
             if target.exists():
+                _originals[rel] = target.read_bytes()
                 target.unlink()
+            else:
+                _originals[rel] = None
         else:
+            _originals[rel] = target.read_bytes() if target.exists() else None
             shutil.copyfile(source, target)
         applied.append(rel)
     proposal["status"] = "applied"
@@ -518,6 +524,18 @@ def apply_proposal(
                 _push_branch(repo_root, _current_branch(repo_root))
                 pushed = True
     except Exception as exc:
+        # Rollback: restore original files
+        for rel, original in _originals.items():
+            target = repo_root / rel
+            try:
+                if original is None:
+                    if target.exists():
+                        target.unlink()
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(original)
+            except OSError:
+                pass  # best-effort rollback
         proposal["status"] = "applied_push_failed" if commit_sha and should_push and not pushed else "apply_failed"
         proposal["git_mode"] = git_mode
         proposal["git_branch"] = _current_branch(repo_root)

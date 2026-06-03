@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .adapters import adapter_status, execute_advisory, execution_status
@@ -31,7 +32,16 @@ from .trainers import run_all_trainers, trainer_status
 
 
 def print_json(payload: object) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    # Well-known CLI UX pattern (ls, jq, git, kubectl): pretty-print when a
+    # human is at the terminal; emit compact single-line JSON when stdout is a
+    # pipe / file redirect so `| jq`, `| grep <id>`, ndjson pipelines, and
+    # line-oriented shell loops can consume the output without the extra
+    # whitespace from indent=2. sort_keys=True is preserved on both branches
+    # so JSON content is byte-equivalent; only whitespace differs.
+    if getattr(sys.stdout, "isatty", lambda: False)():
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(json.dumps(payload, separators=(",", ":"), sort_keys=True))
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:

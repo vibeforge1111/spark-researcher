@@ -247,6 +247,9 @@ def _local_search_results(
         except FileNotFoundError:
             # Memory sync rewrites docs in place; skip files that disappeared mid-search.
             continue
+        except PermissionError:
+            # Windows/Obsidian can hold docs open transiently; skip rather than crash search.
+            continue
         lowered = text.lower()
         lexical_score = sum(1 for term in terms if term in lowered)
         if lexical_score <= 0:

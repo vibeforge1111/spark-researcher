@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -564,9 +565,24 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
-    for trial in pending_trials[:max_iterations]:
+    planned_trials = pending_trials[:max_iterations]
+    planned_count = len(planned_trials)
+    for index, trial in enumerate(planned_trials, start=1):
         record = run_once(config_path, command_name, trial=trial, dry_run=dry_run)
         results.append(record)
+        # Operator-facing progress signal on stderr so the JSON result on stdout
+        # is unaffected. Without this, `spark-researcher run loop --limit 20`
+        # is silent for the entire run window (each trial can take seconds to
+        # minutes depending on the project command) and the operator cannot
+        # tell which trial is currently running or how many are left.
+        try:
+            print(
+                f"[{index}/{planned_count}] candidate={trial.candidate_id} verdict={record.get('verdict')}",
+                file=sys.stderr,
+                flush=True,
+            )
+        except OSError:
+            pass
         if record["verdict"] == "improved":
             consecutive_discards = 0
         elif row_counts_as_discard(record):

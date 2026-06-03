@@ -311,3 +311,5 @@ def init_project(target_dir: Path, *, preset: str, project_name: str) -> Path:
     readme_path = target_dir / "SPARK_RESEARCHER_PRESET.md"
     readme_path.write_text(_preset_readme(preset, project_name), encoding="utf-8")
     return config_path
+
+# json guard

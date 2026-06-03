@@ -9,16 +9,10 @@ from typing import Any
 from .config import load_config
 from .paths import beliefs_root, resolve_runtime_root
 from .runner import read_jsonl
-
-
 MAX_BELIEF_FILENAME_STEM = 80
-
-
 def _write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
-
-
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()
@@ -26,29 +20,17 @@ def _safe_unlink(path: Path) -> None:
         pass
     except PermissionError:
         pass
-
-
 def _beliefs_root(runtime_root: Path) -> Path:
     return beliefs_root(runtime_root)
-
-
 def _self_edit_root(runtime_root: Path) -> Path:
     return runtime_root / "artifacts" / "self-edit"
-
-
 def _ledger_path(runtime_root: Path) -> Path:
     return runtime_root / "artifacts" / "ledger" / "runs.jsonl"
-
-
 def _belief_id(prefix: str, source_id: str) -> str:
     safe = source_id.replace("|", "-").replace(":", "-").replace("/", "-").replace("\\", "-")
     return f"{prefix}-{safe}"
-
-
 def _safe_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "-", value).strip("-") or "item"
-
-
 def _bounded_filename_stem(value: str, *, limit: int = MAX_BELIEF_FILENAME_STEM) -> str:
     safe = _safe_slug(value)
     if len(safe) <= limit:
@@ -57,28 +39,18 @@ def _bounded_filename_stem(value: str, *, limit: int = MAX_BELIEF_FILENAME_STEM)
     head_limit = max(1, limit - len(digest) - 1)
     head = safe[:head_limit].rstrip("-._") or "item"
     return f"{head}-{digest}"
-
-
 def _signature(run: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(item["name"]), str(item["value"])) for item in run.get("applied_mutations", [])))
-
-
 def _signature_map(signature: tuple[tuple[str, str], ...]) -> dict[str, str]:
     return {name: value for name, value in signature}
-
-
 def _group_belief_id(group: dict[str, Any]) -> str:
     representative = dict(group["representative"])
     signature_slug = _safe_slug("-".join(f"{name}-{value}" for name, value in group["signature"]))
     return _belief_id("run", f"{representative.get('command_name')}-{signature_slug}")
-
-
 def _is_better(candidate: float, current: float | None, goal: str) -> bool:
     if current is None:
         return True
     return candidate > current if goal == "maximize" else candidate < current
-
-
 def _skip_core_run_belief(row: dict[str, Any]) -> bool:
     chip_result = row.get("chip_result")
     if not isinstance(chip_result, dict):
@@ -91,8 +63,6 @@ def _skip_core_run_belief(row: dict[str, Any]) -> bool:
     if benchmark_profile and baseline_id:
         return True
     return False
-
-
 def _command_best(rows: list[dict[str, Any]], *, goal: str) -> dict[str, float]:
     best: dict[str, float] = {}
     for row in rows:
@@ -107,8 +77,6 @@ def _command_best(rows: list[dict[str, Any]], *, goal: str) -> dict[str, float]:
         if _is_better(value, current, goal):
             best[command_name] = value
     return best
-
-
 def _promotable_run_groups(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, Any]] = {}
     best_by_command = _command_best(rows, goal=goal)
@@ -156,8 +124,6 @@ def _promotable_run_groups(rows: list[dict[str, Any]], *, goal: str) -> list[dic
             promoted.append(group)
     promoted.sort(key=lambda item: (str(item["command_name"]), str(item["promotion_reason"]), str(item["representative"].get("run_id"))))
     return promoted
-
-
 def _annotate_belief_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
     annotated = [dict(group) for group in groups]
     for group in annotated:
@@ -188,8 +154,6 @@ def _annotate_belief_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]
                 left["belief_status"] = "provisional"
                 right["belief_status"] = "provisional"
     return annotated
-
-
 def _render_run_belief(group: dict[str, Any]) -> str:
     run = dict(group["representative"])
     mutations = run.get("applied_mutations") or []
@@ -243,8 +207,6 @@ def _render_run_belief(group: dict[str, Any]) -> str:
             "- should be re-tested if the target command or metric changes",
         ]
     )
-
-
 def _render_self_edit_belief(proposal: dict[str, Any], review: dict[str, Any]) -> str:
     return "\n".join(
         [
@@ -271,8 +233,6 @@ def _render_self_edit_belief(proposal: dict[str, Any], review: dict[str, Any]) -
             str(review.get("rollback_condition") or "n/a"),
         ]
     )
-
-
 def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str, Any]:
     runtime_root = runtime_root or resolve_runtime_root(repo_root / "spark-researcher.project.json")
     config = load_config(repo_root / "spark-researcher.project.json")
@@ -310,8 +270,16 @@ def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str
             review_path = proposal_path.parent / "review.json"
             if not review_path.exists():
                 continue
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review = json.loads(review_path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Skipping malformed proposal %s: %s", proposal_path, exc)
+                continue
+            try:
+                review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Skipping malformed review %s: %s", review_path, exc)
+                continue
             if review.get("decision") != "approve":
                 continue
             belief_id = _belief_id("self-edit", str(proposal.get("proposal_id")))

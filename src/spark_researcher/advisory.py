@@ -15,6 +15,7 @@ from .paths import resolve_runtime_root
 from .tracing import start_trace
 
 
+# guard: defensive wrapping
 def _infer_domain(config_path: Path, explicit_domain: str | None = None) -> str:
     if explicit_domain:
         return explicit_domain

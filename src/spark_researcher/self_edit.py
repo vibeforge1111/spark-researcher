@@ -67,7 +67,12 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load self-edit JSON {path}: {exc}") from exc
 
 
 def backend_profiles() -> list[dict[str, Any]]:

@@ -70,13 +70,24 @@ def run_search(query: str, *, timeout_seconds: int = 60) -> dict[str, Any]:
     if not _has_pi_identity():
         raise RuntimeError("RuVector search requires a Pi identity. Run `npx ruvector identity generate`, set `PI`, then retry.")
     command[0] = executable
-    completed = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # `intent._memory_context` catches `(RuntimeError, OSError, ValueError)`,
+        # so an uncaught `TimeoutExpired` from a hung RuVector CLI propagates
+        # all the way up through advisory build / frontier suggest. Translate
+        # to a named RuntimeError so the existing intent fallback path engages
+        # with a clear `{"error": ...}` payload instead of crashing.
+        raise RuntimeError(
+            f"RuVector search timed out after {timeout_seconds}s. "
+            "The CLI may be hung; rerun with a higher timeout or restart the RuVector daemon."
+        ) from exc
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
         if "missing authorization header" in detail.lower():

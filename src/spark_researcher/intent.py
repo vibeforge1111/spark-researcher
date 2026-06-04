@@ -12,6 +12,7 @@ from .ruvector import run_search as run_ruvector_search
 from .ruvector import ruvector_status
 
 
+# guard: defensive wrapping
 def _search_query(config: ProjectConfig, explicit: str | None = None) -> str:
     if explicit:
         return explicit

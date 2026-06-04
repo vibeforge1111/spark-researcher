@@ -229,7 +229,27 @@ def execute_advisory(
             "trace_path": str(trace.path),
         }
     with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        try:
+            result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+        except subprocess.TimeoutExpired as exc:
+            stdout_path.write_text(exc.stdout or "", encoding="utf-8")
+            stderr_path.write_text((exc.stderr or "") + f"
+Subprocess timed out after {exc.timeout}s", encoding="utf-8")
+            trace.finish(status="error", attributes={"error": "timeout", "timeout": exc.timeout, "response_path": str(response_path)})
+            return {
+                "model": model,
+                "returncode": -1,
+                "command": expanded,
+                "request_path": str(request_path),
+                "system_prompt_path": str(system_prompt_path),
+                "user_prompt_path": str(user_prompt_path),
+                "response_path": str(response_path),
+                "stdout_path": str(stdout_path),
+                "stderr_path": str(stderr_path),
+                "response": {"error": f"Subprocess timed out after {exc.timeout}s"},
+                "trace_id": trace.trace_id,
+                "trace_path": str(trace.path),
+            }
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

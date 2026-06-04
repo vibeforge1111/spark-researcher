@@ -74,7 +74,10 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
+            raw = response.read(2 * 1024 * 1024 + 1)  # 2MB + 1 byte sentinel
+            if len(raw) > 2 * 1024 * 1024:
+                raise RuntimeError(f"frontier response exceeded 2MB limit")
+            page = raw.decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)

@@ -52,7 +52,10 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
+            raw = response.read(2 * 1024 * 1024 + 1)  # 2MB + 1 byte sentinel
+            if len(raw) > 2 * 1024 * 1024:
+                raise RuntimeError(f"research response exceeded 2MB limit")
+            page = raw.decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
     links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)

@@ -155,7 +155,7 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def safe_urlopen(request: Request | str, *, timeout: float):
+def safe_urlopen(request: Request | str, *, timeout: float, max_bytes: int = 2 * 1024 * 1024):
     url = request.full_url if isinstance(request, Request) else str(request)
     assert_safe_url(url)
 
@@ -172,7 +172,17 @@ def safe_urlopen(request: Request | str, *, timeout: float):
         handlers.append(_PinnedHTTPHandler(pinned_ip))
     opener = build_opener(*handlers)
     try:
-        return opener.open(request, timeout=timeout)
+        response = opener.open(request, timeout=timeout)
+        if max_bytes is not None:
+            data = response.read(max_bytes)
+            # Drain remaining data to detect oversized responses
+            extra = response.read(1)
+            if extra:
+                raise URLError(f"Response exceeded {max_bytes} byte limit")
+            from io import BytesIO
+            from urllib.response import addinfourl
+            response = addinfourl(BytesIO(data), response.headers, response.url, response.code)
+        return response
     except UnsafeURL:
         raise
     except URLError:

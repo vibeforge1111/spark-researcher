@@ -310,6 +310,10 @@ def update_intent_policy(
     return config
 
 
+class ConfigLoadError(ValueError):
+    """Raised when a required key or field is absent from the project config file."""
+
+
 def load_config(path: Path) -> ProjectConfig:
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -328,8 +332,20 @@ def load_config(path: Path) -> ProjectConfig:
         name: MetricSpec(pattern=str(spec["pattern"]), kind=str(spec.get("kind", "float")))
         for name, spec in payload["metrics"].items()
     }
-    mutable_parameters = [
-        MutationSpec(
+    mutable_parameters = []
+    for index, item in enumerate(payload.get("mutable_parameters", [])):
+        if not isinstance(item, dict):
+            raise ConfigLoadError(
+                f"Config error: mutable_parameters[{index}] must be a JSON object in "
+                f"{public_config_path(path)}, got {type(item).__name__}."
+            )
+        for required in ("name", "file", "pattern", "template"):
+            if required not in item:
+                raise ConfigLoadError(
+                    f"Config error: mutable_parameters[{index}] is missing required field "
+                    f"'{required}' in {public_config_path(path)}."
+                )
+        mutable_parameters.append(MutationSpec(
             name=str(item["name"]),
             file=str(item["file"]),
             pattern=str(item["pattern"]),
@@ -337,9 +353,7 @@ def load_config(path: Path) -> ProjectConfig:
             description=str(item.get("description", "")),
             value_step=str(item.get("value_step", "")),
             value_range=[str(part) for part in item.get("value_range", [])],
-        )
-        for item in payload.get("mutable_parameters", [])
-    ]
+        ))
     candidate_trials = [
         CandidateTrial(
             candidate_id=str(item["candidate_id"]),
@@ -356,17 +370,27 @@ def load_config(path: Path) -> ProjectConfig:
         )
         for item in payload.get("candidate_trials", [])
     ]
-    trainers = [
-        TrainerSpec(
+    trainers = []
+    for index, item in enumerate(payload.get("trainers", [])):
+        if not isinstance(item, dict):
+            raise ConfigLoadError(
+                f"Config error: trainers[{index}] must be a JSON object in "
+                f"{public_config_path(path)}, got {type(item).__name__}."
+            )
+        for required in ("name", "examples_path"):
+            if required not in item:
+                raise ConfigLoadError(
+                    f"Config error: trainers[{index}] is missing required field "
+                    f"'{required}' in {public_config_path(path)}."
+                )
+        trainers.append(TrainerSpec(
             name=str(item["name"]),
             examples_path=str(item["examples_path"]),
             compile_command=[str(part) for part in item.get("compile_command", [])],
             min_examples=_safe_int(item.get("min_examples", 20), 20),
             recompile_every=_safe_int(item.get("recompile_every", 10), 10),
             max_examples=_safe_int(item.get("max_examples", 96), 96),
-        )
-        for item in payload.get("trainers", [])
-    ]
+        ))
     self_edit_payload = payload.get("self_edit", {})
     memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})

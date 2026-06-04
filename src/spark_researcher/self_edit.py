@@ -93,6 +93,7 @@ def run_git_status(repo_root: Path) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=120,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -105,6 +106,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=120,
     )
 
 
@@ -333,7 +335,7 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
         write_text(stdout_path, process.stdout)
         write_text(stderr_path, process.stderr)
         status = "pending_review" if process.returncode == 0 else "failed"

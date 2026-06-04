@@ -31,7 +31,13 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
     if not path.exists():
         return []
     try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        raw = path.read_text(encoding="utf-8-sig")
+    except OSError:
+        # A concurrent queue rotation may briefly hide or lock the file;
+        # treat it the same as missing so the frontier loop keeps scheduling.
+        return []
+    try:
+        payload = json.loads(raw)
     except json.JSONDecodeError:
         return []
     if not isinstance(payload, dict):

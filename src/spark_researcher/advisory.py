@@ -235,6 +235,6 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
         )
         trace.finish(status="ok", attributes={"status": epistemic["status"]})
         return advisory
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, RuntimeError) as exc:
         trace.finish(status="error", attributes={"error": str(exc)})
         raise

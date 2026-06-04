@@ -1164,7 +1164,7 @@ def init_chip(
 ) -> dict[str, str]:
     root = ensure_external_chip_target(target_dir)
     root.mkdir(parents=True, exist_ok=True)
-    package = package_name or _package_name(chip_name)
+    package = _package_name(package_name or chip_name)
     if preset == "crypto-trading":
         files = {
             root / ".gitignore": _gitignore(),

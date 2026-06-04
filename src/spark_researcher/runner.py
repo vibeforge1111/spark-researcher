@@ -622,7 +622,13 @@ def parse_overrides(items: list[str] | None) -> dict[str, str]:
         if "=" not in item:
             raise RuntimeError(f"Override must look like name=value, got: {item}")
         name, value = item.split("=", 1)
-        overrides[name.strip()] = value.strip()
+        name = name.strip()
+        if not name:
+            raise RuntimeError(
+                f"Override is missing a mutable-parameter name before `=`, got: {item!r}. "
+                "Use `--set name=value` so the runner can route the override."
+            )
+        overrides[name] = value.strip()
     return overrides
 
 

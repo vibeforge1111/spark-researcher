@@ -80,11 +80,30 @@ def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+MAX_LEDGER_READ_BYTES = 50 * 1024 * 1024  # 50 MiB – guard against OOM on a large ledger
+
+
+def _tail_bytes(path: Path, nbytes: int) -> str:
+    """Return the last *nbytes* of a file as a decoded string, seeking to the prior newline."""
+    size = path.stat().st_size
+    with path.open("rb") as fh:
+        start = max(0, size - nbytes)
+        fh.seek(start)
+        if start > 0:
+            fh.readline()  # discard partial first line
+        return fh.read().decode("utf-8", errors="replace")
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
+    file_size = path.stat().st_size
+    if file_size > MAX_LEDGER_READ_BYTES:
+        text = _tail_bytes(path, MAX_LEDGER_READ_BYTES)
+    else:
+        text = path.read_text(encoding="utf-8")
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if not line.strip():
             continue
         try:

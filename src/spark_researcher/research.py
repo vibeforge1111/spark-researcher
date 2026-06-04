@@ -143,11 +143,21 @@ def _bounded_research_text(value: Any, *, limit: int) -> str:
     return escape(compact, quote=False)
 
 
-def _write_research_artifact(runtime_root: Path, payload: dict[str, Any]) -> Path:
+def _write_research_artifact(runtime_root: Path, payload: dict[str, Any]) -> Path | None:
     root = advisory_root(runtime_root) / "research"
-    root.mkdir(parents=True, exist_ok=True)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # The research artifact directory is best-effort observability.
+        # A read-only artifacts mount / full disk / permission denied must
+        # not abort the in-flight research retry pass — the operator still
+        # needs the verifier follow-up to run on the collected notes.
+        return None
     path = root / f"{_now_slug()}.json"
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return None
     return path
 
 
@@ -286,7 +296,7 @@ def execute_with_research(
         },
     )
     artifact_path = _write_research_artifact(runtime_root, research)
-    research["artifact_path"] = str(artifact_path)
+    research["artifact_path"] = str(artifact_path) if artifact_path is not None else ""
     if not results:
         record_episode(
             runtime_root,
@@ -299,7 +309,7 @@ def execute_with_research(
         packet = dict(initial)
         packet["research_attempted"] = True
         packet["research_result_count"] = 0
-        packet["research_artifact_path"] = str(artifact_path)
+        packet["research_artifact_path"] = str(artifact_path) if artifact_path is not None else ""
         packet["recommended_actions"] = [
             "Research attempt returned no usable web notes.",
             *list(packet.get("recommended_actions", [])),

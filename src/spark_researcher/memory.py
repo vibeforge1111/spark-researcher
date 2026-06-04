@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 from collections import defaultdict
@@ -489,8 +490,11 @@ def write_working_memory(
         "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
     }
     path = _working_path(runtime_root)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     with locked_file(path):
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp_path.write_text(serialized, encoding="utf-8")
+        os.replace(tmp_path, path)
     return payload
 
 

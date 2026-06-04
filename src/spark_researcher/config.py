@@ -119,6 +119,7 @@ class ProjectConfig:
     guardrails: GuardrailSpec = field(default_factory=GuardrailSpec)
 
 
+# guard: defensive wrapping
 def _command_to_payload(spec: CommandSpec) -> dict[str, object]:
     return {
         "args": list(spec.args),

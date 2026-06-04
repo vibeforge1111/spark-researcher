@@ -706,16 +706,23 @@ def run_loop(
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
     for trial in pending_trials[:max_iterations]:
-        record = run_once(
-            config_path,
-            command_name,
-            trial=trial,
-            dry_run=dry_run,
-            governor_decision=governor_decision,
-            authority_args_path=authority_args_path,
-        )
+        try:
+            record = run_once(
+                config_path,
+                command_name,
+                trial=trial,
+                dry_run=dry_run,
+                governor_decision=governor_decision,
+                authority_args_path=authority_args_path,
+            )
+        except Exception as exc:
+            record = {
+                "verdict": "error",
+                "error": str(exc),
+                "trial": trial.name if hasattr(trial, "name") else str(trial),
+            }
         results.append(record)
-        if record["verdict"] == "improved":
+        if record.get("verdict") == "improved":
             consecutive_discards = 0
         elif row_counts_as_discard(record):
             consecutive_discards += 1

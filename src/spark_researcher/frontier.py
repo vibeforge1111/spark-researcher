@@ -45,11 +45,19 @@ def _parse_json(text: str) -> dict[str, Any] | None:
 
 
 def _match_open_field(block: str, field_name: str, pattern: str) -> str:
+    try:
+        compiled_pattern = re.compile(pattern)
+    except re.error:
+        # A chip manifest can pass through with an invalid `frontier.field_patterns.<field>`
+        # regex (e.g. when the manifest is edited at runtime or shipped without running
+        # `chips validate`). Treat the field as un-matchable instead of crashing the
+        # whole frontier_suggest pass.
+        return ""
     field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
-    if field_match and re.fullmatch(pattern, field_match.group(1)):
+    if field_match and compiled_pattern.fullmatch(field_match.group(1)):
         return field_match.group(1)
     for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
-        if re.fullmatch(pattern, token):
+        if compiled_pattern.fullmatch(token):
             return token
     return ""
 

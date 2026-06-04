@@ -51,7 +51,14 @@ def record_failure(
         "trace_id": trace_id,
         "metadata": metadata or {},
     }
-    _append_jsonl(failures_path(runtime_root), payload)
+    try:
+        _append_jsonl(failures_path(runtime_root), payload)
+    except OSError:
+        # The failure registry is best-effort observability. If the registry
+        # write itself fails (full disk, permission revoked, locked directory),
+        # do not let it mask the original run failure that record_failure was
+        # called to log — the caller is already on an error path.
+        payload["registry_write_failed"] = True
     return payload
 
 

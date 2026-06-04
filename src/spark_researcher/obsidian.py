@@ -281,7 +281,14 @@ def render_self_edit_queue(runtime_root: Path) -> str:
         return "\n".join(lines)
     for proposal_path in sorted(root.glob("*/proposal.json"), reverse=True):
         try:
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            raw = proposal_path.read_text(encoding="utf-8")
+        except OSError:
+            # The self-edit queue is mutated by `propose`/`apply_proposal`; a
+            # proposal directory can disappear between `glob` and `read_text`.
+            # Skip this row instead of crashing the whole vault render.
+            continue
+        try:
+            proposal = json.loads(raw)
         except json.JSONDecodeError:
             continue
         if not isinstance(proposal, dict):
@@ -376,7 +383,14 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     if trainer_dir.exists():
         for path in sorted(trainer_dir.glob("*.json")):
             try:
-                trainer_row = json.loads(path.read_text(encoding="utf-8"))
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                # `trainers.write_state` uses an atomic temp+replace pattern;
+                # a concurrent compile can briefly hide a trainer state file.
+                # Skip instead of failing the vault build.
+                continue
+            try:
+                trainer_row = json.loads(raw)
             except json.JSONDecodeError:
                 continue
             if isinstance(trainer_row, dict):

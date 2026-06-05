@@ -20,6 +20,23 @@ from .safe_url import safe_urlopen
 from .tracing import start_trace
 from .trial_queue import merged_candidate_trials
 
+_SAFE_DEFAULT_PATTERN = r"^[a-z0-9:_-]+$"
+_MAX_PATTERN_LENGTH = 200
+_REDOS_RE = re.compile(r"\([^)]*[+*][^)]*\)[+*]")
+
+
+def _safe_pattern(pattern: str) -> str:
+    """Validate a regex pattern against ReDoS and return it, or fall back to a safe default."""
+    if not pattern or len(pattern) > _MAX_PATTERN_LENGTH:
+        return _SAFE_DEFAULT_PATTERN
+    if _REDOS_RE.search(pattern):
+        return _SAFE_DEFAULT_PATTERN
+    try:
+        re.compile(pattern)
+    except re.error:
+        return _SAFE_DEFAULT_PATTERN
+    return pattern
+
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
@@ -44,11 +61,12 @@ def _parse_json(text: str) -> dict[str, Any] | None:
 
 
 def _match_open_field(block: str, field_name: str, pattern: str) -> str:
+    safe = _safe_pattern(pattern)
     field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
-    if field_match and re.fullmatch(pattern, field_match.group(1)):
+    if field_match and re.fullmatch(safe, field_match.group(1)):
         return field_match.group(1)
     for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
-        if re.fullmatch(pattern, token):
+        if re.fullmatch(safe, token):
             return token
     return ""
 
@@ -179,7 +197,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
             if value in allowed[name]:
                 continue
             if name in effective_open_fields:
-                pattern = field_patterns.get(name, r"^[a-z0-9:_-]+$")
+                pattern = _safe_pattern(field_patterns.get(name, r"^[a-z0-9:_-]+$"))
                 if re.fullmatch(pattern, value):
                     continue
             valid = False

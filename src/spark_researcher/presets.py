@@ -302,8 +302,10 @@ def _write_toy_files(target_dir: Path) -> None:
 def init_project(target_dir: Path, *, preset: str, project_name: str) -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
     config_path = target_dir / "spark-researcher.project.json"
-    if config_path.exists():
+    try:
         raise FileExistsError(f"Config already exists: {config_path}")
+    except FileNotFoundError:
+        pass
     payload = build_preset(preset, project_name, ".")
     config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if preset.strip().lower() == "toy":

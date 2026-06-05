@@ -15,6 +15,8 @@ from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
 from .tracing import start_trace
 
+SPARK_RESEARCHER__GIT_TIMEOUT_SECONDS = 60
+
 
 def now_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
@@ -105,6 +107,8 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+
+    timeout=SPARK_RESEARCHER__GIT_TIMEOUT_SECONDS,
     )
 
 

@@ -121,12 +121,14 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
     manifest_path = _manifest_path(runtime_root)
-    if manifest_path.exists():
+    try:
         try:
             return json.loads(manifest_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             # A concurrent memory sync may briefly leave the manifest half-written.
             pass
+    except FileNotFoundError:
+        pass
     return sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
 
 

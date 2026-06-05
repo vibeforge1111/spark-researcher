@@ -1287,7 +1287,13 @@ def absorb(
     index_path, collective_data = _load_collective_index(repo_root)
     capsule_library = collective_data.get("capsuleLibrary", [])
     matching = [entry for entry in capsule_library if entry.get("repo") == source_repo and entry.get("verdict") == "improved"]
-    matching.sort(key=lambda entry: str(entry.get("createdAt") or ""), reverse=True)
+    matching.sort(
+        key=lambda entry: (
+            str(entry.get("createdAt") or ""),
+            str(entry.get("capsuleId") or entry.get("id") or ""),
+        ),
+        reverse=True,
+    )
     absorbed = matching[: max(limit, 0)]
     if not absorbed:
         raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")

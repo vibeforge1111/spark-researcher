@@ -15,6 +15,8 @@ from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
 from .tracing import start_trace
 
+SPARK_RESEARCHER_RUN_GIT_STATUS_TIMEOUT_SECONDS = 60
+
 
 def now_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
@@ -93,6 +95,8 @@ def run_git_status(repo_root: Path) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+
+    timeout=SPARK_RESEARCHER_RUN_GIT_STATUS_TIMEOUT_SECONDS,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
 

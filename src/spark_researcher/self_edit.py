@@ -496,8 +496,10 @@ def apply_proposal(
         target = repo_root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
-            if target.exists():
+            try:
                 target.unlink()
+            except FileNotFoundError:
+                pass
         else:
             shutil.copyfile(source, target)
         applied.append(rel)

@@ -15,6 +15,12 @@ from .paths import spark_swarm_collective_payload_path
 
 
 COLLECTIVE_COMMAND_TIMEOUT_SECONDS = 120
+_REPO_NAME_RE = re.compile(r"[^a-zA-Z0-9_/-]")
+
+
+def _sanitize_repo_name(source_repo: str) -> str:
+    """Sanitize source_repo for safe use in path construction."""
+    return _REPO_NAME_RE.sub("", source_repo).replace("/", "--")
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -1187,7 +1193,7 @@ def _write_absorb_review_files(
     source_repo: str,
     payload: dict[str, Any],
 ) -> dict[str, Path]:
-    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{source_repo.replace('/', '--')}"
+    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{_sanitize_repo_name(source_repo)}"
     review_root.mkdir(parents=True, exist_ok=True)
 
     absorbed_path = review_root / "absorbed-insights.json"
@@ -1292,7 +1298,7 @@ def absorb(
     if not absorbed:
         raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")
 
-    absorb_root = runtime_root / "artifacts" / "collective-absorb" / source_repo.replace("/", "--")
+    absorb_root = runtime_root / "artifacts" / "collective-absorb" / _sanitize_repo_name(source_repo)
     absorb_root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     bundle_path = absorb_root / f"{stamp}-absorb.json"

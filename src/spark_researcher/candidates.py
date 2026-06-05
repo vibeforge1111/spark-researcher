@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 import ctypes
 from dataclasses import asdict
@@ -55,8 +56,34 @@ def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
 def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
     path = _continuous_status_path(runtime_root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     with locked_file(path):
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        # Atomic temp-then-replace so a Ctrl-C / kill mid-write doesn't
+        # leave continuous_status.json half-written; _load_continuous_status
+        # catches JSONDecodeError and silently returns {}, which would make
+        # the continuous loop appear to have never started even though it
+        # was running until the moment the user pressed Ctrl-C. Mirrors the
+        # same temp-then-replace pattern in trial_queue.py:100-110.
+        tmp_name = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                tmp_name = handle.name
+                handle.write(serialized)
+            os.replace(tmp_name, path)
+        except Exception:
+            if tmp_name:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+            raise
 
 
 def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:

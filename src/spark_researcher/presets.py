@@ -270,6 +270,7 @@ def _write_toy_files(target_dir: Path) -> None:
                 compiled_path = Path("compiled.json")
                 count = 0
                 if examples_path.exists():
+                    # NOTE: This is a read-modify-write block. A concurrent writer could lose updates. See _atomic_read_modify_write for the safe version of this pattern.
                     count = sum(1 for line in examples_path.read_text(encoding="utf-8").splitlines() if line.strip())
                 payload = {"compiled_examples": count, "status": "ok"}
                 compiled_path.write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")

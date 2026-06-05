@@ -39,6 +39,17 @@ STORED_PROMPT_INJECTION_PATTERNS = (
     ("private-key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.I)),
 )
 
+# Compile-once for the DDG result-parse loop in _bounded_web_results.
+_DDG_LINK_PATTERN = re.compile(
+    r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_DDG_SNIPPET_PATTERN = re.compile(
+    r'result__snippet[^>]*>(.*?)</[^>]+>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_TAG_PATTERN = re.compile(r"<.*?>")
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
@@ -56,15 +67,15 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
             page = response.read().decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
-    links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
-    snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)
+    links = _DDG_LINK_PATTERN.findall(page)
+    snippets = _DDG_SNIPPET_PATTERN.findall(page)
     results: list[dict[str, str]] = []
     for index, link in enumerate(links[:limit]):
         href, title = link
-        clean_title = re.sub(r"<.*?>", "", unescape(title)).strip()
+        clean_title = _HTML_TAG_PATTERN.sub("", unescape(title)).strip()
         clean_snippet = ""
         if index < len(snippets):
-            clean_snippet = re.sub(r"<.*?>", "", unescape(snippets[index])).strip()
+            clean_snippet = _HTML_TAG_PATTERN.sub("", unescape(snippets[index])).strip()
         if clean_title:
             clean_url = _clean_result_url(href)
             results.append(

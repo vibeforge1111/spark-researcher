@@ -435,6 +435,8 @@ def _crypto_cli(package_name: str) -> str:
         REGIME_MATCH = {{"trend_regime_following|trend": 0.08, "mean_reversion_liquidity_reclaim|range": 0.08, "breakout_volatility_expansion|high_vol": 0.09, "risk_first_asymmetric_capture|event_driven": 0.07}}
 
         def _load(path: str) -> dict:
+            # NOTE: This is a read-modify-write block. A concurrent writer could lose updates.
+            # See _atomic_read_modify_write for the safe version of this pattern.
             return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
         def _write(path: str, payload: dict) -> None:

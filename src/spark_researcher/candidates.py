@@ -840,15 +840,46 @@ def run_continuous_autoloop(
                     "recent_passes": passes[-5:],
                 },
             )
-            packet = run_autoloop(
-                config_path,
-                command_name,
-                rounds=rounds,
-                suggest_limit=suggest_limit,
-                dry_run=dry_run,
-                apply_suggestions=apply_suggestions,
-                governor_decision=governor_decision,
-            )
+            try:
+                packet = run_autoloop(
+                    config_path,
+                    command_name,
+                    rounds=rounds,
+                    suggest_limit=suggest_limit,
+                    dry_run=dry_run,
+                    apply_suggestions=apply_suggestions,
+                    governor_decision=governor_decision,
+                )
+            except Exception as exc:
+                import traceback
+                print(
+                    f"[continuous] pass {pass_index} stage_error: {type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+                traceback.print_exc()
+                pass_summary = {
+                    "pass": pass_index,
+                    "pass_started_at": pass_started_at,
+                    "pass_finished_at": _now_iso(),
+                    "work_duration_seconds": round(time.monotonic() - start_monotonic, 3),
+                    "stage_error": f"{type(exc).__name__}: {exc}",
+                    "productive": False,
+                }
+                passes.append(pass_summary)
+                _write_continuous_status(
+                    runtime_root,
+                    {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes[-5:],
+                        "status": "error_recovery",
+                    },
+                )
+                next_sleep_seconds = max(pause_seconds, 30)
+                time.sleep(next_sleep_seconds)
+                continue
             artifact_after = _tracked_loop_artifacts(runtime_root)
             pass_finished_at = _now_iso()
             work_duration_seconds = round(time.monotonic() - start_monotonic, 3)

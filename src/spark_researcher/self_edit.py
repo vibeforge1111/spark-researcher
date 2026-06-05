@@ -492,8 +492,11 @@ def apply_proposal(
     applied = []
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
+        resolved_target = (repo_root / rel).resolve()
+        if not resolved_target.is_relative_to(repo_root.resolve()):
+            raise ValueError(f"Path traversal detected: change path '{rel}' escapes repo_root")
         source = workspace_root / rel
-        target = repo_root / rel
+        target = resolved_target
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
             if target.exists():

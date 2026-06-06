@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from spark_researcher.candidates import run_continuous_autoloop
+from spark_researcher.candidates import (
+    _continuous_status_path,
+    _load_continuous_status,
+    _write_continuous_status,
+    run_continuous_autoloop,
+)
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
 
 
@@ -52,3 +57,18 @@ def test_continuous_autoloop_stop_file_kills_before_work(tmp_path: Path, monkeyp
     assert packet["stopped"] == "stop_file"
     assert packet["pass_count"] == 0
     assert packet["stop_file"] == str(stop_file)
+
+
+def test_continuous_status_uses_transient_lock_file(tmp_path: Path) -> None:
+    _write_continuous_status(tmp_path, {"current_pass": {"status": "running"}})
+
+    assert _load_continuous_status(tmp_path)["current_pass"]["status"] == "running"
+    assert not _continuous_status_path(tmp_path).with_name("continuous_status.json.lock").exists()
+
+
+def test_continuous_status_malformed_json_returns_empty(tmp_path: Path) -> None:
+    path = _continuous_status_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not-json", encoding="utf-8")
+
+    assert _load_continuous_status(tmp_path) == {}

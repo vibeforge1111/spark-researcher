@@ -98,8 +98,8 @@ Recommended validation levels:
 
 Documentation changes needed:
 
-- expand [`docs/CHIP_VALIDATION.md`](/<workspace>/spark-researcher/docs/CHIP_VALIDATION.md)
-- add a new explicit "runtime-ready versus schema-valid" section to [`docs/CHIPS.md`](/<workspace>/spark-researcher/docs/CHIPS.md)
+- expand `docs/CHIP_VALIDATION.md`
+- add a new explicit "runtime-ready versus schema-valid" section to `docs/CHIPS.md`
 
 ### 2. Workspace Isolation Breaks on Large Stateful Chips
 
@@ -127,8 +127,8 @@ What to change in chip standards:
 
 Documentation changes needed:
 
-- add a "workspace isolation contract" section to [`docs/ARCHITECTURE.md`](/<workspace>/spark-researcher/docs/ARCHITECTURE.md)
-- add a "path hygiene and state hygiene" section to [`docs/CHIPS.md`](/<workspace>/spark-researcher/docs/CHIPS.md)
+- add a "workspace isolation contract" section to `docs/ARCHITECTURE.md`
+- add a "path hygiene and state hygiene" section to `docs/CHIPS.md`
 
 ### 3. Core Baseline Logic Is Not Truthful Enough
 
@@ -157,8 +157,8 @@ What to change in core:
 
 Documentation changes needed:
 
-- update [`docs/AUTOLOOP.md`](/<workspace>/spark-researcher/docs/AUTOLOOP.md)
-- update [`docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`](/<workspace>/spark-researcher/docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md)
+- update `docs/AUTOLOOP.md`
+- update `docs/CHIP_BENCHMARK_BRIDGE_GUIDE.md`
 
 ### 4. Research Escalation Is Not Reaching the Weakest Cases
 
@@ -180,8 +180,8 @@ What to change in core:
 
 Documentation changes needed:
 
-- update [`docs/ADVISORY.md`](/<workspace>/spark-researcher/docs/ADVISORY.md)
-- update [`docs/CHIP_INTELLIGENCE_CONTRACT.md`](/<workspace>/spark-researcher/docs/CHIP_INTELLIGENCE_CONTRACT.md)
+- update `docs/ADVISORY.md`
+- update `docs/CHIP_INTELLIGENCE_CONTRACT.md`
 
 ### 5. Packet Hook Contract Is Too Easy To Misuse
 
@@ -208,8 +208,8 @@ What to change in chip standards:
 
 Documentation changes needed:
 
-- strengthen [`docs/CHIP_INTELLIGENCE_CONTRACT.md`](/<workspace>/spark-researcher/docs/CHIP_INTELLIGENCE_CONTRACT.md)
-- strengthen [`docs/CHIP_MEMORY_ROLLOUT.md`](/<workspace>/spark-researcher/docs/CHIP_MEMORY_ROLLOUT.md)
+- strengthen `docs/CHIP_INTELLIGENCE_CONTRACT.md`
+- strengthen `docs/CHIP_MEMORY_ROLLOUT.md`
 
 ### 6. Memory and Obsidian Surfaces Need Collision Control
 
@@ -240,8 +240,8 @@ What to change in chip standards:
 
 Documentation changes needed:
 
-- update [`docs/MEMORY.md`](/<workspace>/spark-researcher/docs/MEMORY.md)
-- update [`docs/OBSIDIAN.md`](/<workspace>/spark-researcher/docs/OBSIDIAN.md)
+- update `docs/MEMORY.md`
+- update `docs/OBSIDIAN.md`
 
 ### 7. Truth Lanes Need To Be More Explicit
 
@@ -263,8 +263,8 @@ What to change in core:
 
 Documentation changes needed:
 
-- update [`docs/CHIP_ONE_LOOP_FLYWHEEL.md`](/<workspace>/spark-researcher/docs/CHIP_ONE_LOOP_FLYWHEEL.md)
-- update [`docs/STARTUP_BENCH_PROMOTION_BRIDGE.md`](/<workspace>/spark-researcher/docs/STARTUP_BENCH_PROMOTION_BRIDGE.md)
+- update `docs/CHIP_ONE_LOOP_FLYWHEEL.md`
+- update `docs/STARTUP_BENCH_PROMOTION_BRIDGE.md`
 
 ### 8. Self-Edit Apply Needs Atomicity
 
@@ -284,7 +284,7 @@ What to change in core:
 
 Documentation changes needed:
 
-- update [`docs/SELF_EDITING.md`](/<workspace>/spark-researcher/docs/SELF_EDITING.md)
+- update `docs/SELF_EDITING.md`
 
 ## Chip-Specific Remediation
 

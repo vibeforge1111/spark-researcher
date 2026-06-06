@@ -24,9 +24,8 @@ def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
     return candidate
 
 
-def _desktop_root() -> Path:
-    desktop = Path.home() / "Desktop"
-    return desktop if desktop.exists() else Path.home()
+def _default_chip_parent() -> Path:
+    return Path.home() / ".spark" / "chips"
 
 
 def _spark_repo_root() -> Path:
@@ -55,11 +54,11 @@ def _next_steps(chip_root: Path) -> list[str]:
 
 def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
     if target_dir is None:
-        return (_desktop_root() / chip_name).resolve()
+        return (_default_chip_parent() / chip_name).resolve()
     candidate = target_dir.expanduser()
     if candidate.is_absolute():
         return candidate.resolve()
-    return (_desktop_root() / candidate).resolve()
+    return (_default_chip_parent() / candidate).resolve()
 
 
 def ensure_external_chip_target(target_dir: Path) -> Path:
@@ -288,26 +287,29 @@ def _crypto_manifest(chip_name: str, package_name: str) -> str:
             "packets": ["python", "-m", f"{package_name}.cli", "packets"],
             "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
         },
-        "allowed_mutations": {
-            "doctrine_id": [
-                "trend_regime_following",
-                "mean_reversion_liquidity_reclaim",
-                "breakout_volatility_expansion",
-                "risk_first_asymmetric_capture",
-            ],
-            "strategy_id": [
-                "ema_pullback_long",
-                "range_reclaim_scalp",
-                "breakout_open_interest_confirmation",
-                "funding_mean_revert",
-            ],
-            "market_regime": ["trend", "range", "high_vol", "event_driven"],
-            "timeframe": ["15m", "1h", "4h"],
-            "venue": ["binance", "bybit", "hyperliquid"],
-            "paper_gate": ["strict", "balanced"],
+        "frontier": {
+            "allowed_mutations": {
+                "doctrine_id": [
+                    "trend_regime_following",
+                    "mean_reversion_liquidity_reclaim",
+                    "breakout_volatility_expansion",
+                    "risk_first_asymmetric_capture",
+                ],
+                "strategy_id": [
+                    "ema_pullback_long",
+                    "range_reclaim_scalp",
+                    "breakout_open_interest_confirmation",
+                    "funding_mean_revert",
+                ],
+                "market_regime": ["trend", "range", "high_vol", "event_driven"],
+                "timeframe": ["15m", "1h", "4h"],
+                "venue": ["binance", "bybit", "hyperliquid"],
+                "paper_gate": ["strict", "balanced"],
+                "asset_universe": ["BTC,ETH", "BTC,ETH,SOL", "SOL"],
+            },
+            "open_mutation_fields": ["asset_universe"],
+            "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
         },
-        "open_mutation_fields": ["asset_universe"],
-        "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
     }
     return json.dumps(payload, indent=2, sort_keys=True)
 

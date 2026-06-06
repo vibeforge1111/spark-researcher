@@ -5,6 +5,7 @@ import re
 from html import unescape
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request
 
@@ -72,8 +73,9 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     url = "https://html.duckduckgo.com/html/?" + urlencode({"q": query})
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
-        page = safe_urlopen(request, timeout=6).read().decode("utf-8", errors="replace")
-    except Exception:
+        with safe_urlopen(request, timeout=6) as response:
+            page = response.read().decode("utf-8", errors="replace")
+    except (URLError, OSError, ValueError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     notes = []
@@ -149,7 +151,7 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     advisory = build_advisory(config_path, task, model=str(spec.get("model", "generic")), limit=3, domain=str(context.manifest.get("domain", "generic")))
     try:
         response = execute_advisory(runtime_root, advisory=advisory, model=str(spec.get("model", "generic")), dry_run=False)
-    except Exception as exc:
+    except (RuntimeError, OSError) as exc:
         trace.finish(status="error", attributes={"error": str(exc)})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": [f"Frontier execution unavailable: {exc}"]}
     payload = response.get("response", {})

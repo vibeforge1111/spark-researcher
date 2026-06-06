@@ -11,7 +11,7 @@ from .candidates import append_suggestions, run_autoloop, run_continuous_autoloo
 from .chip_starter import init_chip, normalize_chip_name, resolve_chip_target
 from .chips import chip_status, chip_validation
 from .collective import absorb, collective_readiness, collective_status, publish_latest, sync_local_collective, write_spark_swarm_collective_payload_from_latest
-from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
+from .config import intent_policy, load_config, memory_policy, public_config_path, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
 from .failures import surprise_status
 from .intent import build_intent_brief
 from .line_budget import build_line_budget
@@ -36,6 +36,49 @@ def print_json(payload: object) -> None:
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", default="spark-researcher.project.json")
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return parsed
+
+
+def _action_requires_config(args: argparse.Namespace) -> bool:
+    action = getattr(args, "action", None)
+    if action in {None, "init", "line-budget", "optimizer", "failures"}:
+        return False
+    if action == "advisory":
+        return getattr(args, "advisory_command", None) in {None, "build", "execute"}
+    if action == "chips":
+        return getattr(args, "chips_command", None) != "init"
+    if action == "collective":
+        return getattr(args, "collective_command", None) == "spark-swarm-payload"
+    if action == "self-edit":
+        return getattr(args, "self_edit_command", None) in {"propose", "policy", "apply"}
+    return True
+
+
+def _require_config_file(config_path: Path) -> None:
+    if config_path.exists():
+        return
+    print_json(
+        {
+            "ok": False,
+            "error_code": "config_file_not_found",
+            "error": "Config file not found.",
+            "config_path": public_config_path(config_path),
+            "next_action": (
+                "Run `spark-researcher init --path . --preset toy --project-name <name>` "
+                "or pass --config to an existing spark-researcher.project.json file."
+            ),
+        }
+    )
+    raise SystemExit(1)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
     autoloop_parser.add_argument("--continuous", action="store_true")
     autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
-    autoloop_parser.add_argument("--max-passes", type=int)
+    autoloop_parser.add_argument("--max-passes", type=_positive_int)
     autoloop_parser.add_argument("--max-seconds", type=int)
     autoloop_parser.add_argument("--stop-file")
 
@@ -135,7 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
     chips_init_parser = chips_sub.add_parser("init")
     chips_init_parser.add_argument(
         "--path",
-        help="Optional external chip target. Defaults to Desktop/domain-chip-<domain>. Relative paths resolve under Desktop; in-repo targets are refused.",
+        help="Optional external chip target. Defaults to ~/.spark/chips/domain-chip-<domain>. Relative paths resolve under ~/.spark/chips; in-repo targets are refused.",
     )
     chips_init_parser.add_argument(
         "--chip-name",
@@ -514,12 +557,20 @@ def main() -> None:
         print_json(budget)
         return
     config_path = resolve_config_path(getattr(args, "config", None))
+    if _action_requires_config(args):
+        _require_config_file(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
     if args.action == "run":
         config = load_config(config_path)
         trials = merged_candidate_trials(config_path, config=config)
         trial = next((item for item in trials if item.candidate_id == args.candidate_id), None)
+        if args.candidate_id and trial is None:
+            known = ", ".join(sorted(item.candidate_id for item in trials)) or "(none queued)"
+            raise SystemExit(
+                f"Candidate id {args.candidate_id!r} was not found in the trial queue. "
+                f"Known candidate ids: {known}."
+            )
         print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
         return
     if args.action == "loop":
@@ -624,4 +675,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as exc:
+        print_json({"ok": False, "error": str(exc)})
+        raise SystemExit(1)

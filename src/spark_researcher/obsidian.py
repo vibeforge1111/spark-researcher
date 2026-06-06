@@ -280,7 +280,12 @@ def render_self_edit_queue(runtime_root: Path) -> str:
         lines.append("No proposals yet.")
         return "\n".join(lines)
     for proposal_path in sorted(root.glob("*/proposal.json"), reverse=True):
-        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+        try:
+            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(proposal, dict):
+            continue
         lines.extend(
             [
                 f"## {proposal.get('proposal_id')}",
@@ -370,7 +375,12 @@ def build_vault(repo_root: Path, runtime_root: Path, config: ProjectConfig, *, c
     trainer_dir = trainers_root(runtime_root)
     if trainer_dir.exists():
         for path in sorted(trainer_dir.glob("*.json")):
-            trainer_rows.append(json.loads(path.read_text(encoding="utf-8")))
+            try:
+                trainer_row = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(trainer_row, dict):
+                trainer_rows.append(trainer_row)
     domain_pages: list[str] = []
     if chip_has_hook(effective_config_path, "watchtower", config):
         packet = invoke_chip_hook(

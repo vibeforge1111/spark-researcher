@@ -187,7 +187,7 @@ def build_preset(preset: str, project_name: str, project_root: str) -> dict[str,
             "prompt_preamble": "Keep the project lightweight, transparent, and review-first.",
         }
         return payload
-    raise RuntimeError(f"Unknown preset: {preset}")
+    raise RuntimeError(f"Unknown preset: {preset!r}. Known presets: coding, research, content, toy.")
 
 
 def _preset_readme(preset: str, project_name: str) -> str:

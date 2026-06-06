@@ -85,7 +85,7 @@ def _extra_allowed_executables() -> set[str]:
 
 def _validate_command(model: str, command: list[str]) -> list[str]:
     if model not in ENV_KEYS:
-        raise RuntimeError(f"Unsupported execution model `{model}`.")
+        raise RuntimeError(f"Unsupported execution model `{model}`. Supported: {', '.join(sorted(ENV_KEYS))}.")
     if not command:
         return command
     if model == "generic" and not _truthy_env(GENERIC_ADAPTER_ENABLE_ENV):
@@ -106,7 +106,7 @@ def _validate_command(model: str, command: list[str]) -> list[str]:
 
 def _resolve_command(model: str, command_override: list[str] | None = None) -> list[str]:
     if model not in ENV_KEYS:
-        raise RuntimeError(f"Unsupported execution model `{model}`.")
+        raise RuntimeError(f"Unsupported execution model `{model}`. Supported: {', '.join(sorted(ENV_KEYS))}.")
     if command_override:
         parts: list[str] = []
         for item in command_override:

@@ -14,10 +14,23 @@ from .paths import capsule_root, ledger_path
 from .paths import spark_swarm_collective_payload_path
 
 
+COLLECTIVE_COMMAND_TIMEOUT_SECONDS = 120
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            rows.append(parsed)
+    return rows
 
 
 def now_stamp() -> str:
@@ -38,13 +51,15 @@ def _parse_frontmatter(raw: str) -> dict[str, Any]:
     lines = raw.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
-    payload: dict[str, str] = {}
+    payload: dict[str, Any] = {}
     current_key: str | None = None
     for line in lines[1:]:
         if line.strip() == "---":
             break
         if line.startswith("  - ") and current_key is not None:
-            payload.setdefault(current_key, [])
+            existing = payload.get(current_key)
+            if not isinstance(existing, list):
+                payload[current_key] = [] if existing is None else [existing]
             payload[current_key].append(line[4:].strip())
             continue
         if ":" not in line:
@@ -994,7 +1009,11 @@ def _manifest_repo_slug(repo_root: Path) -> str:
 def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | None = None, rebuild: bool = True) -> dict[str, Any]:
     collective_root = repo_root.parent / "autoresearch-collective"
     if not collective_root.exists():
-        raise RuntimeError(f"Collective repo not found: {collective_root}")
+        raise RuntimeError(
+            f"Collective repo not found: {collective_root}. "
+            "Expected an `autoresearch-collective` checkout as a sibling of this repo. "
+            "Clone or place that repo next to spark-researcher, then retry."
+        )
     config_path = _repo_sources_path(collective_root)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     payload = _load_json(config_path) if config_path.exists() else {"sources": []}
@@ -1021,6 +1040,7 @@ def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | N
                 encoding="utf-8",
                 errors="replace",
                 check=False,
+                timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
             )
             commands_run.append(
                 {
@@ -1061,6 +1081,7 @@ def _run_command(
             capture_output=True,
             text=True,
             encoding="utf-8",
+            timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
         )
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()
@@ -1107,7 +1128,7 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
     collective_root = repo_root.parent / "autoresearch-collective"
     path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
     if not path.exists():
-        raise FileNotFoundError(f"Could not locate collective.generated.json at {path}")
+        return path, {"repoDirectory": [], "capsuleLibrary": []}
     return path, json.loads(path.read_text(encoding="utf-8"))
 
 

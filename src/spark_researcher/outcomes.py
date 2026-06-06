@@ -47,8 +47,14 @@ def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
         return []
     rows: list[dict[str, object]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            rows.append(json.loads(line))
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
     return rows
 
 

@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+import spark_researcher.collective as collective_module
 from spark_researcher.collective import (
+    _parse_frontmatter,
+    absorb,
     build_spark_swarm_collective_payload,
     collective_readiness,
     publish_latest,
@@ -81,6 +88,80 @@ def _write_frontmatter_manifest(repo_root: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def test_frontmatter_list_continuation_after_scalar_is_recoverable() -> None:
+    payload = _parse_frontmatter(
+        "\n".join(
+            [
+                "---",
+                "name: Loopsmith Lab",
+                "  - fallback label",
+                "---",
+            ]
+        )
+    )
+
+    assert payload["name"] == ["Loopsmith Lab", "fallback label"]
+
+
+def test_absorb_without_collective_index_fails_without_local_path_leak(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo_root = tmp_path / "repo"
+    runtime_root = tmp_path / "runtime"
+    repo_root.mkdir()
+
+    with pytest.raises(RuntimeError, match="No improved Insights available"):
+        absorb(repo_root, runtime_root, source_repo="vibeforge1111/example")
+
+    captured = capsys.readouterr()
+    assert str(tmp_path) not in captured.out
+    assert str(tmp_path) not in captured.err
+
+
+def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    source_root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(source_root / "src")}
+
+    result = subprocess.run(
+        [sys.executable, "-m", "spark_researcher.cli", "collective", "absorb", "--repo", "vibeforge1111/example"],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "error": "No improved Insights available to absorb from `vibeforge1111/example`.",
+        "ok": False,
+    }
+    assert "Traceback" not in result.stderr
+    assert str(tmp_path) not in result.stdout
+    assert str(tmp_path) not in result.stderr
+
+
+def test_collective_read_jsonl_skips_malformed_and_non_object_rows(tmp_path: Path) -> None:
+    path = tmp_path / "runs.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                '{"run_id":"one","metric_value":1}',
+                "not-json",
+                '["not", "an", "object"]',
+                '{"run_id":"two","metric_value":2}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rows = collective_module.read_jsonl(path)
+
+    assert [row["run_id"] for row in rows] == ["one", "two"]
 
 
 def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> None:
@@ -560,6 +641,82 @@ def test_collective_uses_bridge_bound_workspace_id_when_env_is_missing(tmp_path:
     assert readiness["spark_swarm_payload_workspace_id"] == "ws_bound"
     assert readiness["spark_swarm_bound_workspace_id"] == "ws_bound"
     assert readiness["hosted_checks"]["spark_swarm_workspace_binding_present"] is True
+
+
+def test_collective_git_commands_use_bounded_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append({"command": command, **kwargs})
+        return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(collective_module.subprocess, "run", fake_run)
+
+    result = collective_module._run_command(["git", "status"], cwd=tmp_path)
+
+    assert result.stdout == "ok\n"
+    assert calls == [
+        {
+            "command": ["git", "status"],
+            "cwd": str(tmp_path),
+            "check": True,
+            "capture_output": True,
+            "text": True,
+            "encoding": "utf-8",
+            "timeout": collective_module.COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
+        }
+    ]
+
+
+def test_sync_local_collective_rebuild_uses_bounded_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _write_frontmatter_manifest(repo_root)
+    runtime_root = tmp_path / "runtime"
+    collective_root = tmp_path / "autoresearch-collective"
+    generated_path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
+    generated_path.parent.mkdir(parents=True)
+    generated_path.write_text(
+        json.dumps(
+            {
+                "repoDirectory": [{"repo": "vibeforge1111/starter-lab"}],
+                "capsuleLibrary": [{"repo": "vibeforge1111/starter-lab"}],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append({"command": command, **kwargs})
+        return subprocess.CompletedProcess(command, 0, stdout="rebuilt\n", stderr="")
+
+    monkeypatch.setattr(collective_module.subprocess, "run", fake_run)
+
+    result = collective_module.sync_local_collective(repo_root, runtime_root)
+
+    assert result["repo_registered"] is True
+    assert [call["command"] for call in calls] == [
+        ["node", "./scripts/build-collective-data.mjs"],
+        ["node", "./scripts/build-graph-data.mjs"],
+    ]
+    assert all(call["timeout"] == collective_module.COLLECTIVE_COMMAND_TIMEOUT_SECONDS for call in calls)
+    assert all(call["check"] is False for call in calls)
+
+
+def test_sync_local_collective_missing_repo_names_sibling_checkout(tmp_path: Path) -> None:
+    repo_root = tmp_path / "spark-researcher"
+    repo_root.mkdir()
+
+    with pytest.raises(RuntimeError) as error:
+        collective_module.sync_local_collective(repo_root, tmp_path / "runtime")
+
+    message = str(error.value)
+    assert "Collective repo not found" in message
+    assert "autoresearch-collective" in message
+    assert "sibling" in message
+    assert "Clone or place" in message
 
 
 def test_publish_latest_normalizes_non_collective_verdicts(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ from typing import Any
 from .beliefs import build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .paths import beliefs_root, memory_root, self_edit_root
-from .runner import read_jsonl
+from .runner import locked_file, read_jsonl
 from .ruvector import run_search as run_ruvector_search
 from .ruvector import ruvector_status
 
@@ -114,8 +114,9 @@ def _now_iso() -> str:
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
@@ -450,8 +451,8 @@ def write_working_memory(
         "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
     }
     path = _working_path(runtime_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with locked_file(path):
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return payload
 
 
@@ -459,7 +460,10 @@ def load_working_memory(runtime_root: Path) -> dict[str, Any]:
     path = _working_path(runtime_root)
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
 
 
 def record_episode(

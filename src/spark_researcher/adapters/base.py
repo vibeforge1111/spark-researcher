@@ -118,7 +118,7 @@ def adapter_status() -> dict[str, Any]:
 def adapter_request(name: str, task: str, advisory: dict[str, Any]) -> dict[str, Any]:
     spec = _specs().get(name)
     if spec is None:
-        raise RuntimeError(f"Unknown adapter: {name}")
+        raise RuntimeError(f"Unknown adapter: {name}. Known adapters: {', '.join(adapter_names())}.")
     if spec.supports_native_prehook:
         return _native_request(spec, task, advisory)
     return _wrapper_request(spec, task, advisory)

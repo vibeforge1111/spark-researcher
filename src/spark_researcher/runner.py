@@ -44,7 +44,12 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        rows.append(json.loads(line))
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            rows.append(parsed)
     return rows
 
 
@@ -59,7 +64,13 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}")
+                owner = None
+                try:
+                    owner = lock_path.read_text(encoding="utf-8", errors="ignore").strip()[:64] or None
+                except OSError:
+                    owner = None
+                suffix = f" (owner={owner})" if owner else ""
+                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
             time.sleep(0.05)
     try:
         os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
@@ -174,7 +185,13 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
     lookup = mutation_lookup(config)
     for name, value in mutations.items():
         if name not in lookup:
-            raise KeyError(f"Unknown mutable parameter: {name}")
+            known = ", ".join(sorted(lookup))
+            if known:
+                raise KeyError(f"Unknown mutable parameter: {name}. Known mutable parameters: {known}.")
+            raise KeyError(
+                f"Unknown mutable parameter: {name}. "
+                "No mutable parameters are defined; add entries under `mutable_parameters` in the project config."
+            )
         spec = lookup[name]
         target_path = (workspace_root / spec.file).resolve()
         text = target_path.read_text(encoding="utf-8-sig")
@@ -542,7 +559,8 @@ def parse_overrides(items: list[str] | None) -> dict[str, str]:
 
 def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, limit: int | None = None) -> dict[str, Any]:
     config = load_config(config_path)
-    max_iterations = min(limit or config.guardrails.max_loop_iterations, config.guardrails.max_loop_iterations)
+    requested_limit = limit or config.guardrails.max_loop_iterations
+    max_iterations = min(requested_limit, config.guardrails.max_loop_iterations)
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
@@ -559,6 +577,9 @@ def run_loop(config_path: Path, command_name: str, *, dry_run: bool = False, lim
         "project_name": config.project_name,
         "command_name": command_name,
         "run_count": len(results),
+        "requested_limit": requested_limit,
+        "max_iterations": max_iterations,
+        "limit_clamped_to_guardrail": requested_limit > max_iterations,
         "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
         "results": results,
     }

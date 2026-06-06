@@ -28,9 +28,26 @@ def _index_path(runtime_root: Path) -> Path:
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    from .runner import locked_file
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
 
 
 @dataclass
@@ -163,11 +180,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
     index_path = _index_path(runtime_root)
     if not index_path.exists():
         return {"trace_count": 0, "traces_root": str(root), "recent": [], "research_signals": {"research_retry_count": 0, "research_escalation_count": 0, "citation_check_count": 0, "citation_mismatch_count": 0, "verifier_selection_count": 0, "packet_selection_count": 0, "recent": []}}
-    rows = [
-        json.loads(line)
-        for line in index_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = _read_jsonl_objects(index_path)
     research_retry_count = 0
     research_escalation_count = 0
     citation_check_count = 0
@@ -185,11 +198,7 @@ def trace_status(runtime_root: Path) -> dict[str, Any]:
         path = Path(path_value)
         if not path.exists():
             continue
-        events = [
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        events = _read_jsonl_objects(path)
         for event in events:
             if event.get("event_type") != "event":
                 continue

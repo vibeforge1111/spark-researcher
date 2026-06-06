@@ -38,6 +38,16 @@ def test_assert_safe_url_rejects_dns_that_resolves_private(monkeypatch: pytest.M
         assert_safe_url("https://example.com/search")
 
 
+def test_assert_safe_url_rejects_scoped_ipv6_as_non_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("fe80::1%eth0", 443, 0, 2))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    with pytest.raises(UnsafeURL, match="non-public address"):
+        assert_safe_url("https://example.com/search")
+
+
 def test_assert_safe_url_accepts_public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_getaddrinfo(*args, **kwargs):
         return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443))]

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
@@ -28,7 +30,12 @@ def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
     path = queue_path_for_config(config_path)
     if not path.exists():
         return []
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, dict):
+        return []
     items = payload.get("candidate_trials", [])
     if not isinstance(items, list):
         return []
@@ -87,10 +94,27 @@ def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, conf
         appended.append(asdict(trial))
     if appended:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"candidate_trials": [asdict(item) for item in queue_trials]}, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        serialized = json.dumps({"candidate_trials": [asdict(item) for item in queue_trials]}, indent=2, sort_keys=True) + "\n"
+        tmp_name = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                tmp_name = handle.name
+                handle.write(serialized)
+            os.replace(tmp_name, path)
+        except Exception:
+            if tmp_name:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+            raise
     return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}
 
 

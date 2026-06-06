@@ -6,6 +6,7 @@ import sys
 import json
 
 from spark_researcher import chip_starter
+from spark_researcher.chips import validate_manifest
 
 
 def test_normalize_chip_name_uses_domain_prefix_by_default() -> None:
@@ -20,24 +21,22 @@ def test_normalize_chip_name_preserves_existing_prefix() -> None:
     assert chip_starter.normalize_chip_name("marketing", "domain-chip-marketing") == "domain-chip-marketing"
 
 
-def test_resolve_chip_target_defaults_to_desktop(monkeypatch, tmp_path: Path) -> None:
-    desktop = tmp_path / "Desktop"
-    desktop.mkdir()
-    monkeypatch.setattr(chip_starter, "_desktop_root", lambda: desktop)
+def test_resolve_chip_target_defaults_to_spark_chip_parent(monkeypatch, tmp_path: Path) -> None:
+    chip_parent = tmp_path / ".spark" / "chips"
+    monkeypatch.setattr(chip_starter, "_default_chip_parent", lambda: chip_parent)
 
     target = chip_starter.resolve_chip_target(None, "domain-chip-marketing")
 
-    assert target == (desktop / "domain-chip-marketing").resolve()
+    assert target == (chip_parent / "domain-chip-marketing").resolve()
 
 
-def test_resolve_chip_target_puts_relative_paths_under_desktop(monkeypatch, tmp_path: Path) -> None:
-    desktop = tmp_path / "Desktop"
-    desktop.mkdir()
-    monkeypatch.setattr(chip_starter, "_desktop_root", lambda: desktop)
+def test_resolve_chip_target_puts_relative_paths_under_spark_chip_parent(monkeypatch, tmp_path: Path) -> None:
+    chip_parent = tmp_path / ".spark" / "chips"
+    monkeypatch.setattr(chip_starter, "_default_chip_parent", lambda: chip_parent)
 
     target = chip_starter.resolve_chip_target(Path("marketing-explicit"), "domain-chip-marketing")
 
-    assert target == (desktop / "marketing-explicit").resolve()
+    assert target == (chip_parent / "marketing-explicit").resolve()
 
 
 def test_init_chip_writes_readme_with_resolved_root(tmp_path: Path) -> None:
@@ -76,6 +75,18 @@ def test_preset_readmes_reference_chip_systems_and_relative_spark_repo() -> None
     assert "docs/CHIPS.md" in xcontent_readme
     assert "python -m pip install -e ..\\spark-researcher" in xcontent_readme
     assert "$env:PYTHONPATH='..\\spark-researcher\\src;src'" in xcontent_readme
+
+
+def test_crypto_manifest_frontier_shape_validates(tmp_path: Path) -> None:
+    manifest = json.loads(chip_starter._crypto_manifest("domain-chip-trading-crypto", "domain_chip_trading_crypto"))
+
+    result = validate_manifest(manifest, tmp_path / "spark-chip.json")
+
+    assert result["valid"] is True
+    assert "frontier" in manifest
+    assert "allowed_mutations" not in manifest
+    assert "asset_universe" in manifest["frontier"]["allowed_mutations"]
+    assert manifest["frontier"]["open_mutation_fields"] == ["asset_universe"]
 
 
 def test_xcontent_watchtower_handles_scalar_best_by_metric_values() -> None:

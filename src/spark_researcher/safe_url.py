@@ -17,10 +17,13 @@ class UnsafeURL(ValueError):
 
 def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     try:
-        return {
-            ipaddress.ip_address(info[4][0])
-            for info in socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
-        }
+        addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+        for info in socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM):
+            raw_address = info[4][0]
+            if ":" in raw_address and "%" in raw_address:
+                raw_address = raw_address.split("%", 1)[0]
+            addresses.add(ipaddress.ip_address(raw_address))
+        return addresses
     except (OSError, ValueError) as exc:
         raise UnsafeURL("URL host could not be resolved safely") from exc
 

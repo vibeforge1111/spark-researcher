@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+SECRET_PATH_PATTERN = re.compile(r"(?:sk-[a-z0-9_-]+|api[-_]?key|credential|password|secret|token)", re.IGNORECASE)
 
 
 @dataclass
@@ -154,6 +157,20 @@ def _trainer_to_payload(spec: TrainerSpec) -> dict[str, object]:
     }
 
 
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def config_to_payload(config: ProjectConfig) -> dict[str, object]:
     return {
         "project_name": config.project_name,
@@ -207,6 +224,15 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
 def save_config(path: Path, config: ProjectConfig) -> None:
     payload = config_to_payload(config)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def public_config_path(path: Path) -> str:
+    resolved = path.resolve(strict=False)
+    try:
+        display = str(resolved.relative_to(Path.cwd().resolve(strict=False)))
+    except ValueError:
+        return "<external-config>"
+    return "<redacted-config-path>" if SECRET_PATH_PATTERN.search(display) else display
 
 
 def self_edit_policy(config: ProjectConfig) -> dict[str, object]:
@@ -297,7 +323,17 @@ def update_intent_policy(
 
 
 def load_config(path: Path) -> ProjectConfig:
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Config file not found: {public_config_path(path)}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Failed to parse config file {public_config_path(path)}: invalid JSON at line {exc.lineno}, column {exc.colno}"
+        ) from exc
+    except OSError as exc:
+        detail = exc.strerror or exc.__class__.__name__
+        raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
     commands = {
         name: CommandSpec(
             args=list(spec["args"]),
@@ -344,9 +380,9 @@ def load_config(path: Path) -> ProjectConfig:
             name=str(item["name"]),
             examples_path=str(item["examples_path"]),
             compile_command=[str(part) for part in item.get("compile_command", [])],
-            min_examples=int(item.get("min_examples", 20)),
-            recompile_every=int(item.get("recompile_every", 10)),
-            max_examples=int(item.get("max_examples", 96)),
+            min_examples=_safe_int(item.get("min_examples", 20), 20),
+            recompile_every=_safe_int(item.get("recompile_every", 10), 10),
+            max_examples=_safe_int(item.get("max_examples", 96), 96),
         )
         for item in payload.get("trainers", [])
     ]
@@ -396,9 +432,9 @@ def load_config(path: Path) -> ProjectConfig:
             ),
         ),
         guardrails=GuardrailSpec(
-            max_loop_iterations=int(guardrail_payload.get("max_loop_iterations", 8)),
-            consecutive_discard_limit=int(guardrail_payload.get("consecutive_discard_limit", 3)),
-            near_best_tolerance=float(guardrail_payload.get("near_best_tolerance", 0.03)),
+            max_loop_iterations=_safe_int(guardrail_payload.get("max_loop_iterations", 8), 8),
+            consecutive_discard_limit=_safe_int(guardrail_payload.get("consecutive_discard_limit", 3), 3),
+            near_best_tolerance=_safe_float(guardrail_payload.get("near_best_tolerance", 0.03), 0.03),
             require_clean_git_for_self_edit=bool(guardrail_payload.get("require_clean_git_for_self_edit", True)),
             require_human_approval_for_self_edit=bool(guardrail_payload.get("require_human_approval_for_self_edit", True)),
             blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],

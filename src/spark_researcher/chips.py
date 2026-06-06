@@ -187,7 +187,8 @@ def chip_validation(config_path: Path) -> dict[str, Any]:
             "configured": False,
             "valid": False,
             "errors": ["No chip is configured for this project."],
-            "schema_path": str(schema_path()),
+            "schema_version": CHIP_SCHEMA_VERSION,
+            "io_protocol": CHIP_IO_PROTOCOL,
         }
     result = validate_manifest(context.manifest, context.manifest_path)
     command_checks = _command_preflight(context.manifest, context.chip_root)
@@ -384,6 +385,13 @@ def _build_hook_env(context: ChipContext) -> dict[str, str]:
     return env
 
 
+def _public_hook_failure_detail(hook: str, returncode: int) -> str:
+    return (
+        f"Chip hook `{hook}` failed with exit code {returncode}. "
+        "Details were written to the local chip hook log."
+    )
+
+
 def invoke_chip_hook(
     config_path: Path,
     hook: str,
@@ -394,10 +402,18 @@ def invoke_chip_hook(
 ) -> dict[str, Any]:
     context = load_chip_context(config_path, config)
     if context is None:
-        raise RuntimeError("No chip configured for this project.")
+        raise RuntimeError("No chip configured for this project. Set `chip.path` (and optionally `chip.manifest`) in spark-researcher.json to point at a chip directory containing a manifest.")
     commands = context.manifest.get("commands", {})
     if not isinstance(commands, dict) or hook not in commands:
-        raise RuntimeError(f"Chip hook `{hook}` is not defined in {context.manifest_path}.")
+        defined_hooks = (
+            ", ".join(f"`{name}`" for name in sorted(str(name) for name in commands))
+            if isinstance(commands, dict) and commands
+            else "(none)"
+        )
+        raise RuntimeError(
+            f"Chip hook `{hook}` is not defined in {context.manifest_path}. "
+            f"Defined hooks: {defined_hooks}."
+        )
     command = _command_parts(commands[hook])
     hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
     hook_root.mkdir(parents=True, exist_ok=True)
@@ -429,15 +445,19 @@ def invoke_chip_hook(
         _tmp.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         _tmp.replace(log_path)
         return preview
-    result = subprocess.run(
-        invoked,
-        cwd=str(context.chip_root),
-        env=_build_hook_env(context),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            invoked,
+            cwd=str(context.chip_root),
+            env=_build_hook_env(context),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
     log_path.write_text(
         json.dumps(
             {
@@ -456,7 +476,7 @@ def invoke_chip_hook(
         encoding="utf-8",
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Chip hook `{hook}` failed with exit code {result.returncode}: {result.stderr.strip()}")
+        raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():
         raise RuntimeError(f"Chip hook `{hook}` did not produce an output file: {output_path}")
     response = json.loads(output_path.read_text(encoding="utf-8-sig"))

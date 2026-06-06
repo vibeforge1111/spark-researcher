@@ -36,14 +36,14 @@ def _memory_context(config_path: Path, config: ProjectConfig, query: str, domain
                 goal=config.eval_goal,
                 config_path=config_path,
             )
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             memory_hits = {"error": str(exc)}
     ruvector_hits: Any = []
     ruvector_info = ruvector_status() if "ruvector" in resources else {"status": "disabled"}
     if "ruvector" in resources and query and bool(ruvector_info.get("available")) and str(ruvector_info.get("status")) == "available":
         try:
             ruvector_hits = run_ruvector_search(query)
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             ruvector_hits = {"error": str(exc)}
     return {
         "query": query,

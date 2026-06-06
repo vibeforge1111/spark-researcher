@@ -67,7 +67,12 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load self-edit JSON {path}: {exc}") from exc
 
 
 def backend_profiles() -> list[dict[str, Any]]:
@@ -496,8 +501,8 @@ def apply_proposal(
         target = repo_root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
-            if target.exists():
-                target.unlink()
+            # Use missing_ok=True to avoid race condition FileNotFoundError
+            target.unlink(missing_ok=True)
         else:
             shutil.copyfile(source, target)
         applied.append(rel)
@@ -517,7 +522,7 @@ def apply_proposal(
             if should_push:
                 _push_branch(repo_root, _current_branch(repo_root))
                 pushed = True
-    except Exception as exc:
+    except (OSError, subprocess.CalledProcessError, RuntimeError) as exc:
         proposal["status"] = "applied_push_failed" if commit_sha and should_push and not pushed else "apply_failed"
         proposal["git_mode"] = git_mode
         proposal["git_branch"] = _current_branch(repo_root)

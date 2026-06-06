@@ -129,7 +129,7 @@ class TraceRecorder:
         span_id = self.start_span(name, parent_span_id=parent_span_id, attributes=attributes)
         try:
             yield span_id
-        except Exception as exc:
+        except (OSError, IOError, RuntimeError) as exc:
             self.event("exception", span_id=span_id, attributes={"error": str(exc)})
             self.end_span(span_id, status="error")
             raise

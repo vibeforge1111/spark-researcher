@@ -458,7 +458,8 @@ def invoke_chip_hook(
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
-    log_path.write_text(
+    _log_tmp = log_path.with_suffix(log_path.suffix + ".tmp")
+    _log_tmp.write_text(
         json.dumps(
             {
                 "command": invoked,
@@ -475,6 +476,7 @@ def invoke_chip_hook(
         + "\n",
         encoding="utf-8",
     )
+    _log_tmp.replace(log_path)
     if result.returncode != 0:
         raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():

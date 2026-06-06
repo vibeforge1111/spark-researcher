@@ -310,8 +310,14 @@ def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str
             review_path = proposal_path.parent / "review.json"
             if not review_path.exists():
                 continue
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review = json.loads(review_path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"Failed to load proposal {proposal_path}: {exc}") from exc
+            try:
+                review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"Failed to load review {review_path}: {exc}") from exc
             if review.get("decision") != "approve":
                 continue
             belief_id = _belief_id("self-edit", str(proposal.get("proposal_id")))

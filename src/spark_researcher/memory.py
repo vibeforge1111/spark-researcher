@@ -492,7 +492,10 @@ def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str
     if not path.exists():
         return []
     rows = [
-        json.loads(line)
+        try:
+            json.loads(line)
+        except json.JSONDecodeError:
+            continue
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]

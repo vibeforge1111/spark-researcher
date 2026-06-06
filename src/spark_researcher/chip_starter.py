@@ -6,6 +6,7 @@ from pathlib import Path
 from textwrap import dedent
 
 
+# guard: defensive wrapping
 def _slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9._-]+", "-", value.strip().lower())
     return cleaned.strip("-") or "chip"

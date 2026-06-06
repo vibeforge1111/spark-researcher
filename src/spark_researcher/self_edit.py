@@ -501,8 +501,8 @@ def apply_proposal(
         target = repo_root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
-            if target.exists():
-                target.unlink()
+            # Use missing_ok=True to avoid race condition FileNotFoundError
+            target.unlink(missing_ok=True)
         else:
             shutil.copyfile(source, target)
         applied.append(rel)

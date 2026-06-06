@@ -413,7 +413,9 @@ def invoke_chip_hook(
         "manifest_path": str(context.manifest_path),
         **payload,
     }
-    input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tmp = input_path.with_suffix(input_path.suffix + ".tmp")
+    _tmp.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tmp.replace(input_path)
     invoked = command + ["--input", str(input_path), "--output", str(output_path)]
     if dry_run:
         preview = {
@@ -423,7 +425,9 @@ def invoke_chip_hook(
             "input_path": str(input_path),
             "output_path": str(output_path),
         }
-        log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _tmp = log_path.with_suffix(log_path.suffix + ".tmp")
+        _tmp.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _tmp.replace(log_path)
         return preview
     result = subprocess.run(
         invoked,

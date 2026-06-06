@@ -42,7 +42,7 @@ def write_state(path: Path, payload: dict[str, Any]) -> None:
             tmp_name = handle.name
             handle.write(serialized)
         os.replace(tmp_name, path)
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         if tmp_name:
             try:
                 os.unlink(tmp_name)

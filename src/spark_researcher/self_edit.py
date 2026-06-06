@@ -493,6 +493,9 @@ def apply_proposal(
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
         source = workspace_root / rel
+        resolved = source.resolve()
+        if not str(resolved).startswith(str(workspace_root.resolve())):
+            raise ValueError(f"Path traversal: {rel} resolves outside workspace")
         target = repo_root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":

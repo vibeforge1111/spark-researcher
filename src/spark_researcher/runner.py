@@ -78,7 +78,7 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     finally:
         os.close(handle)
         try:
-            lock_path.unlink()
+            lock_path.unlink(missing_ok=True)
         except FileNotFoundError:
             pass
 
@@ -540,7 +540,7 @@ def run_once(
             )
         safe_finish_trace(trace, status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
         return record
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
         safe_finish_trace(trace, status="error", attributes={"error": str(exc)})
         raise
     finally:

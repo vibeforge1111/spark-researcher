@@ -19,6 +19,7 @@ from .runner import locked_file, read_jsonl, run_once
 from .trial_queue import append_queue_trials, merged_candidate_trials
 
 
+# guard: defensive wrapping
 def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 

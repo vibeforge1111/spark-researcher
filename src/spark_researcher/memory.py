@@ -45,7 +45,7 @@ def _episodes_path(runtime_root: Path) -> Path:
 
 def _safe_unlink(path: Path) -> None:
     try:
-        path.unlink()
+        path.unlink(missing_ok=True)
     except FileNotFoundError:
         return
     except PermissionError:

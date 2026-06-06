@@ -15,6 +15,7 @@ from .paths import resolve_runtime_root
 from .tracing import start_trace
 
 
+# guard: defensive wrapping
 def _infer_domain(config_path: Path, explicit_domain: str | None = None) -> str:
     if explicit_domain:
         return explicit_domain
@@ -234,6 +235,6 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
         )
         trace.finish(status="ok", attributes={"status": epistemic["status"]})
         return advisory
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, RuntimeError) as exc:
         trace.finish(status="error", attributes={"error": str(exc)})
         raise

@@ -196,7 +196,10 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
         target_path = (workspace_root / spec.file).resolve()
         text = target_path.read_text(encoding="utf-8-sig")
         replacement = spec.template.format(value=value)
-        updated, count = re.subn(spec.pattern, replacement, text, count=1)
+        # Use a function replacement so the value is treated as a literal string:
+        # passing `replacement` directly lets re interpret backslash escapes in the
+        # user-supplied value (e.g. r"\1" raises re.error; "C:\new" injects a newline).
+        updated, count = re.subn(spec.pattern, lambda _m: replacement, text, count=1)
         if count != 1:
             raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
         target_path.write_text(updated, encoding="utf-8")

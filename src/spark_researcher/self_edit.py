@@ -452,9 +452,13 @@ def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path
 
 
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
+    # Check both the full joined string AND individual parts to prevent
+    # bypass via argument splitting (e.g. ["rm", "-", "r", "f"])
     lowered = " ".join(parts).lower()
+    parts_lower = [p.lower() for p in parts]
     for fragment in blocked_fragments:
-        if fragment.lower() in lowered:
+        frag = fragment.lower()
+        if frag in lowered or frag in parts_lower:
             raise RuntimeError(f"Blocked self-edit command fragment detected: {fragment}")
 
 

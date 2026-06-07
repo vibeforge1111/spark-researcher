@@ -6,6 +6,7 @@ from pathlib import Path
 from statistics import mean
 
 from .paths import advisory_root
+from .runner import locked_file
 
 
 def _now_iso() -> str:
@@ -36,8 +37,9 @@ def log_advisory_outcome(
         "score": score,
         "notes": notes,
     }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
     return {"path": str(path), "recorded": True, "payload": payload}
 
 

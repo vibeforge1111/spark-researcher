@@ -345,7 +345,6 @@ def build_record(
         "log_path": str(log_path),
         "metrics": metrics,
         "stdout_excerpt": command_result.stdout[:500],
-        "stderr_excerpt": command_result.stderr[:500],
     }
     if chip_result:
         record["chip_result"] = chip_result

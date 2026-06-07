@@ -45,8 +45,12 @@ def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
     path = advisory_root(runtime_root) / "outcomes.jsonl"
     if not path.exists():
         return []
-    rows: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+   rows: list[dict[str, object]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return rows
+    for line in lines:
         if not line.strip():
             continue
         try:

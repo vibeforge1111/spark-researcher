@@ -544,8 +544,12 @@ def propose(
     proposal_id = f"{now_stamp()}-self-edit"
     proposal_root = self_edit_root(runtime_root) / proposal_id
     workspace_root = _workspace_dir(proposal_id)
-    if workspace_root.exists():
+    # Use atomic creation to prevent TOCTOU race on predictable temp path
+    try:
+        os.makedirs(workspace_root, exist_ok=False)
+    except FileExistsError:
         shutil.rmtree(workspace_root)
+        os.makedirs(workspace_root, exist_ok=False)
     copy_repo(repo_root, workspace_root)
     request_path = proposal_root / "request.md"
     last_message_path = proposal_root / "agent-last-message.txt"

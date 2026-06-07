@@ -650,6 +650,14 @@ def main() -> None:
         print_json(runner(config_path, args.project_command, **kwargs))
         return
     if args.action == "candidates":
+        if args.candidates_command is None:
+            print_json({
+                "ok": False,
+                "error_code": "candidates_subcommand_required",
+                "error": "`spark-researcher candidates` requires a subcommand.",
+                "next_action": "Run `spark-researcher candidates suggest --command <name>` or `spark-researcher candidates apply --command <name>`.",
+            })
+            raise SystemExit(2)
         if args.candidates_command == "apply":
             packet = suggest_trials(config_path, args.project_command, limit=args.limit)
             print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"], command_name=args.project_command)})

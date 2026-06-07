@@ -54,7 +54,9 @@ def write_state(path: Path, payload: dict[str, Any]) -> None:
 def count_examples(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    if not path.exists():
+        return 0
+    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())trip())
 
 
 def trainer_state_path(runtime_root: Path, name: str) -> Path:

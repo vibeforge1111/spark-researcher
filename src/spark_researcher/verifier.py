@@ -384,7 +384,7 @@ def _research_packet(advisory: dict[str, Any], critique: dict[str, Any], *, trac
 def _under_supported_packet(advisory: dict[str, Any], epistemic: dict[str, Any], *, trace_id: str, trace_path: str) -> dict[str, Any]:
     critique = {
         "missing_evidence": list(epistemic.get("missing_evidence", [])),
-        "issues": list(epistemic.get("missing_evidence", [])),
+        "issues": list(epistemic.get("issues", [])),
         "best_next_question": "",
         "implicated_failure_surface": "missing_support",
     }

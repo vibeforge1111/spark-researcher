@@ -96,6 +96,32 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _is_pid_running(pid: int) -> bool:
+    """Check if a process with the given PID is still running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _is_stale_lock(lock_path: Path) -> bool:
+    """Check if a lock file is stale (holder process is dead).
+    
+    Reads the PID from the lock file and checks if that process
+    is still alive. If the PID is invalid or the process is dead,
+    the lock is considered stale.
+    """
+    try:
+        pid_text = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+        if not pid_text:
+            return True
+        pid = int(pid_text.split()[0])
+        return not _is_pid_running(pid)
+    except (ValueError, OSError):
+        return True
+
+
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     ensure_parent(path)
@@ -106,6 +132,13 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
         try:
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
+            # Check for stale lock before timing out
+            if _is_stale_lock(lock_path):
+                try:
+                    lock_path.unlink()
+                    continue
+                except FileNotFoundError:
+                    pass
             if time.monotonic() >= deadline:
                 owner = None
                 try:

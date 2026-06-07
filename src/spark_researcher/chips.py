@@ -466,7 +466,7 @@ def invoke_chip_hook(
     if result.returncode != 0:
         raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():
-        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file: {output_path}")
+        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
     response = json.loads(output_path.read_text(encoding="utf-8-sig"))
     if not isinstance(response, dict):
         raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")

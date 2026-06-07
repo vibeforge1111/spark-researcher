@@ -993,7 +993,10 @@ def _generated_index_path(collective_root: Path) -> Path:
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Failed to load JSON from {path}: {exc}") from exc
 
 
 def _manifest_repo_slug(repo_root: Path) -> str:

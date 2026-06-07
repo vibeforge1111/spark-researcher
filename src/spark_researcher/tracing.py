@@ -38,7 +38,11 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return rows
+    for line in lines:
         if not line.strip():
             continue
         try:

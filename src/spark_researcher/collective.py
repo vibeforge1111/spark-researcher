@@ -1107,7 +1107,7 @@ def _default_base_branch(repo_root: Path) -> str:
     try:
         head = _git_output(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD")
         if "/" in head:
-            return head.rsplit("/", 1)[-1]
+            return head.rsplit("/", 1)[-1] if "/" in head else head
     except RuntimeError:
         pass
     try:

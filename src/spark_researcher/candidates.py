@@ -45,11 +45,15 @@ def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
         runtime_root / "artifacts" / "realworld" / "queue.json",
         ledger_path(runtime_root),
     ]
-    return {
-        str(path): path.stat().st_mtime
-        for path in tracked
-        if path.exists()
-    }
+    result: dict[str, float] = {}
+    for path in tracked:
+        if not path.exists():
+            continue
+        try:
+            result[str(path)] = path.stat().st_mtime
+        except OSError:
+            continue
+    return result
 
 
 def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:

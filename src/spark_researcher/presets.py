@@ -305,7 +305,9 @@ def init_project(target_dir: Path, *, preset: str, project_name: str) -> Path:
     if config_path.exists():
         raise FileExistsError(f"Config already exists: {config_path}")
     payload = build_preset(preset, project_name, ".")
-    config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    config_tmp_path = config_path.with_suffix(config_path.suffix + ".tmp")
+    config_tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    config_tmp_path.replace(config_path)
     if preset.strip().lower() == "toy":
         _write_toy_files(target_dir)
     readme_path = target_dir / "SPARK_RESEARCHER_PRESET.md"

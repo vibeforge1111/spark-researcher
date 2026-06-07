@@ -723,6 +723,13 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
+    # Validate workspace_root matches expected path to prevent path injection
+    expected_workspace = _workspace_dir(proposal_id)
+    if workspace_root.resolve() != expected_workspace.resolve():
+        raise RuntimeError(
+            f"workspace_root mismatch: expected {expected_workspace}, "
+            f"got {workspace_root}. This may indicate a tampered proposal."
+        )
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     if git_mode not in {"manual", "branch", "main"}:
         raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")

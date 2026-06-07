@@ -577,7 +577,10 @@ def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", 
     proposals_root = self_edit_root(runtime_root)
     if proposals_root.exists():
         for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            try:
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise RuntimeError(f"Failed to load proposal from {proposal_path}: {exc}") from exc
             review_path = proposal_path.parent / "review.json"
             review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
             target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)

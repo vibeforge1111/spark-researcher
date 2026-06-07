@@ -68,7 +68,7 @@ def _first_line_title(text: str, fallback: str) -> str:
 
 def _infer_kind(path: Path) -> str:
     stem = path.stem
-    prefix = stem.split("-", 1)[0]
+    prefix = stem.split("-", 1)[0] if "-" in stem else stem
     return "self_edit" if prefix == "self" else prefix
 
 

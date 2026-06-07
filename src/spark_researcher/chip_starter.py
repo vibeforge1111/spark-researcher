@@ -223,7 +223,10 @@ def _generic_cli(package_name: str, domain: str, metric_name: str, goal: str) ->
             "from pathlib import Path",
             "",
             "def _load(path: str) -> dict:",
-            '    return json.loads(Path(path).read_text(encoding="utf-8-sig"))',
+            '    try:
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise RuntimeError(f"Failed to load JSON: {exc}") from exc',
             "",
             "def _write(path: str, payload: dict) -> None:",
             '    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")',
@@ -436,7 +439,10 @@ def _crypto_cli(package_name: str) -> str:
         REGIME_MATCH = {{"trend_regime_following|trend": 0.08, "mean_reversion_liquidity_reclaim|range": 0.08, "breakout_volatility_expansion|high_vol": 0.09, "risk_first_asymmetric_capture|event_driven": 0.07}}
 
         def _load(path: str) -> dict:
-            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+            try:
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise RuntimeError(f"Failed to load JSON: {exc}") from exc
 
         def _write(path: str, payload: dict) -> None:
             Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
@@ -819,7 +825,10 @@ def _xcontent_cli(package_name: str) -> str:
         BASELINE = {{"engagement_quality_score": 0.32, "useful_reach_score": 0.28, "grok_relevance_score": 0.18, "verdict_confidence": 0.50}}
 
         def _load(path: str) -> dict[str, Any]:
-            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+            try:
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+except (OSError, json.JSONDecodeError) as exc:
+    raise RuntimeError(f"Failed to load JSON: {exc}") from exc
 
         def _write(path: str, payload: dict[str, Any]) -> None:
             Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")

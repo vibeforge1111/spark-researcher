@@ -242,7 +242,10 @@ def _write_toy_files(target_dir: Path) -> None:
 
 
             def main() -> None:
-                config = json.loads(Path("config.json").read_text(encoding="utf-8"))
+                try:
+                    config = json.loads(config_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise RuntimeError(f"Failed to load config.json: {exc}") from exc
                 learning_rate = float(config["learning_rate"])
                 weight_decay = float(config["weight_decay"])
                 val_loss = 1.0 + ((learning_rate - 0.0003) ** 2) * 1000000 + abs(weight_decay - 0.02) * 5

@@ -429,8 +429,14 @@ def _refresh_chip_working_memory(
     if isinstance(track_summaries, list) and track_summaries:
         scored_tracks = [item for item in track_summaries if isinstance(item, dict)]
         if scored_tracks:
-            best_track = max(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
-            weakest_track = min(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
+            def _safe_float(value: object, default: float = 0.0) -> float:
+                try:
+                    return float(value) if value is not None else default  # type: ignore[arg-type]
+                except (ValueError, TypeError):
+                    return default
+
+            best_track = max(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
+            weakest_track = min(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
     focus = (
         f"{config.project_name} state: benchmark-grounded doctrine is led by {operator_label} "
         f"on {benchmark_profile} at {config.eval_metric} {metric_value}. "

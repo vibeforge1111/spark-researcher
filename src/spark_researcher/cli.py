@@ -84,7 +84,12 @@ def _require_config_file(config_path: Path) -> None:
 def _load_governor_decision(path: str | None) -> dict | None:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, FileNotFoundError) as exc:
+        raise SystemExit(f"Cannot read governor decision file {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid JSON in governor decision file {path}: {exc}") from exc
 
 
 def build_parser() -> argparse.ArgumentParser:

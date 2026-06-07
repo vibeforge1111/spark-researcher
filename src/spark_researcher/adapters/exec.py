@@ -190,8 +190,11 @@ def execute_advisory(
     )
     command = _resolve_command(model, command_override)
     if not command:
-        trace.finish(status="error", attributes={"error": f"No execution command configured for model `{model}`."})
-        raise RuntimeError(f"No execution command configured for model `{model}`.")
+        env_key = ENV_KEYS.get(model, "")
+        env_hint = f" Set {env_key} to the executable command line (or pass --command)." if env_key else ""
+        message = f"No execution command configured for model `{model}`.{env_hint}"
+        trace.finish(status="error", attributes={"error": message})
+        raise RuntimeError(message)
     root = advisory_root(runtime_root) / "requests"
     root.mkdir(parents=True, exist_ok=True)
     stamp = _now_slug()

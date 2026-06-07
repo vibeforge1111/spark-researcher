@@ -182,6 +182,7 @@ def execute_advisory(
     command_override: list[str] | None = None,
     dry_run: bool = False,
     governor_decision: dict[str, Any] | None = None,
+    timeout: float | None = 600,
 ) -> dict[str, Any]:
     command = _resolve_command(model, command_override)
     if not command:
@@ -242,7 +243,7 @@ def execute_advisory(
             "trace_path": str(trace.path),
         }
     with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

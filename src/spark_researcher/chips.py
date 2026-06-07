@@ -474,5 +474,4 @@ def invoke_chip_hook(
     response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
     response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
     response.setdefault("hook", hook)
-    response.setdefault("log_path", str(log_path))
     return response

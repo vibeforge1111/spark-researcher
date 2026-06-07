@@ -456,7 +456,10 @@ def apply_proposal(
     if not proposal_path.exists():
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
-    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    try:
+            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return {"status": "apply_failed", "error": f"Failed to load proposal: {exc}"}
     review = _load_json(_review_path(runtime_root, proposal_id))
     if not review:
         trace.finish(status="error", attributes={"error": "Proposal must be reviewed before apply."})

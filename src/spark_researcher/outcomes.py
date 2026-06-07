@@ -46,6 +46,9 @@ def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
     if not path.exists():
         return []
     rows: list[dict[str, object]] = []
+    
+    if not path.exists():
+        return []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue

@@ -62,7 +62,13 @@ def _iso_now() -> str:
 
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
-    return self_edit_root(runtime_root) / proposal_id
+    if not proposal_id or "/" in proposal_id or "\\" in proposal_id or ".." in proposal_id:
+        raise ValueError(f"Invalid proposal_id: {proposal_id!r}")
+    resolved = (self_edit_root(runtime_root) / proposal_id).resolve()
+    root = self_edit_root(runtime_root).resolve()
+    if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
+        raise ValueError(f"proposal_id escapes root directory: {proposal_id!r}")
+    return resolved
 
 
 def _workspace_dir(proposal_id: str) -> Path:

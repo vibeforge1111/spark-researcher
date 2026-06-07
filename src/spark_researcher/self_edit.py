@@ -499,7 +499,10 @@ def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:
         return None
     key = profile_name.strip().lower()
     if key not in BUILTIN_BACKEND_PROFILES:
-        raise RuntimeError(f"Unknown backend profile: {profile_name}")
+        known = ", ".join(sorted(BUILTIN_BACKEND_PROFILES.keys()))
+        raise RuntimeError(
+            f"Unknown backend profile: {profile_name!r}. Known profiles: {known}."
+        )
     spec = BUILTIN_BACKEND_PROFILES[key]
     executable = str(spec["command"][0])
     resolved_executable = shutil.which(executable)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 from .adapters import adapter_status, execute_advisory, execution_status
@@ -81,10 +82,17 @@ def _require_config_file(config_path: Path) -> None:
     raise SystemExit(1)
 
 
+_logger = logging.getLogger(__name__)
+
+
 def _load_governor_decision(path: str | None) -> dict | None:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        _logger.warning("Failed to load governor decision from %s: %s", path, exc)
+        return None
 
 
 def build_parser() -> argparse.ArgumentParser:

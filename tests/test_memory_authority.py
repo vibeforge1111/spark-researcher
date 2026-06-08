@@ -12,6 +12,7 @@ from spark_researcher.authority import (
     ADVISORY_EXECUTE_ACTION_TYPE,
     ADVISORY_EXECUTE_CAPABILITY_ID,
     ADVISORY_EXECUTE_TOOL_NAME,
+    governor_decision_has_canonical_binding,
     MEMORY_WRITE_ACTION_TYPE,
     MEMORY_WRITE_CAPABILITY_ID,
     MEMORY_WRITE_TOOL_NAME,
@@ -151,6 +152,27 @@ def test_working_memory_accepts_bound_memory_governor(tmp_path: Path) -> None:
 
     assert payload["focus"] == "bound authority"
     assert (memory_root(tmp_path) / "working.json").exists()
+
+
+def test_working_memory_rejects_unmarked_local_governor_shape(tmp_path: Path) -> None:
+    decision = memory_governor_decision(working_memory_authority_refs(tmp_path))
+    decision["evidence"] = [
+        item
+        for item in decision["evidence"]
+        if item.get("source") != "issuer:spark-harness-core/governor"
+    ]
+
+    assert governor_decision_has_canonical_binding(decision) is False
+    with pytest.raises(RuntimeError, match="canonical_governor_binding_missing"):
+        write_working_memory(
+            tmp_path,
+            kind="test",
+            focus="unmarked authority",
+            status="blocked",
+            governor_decision=decision,
+        )
+
+    assert not (memory_root(tmp_path) / "working.json").exists()
 
 
 def test_episode_requires_memory_governor_before_write(tmp_path: Path) -> None:

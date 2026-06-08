@@ -59,8 +59,12 @@ def load_failures(runtime_root: Path) -> list[dict[str, Any]]:
     path = failures_path(runtime_root)
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+   rows: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return rows
+    for line in lines:
         if not line.strip():
             continue
         try:

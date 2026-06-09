@@ -49,6 +49,24 @@ RUN_EXECUTION_MUTATION_CLASS = "writes_files"
 RUN_EXECUTION_ACTION_TYPE = "edit_file"
 RUN_EXECUTION_CAPABILITY_ID = f"capability:{RUN_EXECUTION_OWNER_SYSTEM}:{RUN_EXECUTION_TOOL_NAME}"
 
+COLLECTIVE_PUBLISH_TOOL_NAME = "researcher.collective.publish"
+COLLECTIVE_PUBLISH_OWNER_SYSTEM = "spark-researcher"
+COLLECTIVE_PUBLISH_MUTATION_CLASS = "publishes"
+COLLECTIVE_PUBLISH_ACTION_TYPE = "publish"
+COLLECTIVE_PUBLISH_CAPABILITY_ID = f"capability:{COLLECTIVE_PUBLISH_OWNER_SYSTEM}:{COLLECTIVE_PUBLISH_TOOL_NAME}"
+
+COLLECTIVE_SYNC_TOOL_NAME = "researcher.collective.sync-local"
+COLLECTIVE_SYNC_OWNER_SYSTEM = "spark-researcher"
+COLLECTIVE_SYNC_MUTATION_CLASS = "writes_files"
+COLLECTIVE_SYNC_ACTION_TYPE = "edit_file"
+COLLECTIVE_SYNC_CAPABILITY_ID = f"capability:{COLLECTIVE_SYNC_OWNER_SYSTEM}:{COLLECTIVE_SYNC_TOOL_NAME}"
+
+COLLECTIVE_ABSORB_TOOL_NAME = "researcher.collective.absorb"
+COLLECTIVE_ABSORB_OWNER_SYSTEM = "spark-researcher"
+COLLECTIVE_ABSORB_MUTATION_CLASS = "publishes"
+COLLECTIVE_ABSORB_ACTION_TYPE = "publish"
+COLLECTIVE_ABSORB_CAPABILITY_ID = f"capability:{COLLECTIVE_ABSORB_OWNER_SYSTEM}:{COLLECTIVE_ABSORB_TOOL_NAME}"
+
 
 def _harness_core_source_candidates() -> list[Path]:
     candidates: list[Path] = []
@@ -220,6 +238,69 @@ def require_chip_create_authority(
         reasons = [str(item) for item in verification.get("reason_codes", []) if str(item).strip()]
         reason_text = ", ".join(reasons) if reasons else "governor_authority_denied"
         raise RuntimeError("Chip creation requires GovernorDecisionV1 chip-create authority: " + reason_text)
+    return verification
+
+
+def require_collective_publish_authority(
+    governor_decision: dict[str, Any] | None,
+    *,
+    action_id: str | None = None,
+) -> dict[str, Any]:
+    verifier = _load_verify_governor_tool_authority()
+    verification = verifier(
+        governor_decision,
+        tool_name=COLLECTIVE_PUBLISH_TOOL_NAME,
+        owner_system=COLLECTIVE_PUBLISH_OWNER_SYSTEM,
+        mutation_class=COLLECTIVE_PUBLISH_MUTATION_CLASS,
+        action_id=action_id,
+        require_pre_execution_ledger=True,
+    )
+    if not verification.get("allowed"):
+        reasons = [str(item) for item in verification.get("reason_codes", []) if str(item).strip()]
+        reason_text = ", ".join(reasons) if reasons else "governor_authority_denied"
+        raise RuntimeError("Collective publish requires GovernorDecisionV1 collective-publish authority: " + reason_text)
+    return verification
+
+
+def require_collective_sync_authority(
+    governor_decision: dict[str, Any] | None,
+    *,
+    action_id: str | None = None,
+) -> dict[str, Any]:
+    verifier = _load_verify_governor_tool_authority()
+    verification = verifier(
+        governor_decision,
+        tool_name=COLLECTIVE_SYNC_TOOL_NAME,
+        owner_system=COLLECTIVE_SYNC_OWNER_SYSTEM,
+        mutation_class=COLLECTIVE_SYNC_MUTATION_CLASS,
+        action_id=action_id,
+        require_pre_execution_ledger=True,
+    )
+    if not verification.get("allowed"):
+        reasons = [str(item) for item in verification.get("reason_codes", []) if str(item).strip()]
+        reason_text = ", ".join(reasons) if reasons else "governor_authority_denied"
+        raise RuntimeError("Collective sync requires GovernorDecisionV1 collective-sync authority: " + reason_text)
+    return verification
+
+
+def require_collective_absorb_authority(
+    governor_decision: dict[str, Any] | None,
+    *,
+    action_id: str | None = None,
+) -> dict[str, Any]:
+    verifier = _load_verify_governor_tool_authority()
+    verification = verifier(
+        governor_decision,
+        tool_name=COLLECTIVE_ABSORB_TOOL_NAME,
+        owner_system=COLLECTIVE_ABSORB_OWNER_SYSTEM,
+        mutation_class=COLLECTIVE_ABSORB_MUTATION_CLASS,
+        action_id=action_id,
+        require_pre_execution_ledger=True,
+    )
+    if not verification.get("allowed"):
+        reasons = [str(item) for item in verification.get("reason_codes", []) if str(item).strip()]
+        reason_text = ", ".join(reasons) if reasons else "governor_authority_denied"
+        raise RuntimeError("Collective absorb requires GovernorDecisionV1 collective-absorb authority: " + reason_text)
     return verification
 
 

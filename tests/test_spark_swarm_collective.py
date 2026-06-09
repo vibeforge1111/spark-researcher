@@ -9,6 +9,11 @@ from pathlib import Path
 import pytest
 
 import spark_researcher.collective as collective_module
+from collective_governor import (
+    collective_absorb_governor_decision,
+    collective_publish_governor_decision,
+    collective_sync_governor_decision,
+)
 from runner_governor import run_governor_decision
 from spark_researcher.collective import (
     _parse_frontmatter,
@@ -116,7 +121,12 @@ def test_absorb_without_collective_index_fails_without_local_path_leak(tmp_path:
     repo_root.mkdir()
 
     with pytest.raises(RuntimeError, match="No improved Insights available"):
-        absorb(repo_root, runtime_root, source_repo="vibeforge1111/example")
+        absorb(
+            repo_root,
+            runtime_root,
+            source_repo="vibeforge1111/example",
+            governor_decision=collective_absorb_governor_decision(),
+        )
 
     captured = capsys.readouterr()
     assert str(tmp_path) not in captured.out
@@ -128,9 +138,21 @@ def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Pat
     repo_root.mkdir()
     source_root = Path(__file__).resolve().parents[1]
     env = {**os.environ, "PYTHONPATH": str(source_root / "src")}
+    governor_path = tmp_path / "absorb-governor-decision.json"
+    governor_path.write_text(json.dumps(collective_absorb_governor_decision()) + "\n", encoding="utf-8")
 
     result = subprocess.run(
-        [sys.executable, "-m", "spark_researcher.cli", "collective", "absorb", "--repo", "vibeforge1111/example"],
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "collective",
+            "absorb",
+            "--repo",
+            "vibeforge1111/example",
+            "--governor-decision",
+            str(governor_path),
+        ],
         cwd=repo_root,
         env=env,
         text=True,
@@ -573,7 +595,7 @@ def test_collective_readiness_tracks_latest_payload_and_capsule(tmp_path: Path, 
     assert readiness["checks"]["spark_swarm_payload_current"] is True, readiness
     assert readiness["checks"]["capsule_present_for_latest_run"] is False
 
-    publish_latest(repo_root, runtime_root)
+    publish_latest(repo_root, runtime_root, governor_decision=collective_publish_governor_decision())
     readiness = collective_readiness(repo_root, runtime_root)
     assert readiness["ready"] is True
     assert readiness["hosted_ready"] is False
@@ -601,7 +623,7 @@ def test_collective_readiness_marks_hosted_ready_when_workspace_id_is_present(tm
 
     monkeypatch.setenv("SPARK_SWARM_WORKSPACE_ID", "ws_demo")
     write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
-    publish_latest(repo_root, runtime_root)
+    publish_latest(repo_root, runtime_root, governor_decision=collective_publish_governor_decision())
 
     readiness = collective_readiness(repo_root, runtime_root)
     assert readiness["ready"] is True
@@ -671,7 +693,7 @@ def test_collective_uses_bridge_bound_workspace_id_when_env_is_missing(tmp_path:
     monkeypatch.delenv("SPARK_SWARM_WORKSPACE_ID", raising=False)
 
     write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
-    publish_latest(repo_root, runtime_root)
+    publish_latest(repo_root, runtime_root, governor_decision=collective_publish_governor_decision())
 
     payload = json.loads(spark_swarm_collective_payload_path(repo_root).read_text(encoding="utf-8"))
     readiness = collective_readiness(repo_root, runtime_root)
@@ -734,7 +756,11 @@ def test_sync_local_collective_rebuild_uses_bounded_timeout(tmp_path: Path, monk
 
     monkeypatch.setattr(collective_module.subprocess, "run", fake_run)
 
-    result = collective_module.sync_local_collective(repo_root, runtime_root)
+    result = collective_module.sync_local_collective(
+        repo_root,
+        runtime_root,
+        governor_decision=collective_sync_governor_decision(),
+    )
 
     assert result["repo_registered"] is True
     assert [call["command"] for call in calls] == [
@@ -750,7 +776,11 @@ def test_sync_local_collective_missing_repo_names_sibling_checkout(tmp_path: Pat
     repo_root.mkdir()
 
     with pytest.raises(RuntimeError) as error:
-        collective_module.sync_local_collective(repo_root, tmp_path / "runtime")
+        collective_module.sync_local_collective(
+            repo_root,
+            tmp_path / "runtime",
+            governor_decision=collective_sync_governor_decision(),
+        )
 
     message = str(error.value)
     assert "Collective repo not found" in message
@@ -779,7 +809,7 @@ def test_publish_latest_normalizes_non_collective_verdicts(tmp_path: Path) -> No
     ledger.parent.mkdir(parents=True, exist_ok=True)
     ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
 
-    published = publish_latest(repo_root, runtime_root)
+    published = publish_latest(repo_root, runtime_root, governor_decision=collective_publish_governor_decision())
 
     payload = json.loads(Path(published["manifest_path"]).read_text(encoding="utf-8"))
     assert payload["verdict"] == "flat"

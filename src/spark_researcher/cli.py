@@ -268,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     collective_sub = collective_parser.add_subparsers(dest="collective_command")
     collective_publish = collective_sub.add_parser("publish")
     add_config_argument(collective_publish)
+    collective_publish.add_argument("--governor-decision")
     collective_status_parser = collective_sub.add_parser("status")
     add_config_argument(collective_status_parser)
     collective_ready_parser = collective_sub.add_parser("ready")
@@ -278,6 +279,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(collective_sync_parser)
     collective_sync_parser.add_argument("--label")
     collective_sync_parser.add_argument("--skip-rebuild", action="store_true")
+    collective_sync_parser.add_argument("--governor-decision")
     collective_absorb_parser = collective_sub.add_parser("absorb")
     add_config_argument(collective_absorb_parser)
     collective_absorb_parser.add_argument("--repo", required=True)
@@ -285,6 +287,7 @@ def build_parser() -> argparse.ArgumentParser:
     collective_absorb_parser.add_argument("--dry-run", action="store_true")
     collective_absorb_parser.add_argument("--bundle-only", action="store_true")
     collective_absorb_parser.add_argument("--merge-policy", choices=["human_review", "agent_review", "automerge"])
+    collective_absorb_parser.add_argument("--governor-decision")
 
     self_edit_parser = sub.add_parser("self-edit")
     self_edit_sub = self_edit_parser.add_subparsers(dest="self_edit_command")
@@ -469,13 +472,21 @@ def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Pa
 
 def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
     if args.collective_command == "publish":
-        print_json(publish_latest(repo_root, runtime_root))
+        print_json(publish_latest(repo_root, runtime_root, governor_decision=_load_governor_decision(args.governor_decision)))
         return
     if args.collective_command == "ready":
         print_json(collective_readiness(repo_root, runtime_root))
         return
     if args.collective_command == "sync-local":
-        print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
+        print_json(
+            sync_local_collective(
+                repo_root,
+                runtime_root,
+                label=args.label,
+                rebuild=not args.skip_rebuild,
+                governor_decision=_load_governor_decision(args.governor_decision),
+            )
+        )
         return
     if args.collective_command == "spark-swarm-payload":
         print_json(write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path)))
@@ -490,6 +501,7 @@ def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root
                 dry_run=args.dry_run,
                 bundle_only=args.bundle_only,
                 merge_policy=args.merge_policy,
+                governor_decision=_load_governor_decision(args.governor_decision),
             )
         )
         return

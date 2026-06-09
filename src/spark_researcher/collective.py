@@ -9,6 +9,7 @@ import argparse
 import re
 from typing import Any
 
+from .authority import require_collective_absorb_authority, require_collective_publish_authority, require_collective_sync_authority
 from .config import ProjectConfig
 from .paths import capsule_root, ledger_path
 from .paths import spark_swarm_collective_payload_path
@@ -700,7 +701,13 @@ def write_spark_swarm_collective_payload_from_latest(
     return write_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
 
 
-def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
+def publish_latest(
+    repo_root: Path,
+    runtime_root: Path,
+    *,
+    governor_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    require_collective_publish_authority(governor_decision)
     run = latest_metric_run(runtime_root)
     if run is None:
         raise RuntimeError("No metric runs available to publish.")
@@ -1006,7 +1013,15 @@ def _manifest_repo_slug(repo_root: Path) -> str:
     return repo_root.name
 
 
-def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | None = None, rebuild: bool = True) -> dict[str, Any]:
+def sync_local_collective(
+    repo_root: Path,
+    runtime_root: Path,
+    *,
+    label: str | None = None,
+    rebuild: bool = True,
+    governor_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    require_collective_sync_authority(governor_decision)
     collective_root = repo_root.parent / "autoresearch-collective"
     if not collective_root.exists():
         raise RuntimeError(
@@ -1283,7 +1298,9 @@ def absorb(
     dry_run: bool = False,
     bundle_only: bool = False,
     merge_policy: str | None = None,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    require_collective_absorb_authority(governor_decision)
     index_path, collective_data = _load_collective_index(repo_root)
     capsule_library = collective_data.get("capsuleLibrary", [])
     matching = [entry for entry in capsule_library if entry.get("repo") == source_repo and entry.get("verdict") == "improved"]
@@ -1412,12 +1429,19 @@ def absorb(
     }
 
 
+def _load_governor_decision(path: str | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Spark Researcher collective bridge")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--config", default="spark-researcher.project.json")
+    publish_parser.add_argument("--governor-decision")
     publish_parser.add_argument("--stdout", action="store_true")
 
     status_parser = subparsers.add_parser("status")
@@ -1432,6 +1456,7 @@ def main(argv: list[str] | None = None) -> int:
     sync_parser.add_argument("--config", default="spark-researcher.project.json")
     sync_parser.add_argument("--label")
     sync_parser.add_argument("--skip-rebuild", action="store_true")
+    sync_parser.add_argument("--governor-decision")
     sync_parser.add_argument("--stdout", action="store_true")
 
     absorb_parser = subparsers.add_parser("absorb")
@@ -1441,6 +1466,7 @@ def main(argv: list[str] | None = None) -> int:
     absorb_parser.add_argument("--dry-run", action="store_true")
     absorb_parser.add_argument("--bundle-only", action="store_true")
     absorb_parser.add_argument("--merge-policy", choices=["human_review", "agent_review", "automerge"])
+    absorb_parser.add_argument("--governor-decision")
     absorb_parser.add_argument("--stdout", action="store_true")
 
     args = parser.parse_args(argv)
@@ -1449,13 +1475,19 @@ def main(argv: list[str] | None = None) -> int:
     runtime_root = repo_root
 
     if args.command == "publish":
-        payload = publish_latest(repo_root, runtime_root)
+        payload = publish_latest(repo_root, runtime_root, governor_decision=_load_governor_decision(args.governor_decision))
     elif args.command == "status":
         payload = collective_status(repo_root, runtime_root)
     elif args.command == "ready":
         payload = collective_readiness(repo_root, runtime_root)
     elif args.command == "sync-local":
-        payload = sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild)
+        payload = sync_local_collective(
+            repo_root,
+            runtime_root,
+            label=args.label,
+            rebuild=not args.skip_rebuild,
+            governor_decision=_load_governor_decision(args.governor_decision),
+        )
     elif args.command == "absorb":
         payload = absorb(
             repo_root,
@@ -1465,6 +1497,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             bundle_only=args.bundle_only,
             merge_policy=args.merge_policy,
+            governor_decision=_load_governor_decision(args.governor_decision),
         )
     else:
         raise ValueError(f"Unknown command: {args.command}")

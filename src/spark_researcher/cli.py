@@ -84,7 +84,35 @@ def _require_config_file(config_path: Path) -> None:
 def _load_governor_decision(path: str | None) -> dict | None:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    governor_path = Path(path)
+    try:
+        return json.loads(governor_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print_json({
+            "ok": False,
+            "error_code": "governor_file_not_found",
+            "error": f"Governor decision file not found: {path}",
+            "next_action": "Provide a valid --governor-decision JSON file path.",
+        })
+        raise SystemExit(1)
+    except json.JSONDecodeError as exc:
+        print_json({
+            "ok": False,
+            "error_code": "governor_invalid_json",
+            "error": f"Governor decision file contains invalid JSON: line {exc.lineno}, column {exc.colno}",
+            "path": path,
+            "next_action": "Fix the JSON syntax in the governor decision file.",
+        })
+        raise SystemExit(1)
+    except OSError as exc:
+        detail = exc.strerror or exc.__class__.__name__
+        print_json({
+            "ok": False,
+            "error_code": "governor_read_error",
+            "error": f"Failed to read governor decision file {path}: {detail}",
+            "next_action": "Check file permissions and try again.",
+        })
+        raise SystemExit(1)
 
 
 def build_parser() -> argparse.ArgumentParser:

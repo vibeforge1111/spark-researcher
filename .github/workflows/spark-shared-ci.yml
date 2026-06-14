@@ -6,6 +6,7 @@ on:
       - main
       - "codex/**"
       - "reconcile/**"
+      - "ap-01-*"
   pull_request:
   workflow_dispatch:
 

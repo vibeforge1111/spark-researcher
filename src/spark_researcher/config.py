@@ -322,6 +322,20 @@ def update_intent_policy(
     return config
 
 
+class ConfigLoadError(ValueError):
+    """Raised when a required key is absent from the project config file."""
+
+
+def _require_key(payload: dict, key: str, config_path: Path) -> object:
+    """Return payload[key] or raise a descriptive ConfigLoadError naming the file."""
+    if key not in payload:
+        raise ConfigLoadError(
+            f"Config error: key '{key}' is required in {public_config_path(config_path)}. "
+            f"Add it to your spark-researcher.project.json file."
+        )
+    return payload[key]
+
+
 def load_config(path: Path) -> ProjectConfig:
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -334,6 +348,11 @@ def load_config(path: Path) -> ProjectConfig:
     except OSError as exc:
         detail = exc.strerror or exc.__class__.__name__
         raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
+    if not isinstance(payload, dict):
+        raise ConfigLoadError(
+            f"Config error: {public_config_path(path)} must contain a JSON object, "
+            f"got {type(payload).__name__}."
+        )
     commands = {
         name: CommandSpec(
             args=list(spec["args"]),
@@ -341,11 +360,11 @@ def load_config(path: Path) -> ProjectConfig:
             kind=str(spec.get("kind", "train-once")),
             log_name=str(spec.get("log_name", f"{name}.log")),
         )
-        for name, spec in payload["commands"].items()
+        for name, spec in _require_key(payload, "commands", path).items()
     }
     metrics = {
         name: MetricSpec(pattern=str(spec["pattern"]), kind=str(spec.get("kind", "float")))
-        for name, spec in payload["metrics"].items()
+        for name, spec in _require_key(payload, "metrics", path).items()
     }
     mutable_parameters = [
         MutationSpec(
@@ -392,9 +411,9 @@ def load_config(path: Path) -> ProjectConfig:
     chip_payload = payload.get("chip", {})
     intent_payload = payload.get("intent", {})
     return ProjectConfig(
-        project_name=str(payload["project_name"]),
+        project_name=str(_require_key(payload, "project_name", path)),
         project_root=str(payload.get("project_root", ".")),
-        eval_metric=str(payload["eval_metric"]),
+        eval_metric=str(_require_key(payload, "eval_metric", path)),
         eval_goal=str(payload.get("eval_goal", "minimize")),
         commands=commands,
         metrics=metrics,

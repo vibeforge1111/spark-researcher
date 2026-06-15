@@ -107,13 +107,23 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             if time.monotonic() >= deadline:
-                owner = None
+                # Stale lock detection: remove if older than 5 minutes
+                stale = False
                 try:
-                    owner = lock_path.read_text(encoding="utf-8", errors="ignore").strip()[:64] or None
+                    mtime = lock_path.stat().st_mtime
+                    if time.time() - mtime > 300:
+                        lock_path.unlink()
+                        stale = True
                 except OSError:
+                    stale = False
+                if not stale:
                     owner = None
-                suffix = f" (owner={owner})" if owner else ""
-                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
+                    try:
+                        owner = lock_path.read_text(encoding="utf-8", errors="ignore").strip()[:64] or None
+                    except OSError:
+                        owner = None
+                    suffix = f" (owner={owner})" if owner else ""
+                    raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
             time.sleep(0.05)
     try:
         os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))

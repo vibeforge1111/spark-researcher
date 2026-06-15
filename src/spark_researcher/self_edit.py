@@ -442,13 +442,52 @@ def collect_changes(repo_root: Path, workspace_root: Path, mutable_targets: list
     return allowed, blocked
 
 
-def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path, last_message_path: Path) -> list[str]:
-    return [
-        part.replace("{workspace}", str(workspace_root))
-        .replace("{request}", str(request_path))
-        .replace("{last_message}", str(last_message_path))
-        for part in parts
-    ]
+def expand_command(
+    parts: list[str],
+    *,
+    workspace_root: Path,
+    request_path: Path,
+    last_message_path: Path,
+) -> tuple[list[str], dict[str, str]]:
+    """Expand placeholder values in command template parts.
+
+    Returns (expanded_parts, path_env) where path_env must be merged into
+    subprocess.run(env=...) so that shell-based command templates can reference
+    $SPARK_WORKSPACE, $SPARK_REQUEST, and $SPARK_LAST_MESSAGE without embedding
+    the raw path values directly into shell command strings (which would allow
+    shell metacharacters in workspace paths to inject additional commands).
+
+    For templates where {workspace} is a standalone argument (not embedded in a
+    shell command string) the direct string substitution is retained for backward
+    compatibility. The path_env values should always be passed to subprocess so
+    that shell-using templates can safely reference the env var instead.
+    """
+    ws = str(workspace_root)
+    rp = str(request_path)
+    lm = str(last_message_path)
+
+    # Use shlex.quote for values embedded inside a larger argument string so that
+    # shell metacharacters in the path cannot break out of the argument boundary.
+    # For standalone-placeholder args (the entire part equals the placeholder) we
+    # keep the raw value because subprocess.run(shell=False) passes it as-is.
+    def _safe_sub(part: str, placeholder: str, raw_value: str) -> str:
+        if part == placeholder:
+            return raw_value  # standalone arg: passed directly to exec, no shell parsing
+        return part.replace(placeholder, shlex.quote(raw_value))  # embedded: shell-quote it
+
+    expanded = []
+    for part in parts:
+        part = _safe_sub(part, "{workspace}", ws)
+        part = _safe_sub(part, "{request}", rp)
+        part = _safe_sub(part, "{last_message}", lm)
+        expanded.append(part)
+
+    path_env = {
+        "SPARK_WORKSPACE": ws,
+        "SPARK_REQUEST": rp,
+        "SPARK_LAST_MESSAGE": lm,
+    }
+    return expanded, path_env
 
 
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
@@ -552,7 +591,7 @@ def propose(
     write_text(request_path, render_request(prompt, config.self_edit.prompt_preamble, mutable_targets))
     profile = _resolve_backend_profile(backend_profile)
     resolved_command = _resolve_command_override(command_override) or (profile["command"] if profile else []) or config.self_edit.command
-    command = expand_command(
+    command, path_env = expand_command(
         resolved_command,
         workspace_root=workspace_root,
         request_path=request_path,
@@ -564,7 +603,8 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        subprocess_env = {**os.environ, **path_env}
+        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", env=subprocess_env)
         write_text(stdout_path, process.stdout)
         write_text(stderr_path, process.stderr)
         status = "pending_review" if process.returncode == 0 else "failed"

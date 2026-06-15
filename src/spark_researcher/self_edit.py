@@ -62,6 +62,9 @@ def _iso_now() -> str:
 
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
+    # Reject path traversal in proposal_id before constructing the path
+    if ".." in proposal_id.replace("\\", "/").split("/"):
+        raise ValueError(f"Invalid proposal_id: {proposal_id}")
     return self_edit_root(runtime_root) / proposal_id
 
 
@@ -388,6 +391,9 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
 
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
     normalized = path_text.replace("\\", "/")
+    # Reject path traversal sequences before prefix matching
+    if "../" in normalized or "/.." in normalized:
+        return False
     return any(normalized == target or normalized.startswith(target.rstrip("/") + "/") for target in mutable_targets)
 
 

@@ -15,6 +15,17 @@ class MetricSpec:
     pattern: str
     kind: str = "float"
 
+    def __post_init__(self) -> None:
+        """Validate regex pattern compiles and is safe."""
+        try:
+            compiled = re.compile(self.pattern)
+        except re.error as exc:
+            raise ValueError(f"Invalid regex pattern {self.pattern!r}: {exc}") from exc
+        # Warn on known catastrophic-backtracking patterns
+        if any(tok in self.pattern for tok in ("(+", "*)", "(?=", "(?!")):
+            import sys
+            print(f"WARNING: metric pattern {self.pattern!r} may cause catastrophic backtracking", file=sys.stderr)
+
 
 @dataclass
 class CommandSpec:

@@ -452,7 +452,8 @@ def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path
 
 
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
-    lowered = " ".join(parts).lower()
+    # Normalize whitespace so tab-separated fragments like "rm\t-rf\t/" match "rm -rf"
+    lowered = " ".join(part.replace("\t", " ") for part in parts).lower()
     for fragment in blocked_fragments:
         if fragment.lower() in lowered:
             raise RuntimeError(f"Blocked self-edit command fragment detected: {fragment}")

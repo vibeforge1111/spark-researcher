@@ -318,13 +318,17 @@ def backend_profiles() -> list[dict[str, Any]]:
 
 
 def run_git_status(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
@@ -336,6 +340,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=60,
     )
 
 
@@ -564,7 +569,10 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        try:
+            process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Self-edit command timed out after 300s: {' '.join(command)}")
         write_text(stdout_path, process.stdout)
         write_text(stderr_path, process.stderr)
         status = "pending_review" if process.returncode == 0 else "failed"

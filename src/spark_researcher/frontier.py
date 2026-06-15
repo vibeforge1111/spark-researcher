@@ -76,7 +76,7 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     try:
         with safe_urlopen(request, timeout=6) as response:
             page = response.read().decode("utf-8", errors="replace")
-    except (URLError, OSError, ValueError):
+    except (URLError, OSError, ValueError, UnicodeDecodeError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     notes = []

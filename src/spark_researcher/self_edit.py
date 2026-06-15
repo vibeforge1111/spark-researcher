@@ -80,9 +80,13 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
 def _apply_result_ledger_path(runtime_root: Path, proposal_id: str) -> Path:
     return _proposal_dir(runtime_root, proposal_id) / "apply-result-ledger.json"
 
-
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def _harness_artifact_ref(kind: str, path_or_uri: str, summary: str) -> dict[str, Any]:
@@ -684,7 +688,10 @@ def apply_proposal(
     if not proposal_path.exists():
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
-    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Cannot read proposal {proposal_path}: {exc}") from exc
     if governor_decision is None:
         if governor_decision_path is None:
             trace.finish(status="error", attributes={"error": "Self-edit apply requires GovernorDecisionV1 authority."})

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from urllib.error import URLError
+from urllib.parse import quote
 
 import pytest
 
 from spark_researcher import frontier
-from spark_researcher.research import _bounded_web_results, _research_task, sanitize_untrusted_research_text, scan_untrusted_research_text
+from spark_researcher.research import (
+    _bounded_web_results,
+    _clean_result_url,
+    _citation_rows,
+    _research_task,
+    sanitize_untrusted_research_text,
+    scan_untrusted_research_text,
+)
 
 
 class _FakeResponse:
@@ -70,6 +78,32 @@ def test_research_task_caps_web_note_lengths() -> None:
     assert "T" * 250 not in task
     assert "S" * 500 not in task
     assert "u" * 300 not in task
+
+
+def test_clean_result_url_drops_unsafe_source_schemes() -> None:
+    href = "/l/?uddg=" + quote("javascript:alert(1)", safe="")
+
+    assert _clean_result_url(href) == ""
+
+    rows = _citation_rows(
+        [{"title": "Bad source", "snippet": "example note", "url": _clean_result_url(href), "domain": ""}]
+    )
+    task = _research_task("Summarize latest docs", {"query": "latest docs", "citations": rows})
+
+    assert "javascript:alert" not in task
+    assert "Source:" not in task
+
+
+def test_clean_result_url_drops_private_ip_source_urls() -> None:
+    href = "/l/?uddg=" + quote("http://127.0.0.1/admin", safe="")
+
+    assert _clean_result_url(href) == ""
+
+
+def test_clean_result_url_keeps_public_http_sources() -> None:
+    href = "/l/?uddg=" + quote("https://example.com/docs", safe="")
+
+    assert _clean_result_url(href) == "https://example.com/docs"
 
 
 def test_research_note_scanner_catches_hidden_unicode_and_exfiltration() -> None:

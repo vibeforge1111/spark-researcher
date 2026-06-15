@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import re
 from datetime import UTC, datetime
 from html import escape, unescape
@@ -104,8 +105,22 @@ def _clean_result_url(url: str) -> str:
     parsed = urlparse(raw)
     query_url = parse_qs(parsed.query).get("uddg", [""])[0].strip()
     if query_url:
-        return unescape(query_url)
-    return raw
+        raw = unescape(query_url)
+    return raw if _is_public_source_url(raw) else ""
+
+
+def _is_public_source_url(url: str) -> bool:
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return False
+    hostname = (parsed.hostname or "").rstrip(".").lower()
+    if not hostname or hostname == "localhost" or hostname.endswith(".localhost"):
+        return False
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return True
+    return address.is_global
 
 
 def _domain_from_url(url: str) -> str:

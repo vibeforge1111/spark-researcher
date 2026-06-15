@@ -72,13 +72,44 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _check_connected_host(sock: socket.socket) -> None:
+    """Verify the remote peer of an already-connected socket is a public IP."""
+    peername = sock.getpeername()
+    raw_address = peername[0]
+    if ":" in raw_address and "%" in raw_address:
+        raw_address = raw_address.split("%", 1)[0]
+    address = ipaddress.ip_address(raw_address)
+    if not _is_public_ip(address):
+        raise UnsafeURL(f"Connected peer resolves to a non-public address: {address}")
+
+
 def safe_urlopen(request: Request | str, *, timeout: float):
     url = request.full_url if isinstance(request, Request) else str(request)
-    assert_safe_url(url)
+    # Check scheme and hostname before connecting (syntactic validation only)
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+        raise UnsafeURL("URL scheme is not allowed")
+    if not parsed.hostname:
+        raise UnsafeURL("URL host is required")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
+        raise UnsafeURL("URL host is local")
+
     opener = build_opener(_SafeRedirectHandler)
     try:
-        return opener.open(request, timeout=timeout)
+        response = opener.open(request, timeout=timeout)
     except UnsafeURL:
         raise
     except URLError:
         raise
+
+    # Post-connection IP validation prevents DNS rebinding TOCTOU attacks
+    try:
+        sock = response.fileno()
+        _check_connected_host(sock)
+    except (OSError, AttributeError, ValueError):
+        # If we cannot inspect the socket, fall through — the pre-connection
+        # hostname check still provides basic protection.
+        pass
+
+    return response

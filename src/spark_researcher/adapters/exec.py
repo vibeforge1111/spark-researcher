@@ -14,6 +14,8 @@ from ..authority import require_advisory_execution_authority
 from ..paths import advisory_root
 from ..tracing import start_trace
 
+SPARK_RESEARCHER_EXECUTE_ADVISORY_TIMEOUT_SECONDS = 60
+
 
 ENV_KEYS = {
     "claude": "SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND",
@@ -242,7 +244,9 @@ def execute_advisory(
             "trace_path": str(trace.path),
         }
     with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace"
+        timeout=SPARK_RESEARCHER_EXECUTE_ADVISORY_TIMEOUT_SECONDS,
+        )
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

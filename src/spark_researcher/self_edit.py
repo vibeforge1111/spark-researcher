@@ -725,7 +725,7 @@ def apply_proposal(
     workspace_root = Path(proposal["workspace_root"])
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     if git_mode not in {"manual", "branch", "main"}:
-        raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")
+        raise RuntimeError(f"Unsupported self-edit git mode: {git_mode!r}. Allowed values: manual, branch, main.")
     branch_name = _current_branch(repo_root)
     original_branch = branch_name
     created_branch = False

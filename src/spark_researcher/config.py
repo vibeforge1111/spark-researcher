@@ -347,8 +347,19 @@ def load_config(path: Path) -> ProjectConfig:
         name: MetricSpec(pattern=str(spec["pattern"]), kind=str(spec.get("kind", "float")))
         for name, spec in payload["metrics"].items()
     }
-    mutable_parameters = [
-        MutationSpec(
+    mutable_parameters = []
+    for idx, item in enumerate(payload.get("mutable_parameters", [])):
+        for field in ("name", "file", "pattern", "template"):
+            if field not in item:
+                # Replace the implicit KeyError with a config-shaped
+                # SystemExit so the operator sees the offending entry index
+                # and field instead of a bare `KeyError: 'pattern'` traceback
+                # rooted three frames deep in load_config.
+                raise SystemExit(
+                    f"Config error in {public_config_path(path)}: "
+                    f"mutable_parameters[{idx}] is missing required field '{field}'."
+                )
+        mutable_parameters.append(MutationSpec(
             name=str(item["name"]),
             file=str(item["file"]),
             pattern=str(item["pattern"]),
@@ -356,9 +367,7 @@ def load_config(path: Path) -> ProjectConfig:
             description=str(item.get("description", "")),
             value_step=str(item.get("value_step", "")),
             value_range=[str(part) for part in item.get("value_range", [])],
-        )
-        for item in payload.get("mutable_parameters", [])
-    ]
+        ))
     candidate_trials = [
         CandidateTrial(
             candidate_id=str(item["candidate_id"]),
@@ -375,17 +384,25 @@ def load_config(path: Path) -> ProjectConfig:
         )
         for item in payload.get("candidate_trials", [])
     ]
-    trainers = [
-        TrainerSpec(
+    trainers = []
+    for idx, item in enumerate(payload.get("trainers", [])):
+        for field in ("name", "examples_path"):
+            if field not in item:
+                # Same shape as the mutable_parameters guard above: surface a
+                # config-shaped SystemExit pointing at the entry index and
+                # missing field instead of a bare KeyError traceback.
+                raise SystemExit(
+                    f"Config error in {public_config_path(path)}: "
+                    f"trainers[{idx}] is missing required field '{field}'."
+                )
+        trainers.append(TrainerSpec(
             name=str(item["name"]),
             examples_path=str(item["examples_path"]),
             compile_command=[str(part) for part in item.get("compile_command", [])],
             min_examples=_safe_int(item.get("min_examples", 20), 20),
             recompile_every=_safe_int(item.get("recompile_every", 10), 10),
             max_examples=_safe_int(item.get("max_examples", 96), 96),
-        )
-        for item in payload.get("trainers", [])
-    ]
+        ))
     self_edit_payload = payload.get("self_edit", {})
     memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})

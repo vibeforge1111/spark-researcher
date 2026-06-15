@@ -564,10 +564,17 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
-        write_text(stdout_path, process.stdout)
-        write_text(stderr_path, process.stderr)
-        status = "pending_review" if process.returncode == 0 else "failed"
+        try:
+            process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+        except subprocess.TimeoutExpired:
+            write_text(stdout_path, "")
+            write_text(stderr_path, "Command timed out after 600 seconds.")
+            status = "failed"
+            process = None
+        if process is not None:
+            write_text(stdout_path, process.stdout)
+            write_text(stderr_path, process.stderr)
+            status = "pending_review" if process.returncode == 0 else "failed"
     else:
         write_text(stdout_path, json.dumps({"command": command, "dry_run": dry_run}, indent=2))
         write_text(stderr_path, "")

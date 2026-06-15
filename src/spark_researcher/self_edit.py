@@ -17,6 +17,8 @@ from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
 from .tracing import start_trace
 
+SPARK_RESEARCHER_PROPOSE_TIMEOUT_SECONDS = 60
+
 
 SELF_EDIT_APPLY_TOOL_NAME = "spark-researcher.self_edit.apply"
 SELF_EDIT_APPLY_CAPABILITY_ID = "capability:spark-researcher:self-edit.apply"
@@ -564,7 +566,9 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace"
+        timeout=SPARK_RESEARCHER_PROPOSE_TIMEOUT_SECONDS,
+        )
         write_text(stdout_path, process.stdout)
         write_text(stderr_path, process.stderr)
         status = "pending_review" if process.returncode == 0 else "failed"

@@ -113,7 +113,7 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
                 except OSError:
                     owner = None
                 suffix = f" (owner={owner})" if owner else ""
-                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
+                raise TimeoutError("Timed out waiting for file lock")
             time.sleep(0.05)
     try:
         os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))

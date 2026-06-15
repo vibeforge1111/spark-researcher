@@ -242,7 +242,19 @@ def execute_advisory(
             "trace_path": str(trace.path),
         }
     with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        timeout_seconds = float(os.environ.get("SPARK_RESEARCHER_SUBPROCESS_TIMEOUT_SECONDS", "300") or "300")
+        try:
+            result = subprocess.run(
+                expanded,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as error:
+            trace.finish(status="error", attributes={"error": f"timeout after {timeout_seconds:.0f}s"})
+            raise RuntimeError(f"Advisory execution timed out after {timeout_seconds:.0f}s") from error
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

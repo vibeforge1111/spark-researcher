@@ -391,10 +391,8 @@ def build_record(
         "cwd": command_result.cwd,
         "run_dir": str(run_dir),
         "workspace_root": str(run_dir / "workspace"),
-        "log_path": str(log_path),
         "metrics": metrics,
         "stdout_excerpt": command_result.stdout[:500],
-        "stderr_excerpt": command_result.stderr[:500],
     }
     if chip_result:
         record["chip_result"] = chip_result

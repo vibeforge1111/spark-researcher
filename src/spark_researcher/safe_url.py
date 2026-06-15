@@ -25,7 +25,9 @@ def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ip
             addresses.add(ipaddress.ip_address(raw_address))
         return addresses
     except (OSError, ValueError) as exc:
-        raise UnsafeURL("URL host could not be resolved safely") from exc
+        raise UnsafeURL(
+            f"URL host {hostname!r} could not be resolved (DNS lookup failed: {exc})."
+        ) from exc
 
 
 def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -42,12 +44,19 @@ def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> boo
 def assert_safe_url(url: str) -> None:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        raise UnsafeURL("URL scheme is not allowed")
+        raise UnsafeURL(
+            f"URL scheme {parsed.scheme!r} is not allowed. Use http or https."
+        )
     if not parsed.hostname:
-        raise UnsafeURL("URL host is required")
+        raise UnsafeURL(
+            f"URL host is required (parsed url={url!r}). "
+            f"Provide an absolute URL of the form https://example.com/path."
+        )
     hostname = parsed.hostname.rstrip(".").lower()
     if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
-        raise UnsafeURL("URL host is local")
+        raise UnsafeURL(
+            f"URL host {hostname!r} is a loopback name. Use a publicly-reachable URL."
+        )
     try:
         literal = ipaddress.ip_address(hostname)
     except ValueError:
@@ -55,7 +64,10 @@ def assert_safe_url(url: str) -> None:
     else:
         addresses = {literal}
     if not addresses or any(not _is_public_ip(address) for address in addresses):
-        raise UnsafeURL("URL host resolves to a non-public address")
+        raise UnsafeURL(
+            f"URL host {hostname!r} resolves to a non-public address. "
+            f"Use a publicly-reachable host."
+        )
 
 
 class _SafeRedirectHandler(HTTPRedirectHandler):

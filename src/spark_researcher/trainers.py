@@ -122,7 +122,6 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
         "last_status": "ok" if process.returncode == 0 else "failed",
         "last_reason": reason,
         "stdout_excerpt": process.stdout[:400],
-        "stderr_excerpt": process.stderr[:400],
         "command": spec.compile_command,
     }
     write_state(state_path, updated)

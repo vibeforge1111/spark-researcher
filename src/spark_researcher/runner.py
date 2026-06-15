@@ -11,6 +11,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+RUN_PROCESS_TIMEOUT_SECONDS = 300
 from typing import Any
 
 from .authority import require_run_execution_authority
@@ -199,7 +201,20 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
         preview = {"cwd": str(cwd), "command": command}
         log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
         return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=RUN_PROCESS_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        timeout_message = f"process exceeded {RUN_PROCESS_TIMEOUT_SECONDS}s timeout"
+        log_path.write_text(f"\n[stderr]\n{timeout_message}", encoding="utf-8")
+        return CommandResult(returncode=-1, stdout="", stderr=timeout_message, command=command, cwd=str(cwd))
     log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
     return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 

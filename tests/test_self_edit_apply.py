@@ -16,76 +16,7 @@ for HARNESS_CORE_SRC in (
 
 from spark_harness_core import HarnessKernel, evidence_ref
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
-from spark_researcher.self_edit import (
-    SELF_EDIT_APPLY_CAPABILITY_ID,
-    SELF_EDIT_APPLY_TOOL_NAME,
-    _apply_result_ledger_path,
-    _proposal_path,
-    _review_path,
-    apply_proposal,
-)
-
-
-def _governor_decision(proposal_id: str, *, capability_id: str = SELF_EDIT_APPLY_CAPABILITY_ID) -> dict:
-    kernel = HarnessKernel(surface="cli")
-    action = kernel.proposed_action(
-        capability_id=capability_id,
-        action_type="edit_file",
-        risk_tier="high",
-        summary=f"Apply reviewed self-edit proposal {proposal_id}.",
-        args_path=f"proposal:{proposal_id}",
-        requires_confirmation=True,
-    )
-    evidence = [
-        evidence_ref(
-            "fresh_user_intent",
-            "test",
-            f"Fresh owner request to apply self-edit proposal {proposal_id}.",
-            confidence=1.0,
-        ),
-        evidence_ref(
-            "human_confirmation",
-            "test",
-            f"Governor decision is bound to self-edit proposal {proposal_id}.",
-            confidence=1.0,
-        )
-    ]
-    envelope = kernel.create_envelope(
-        selected_move="execute_action",
-        intent_summary=f"Apply reviewed self-edit proposal {proposal_id}.",
-        raw_turn_summary=f"Owner explicitly approved self-edit proposal {proposal_id}.",
-        evidence=evidence,
-        proposed_actions=[action],
-        authority_state="executable",
-        risk_tier="high",
-        confidence=1.0,
-    )
-    authorization = kernel.authorize(
-        envelope,
-        action,
-        approval_ref=evidence_ref(
-            "human_confirmation",
-            "test",
-            f"Owner approved proposal {proposal_id}.",
-            confidence=1.0,
-        ),
-    )
-    ledger = kernel.record_tool_call(
-        envelope=envelope,
-        action=action,
-        authorization=authorization,
-        tool_name=SELF_EDIT_APPLY_TOOL_NAME,
-        status="not_started",
-        output_path=f"proposal:{proposal_id}",
-        summary=f"Self-edit proposal {proposal_id} is authorized but not applied yet.",
-    )
-    return kernel.governor_decision(
-        envelope,
-        authorizations=[authorization],
-        tool_ledgers=[ledger],
-        reply_style="compact_status",
-        reply_instruction="Apply the reviewed self-edit proposal.",
-    )
+from spark_researcher.self_edit import _proposal_path, _review_path, apply_proposal, proposal_public_summary
 
 
 def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, Path]:
@@ -125,6 +56,45 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
         encoding="utf-8",
     )
     return config_path, target
+
+
+def test_proposal_public_summary_omits_prompt_diffs_and_raw_agent_text() -> None:
+    proposal = {
+        "proposal_id": "proposal-private",
+        "created_at": "2026-06-03T00:00:00+00:00",
+        "status": "pending_review",
+        "prompt": "SECRET_PROMPT_SENTINEL",
+        "request_path": "/SECRET_HOME/private/request.md",
+        "workspace_root": "/SECRET_HOME/private/workspace",
+        "stdout_path": "/SECRET_HOME/private/stdout.log",
+        "stderr_path": "/SECRET_HOME/private/stderr.log",
+        "last_message_path": "/SECRET_HOME/private/agent-last-message.txt",
+        "backend_profile": "local",
+        "trace_id": "trace-1",
+        "trace_path": "/private/trace.jsonl",
+        "command": ["agent", "SECRET_COMMAND_SENTINEL"],
+        "mutable_targets": ["src"],
+        "change_count": 1,
+        "allowed_changes": [{"path": "src/example.py", "diff": "SECRET_DIFF_SENTINEL"}],
+        "blocked_changes": [{"path": "secrets.env", "diff": "SECRET_BLOCKED_DIFF_SENTINEL"}],
+    }
+
+    summary = proposal_public_summary(proposal)
+    encoded = repr(summary)
+    assert summary["blocked_change_count"] == 1
+    assert summary["change_count"] == 1
+    assert summary["workspace_present"] is True
+    assert summary["artifacts"]["request"] == {"present": True, "name": "request.md"}
+    assert "prompt" not in summary
+    assert "command" not in summary
+    assert "allowed_changes" not in summary
+    assert "blocked_changes" not in summary
+    assert "workspace_root" not in summary
+    assert "SECRET_PROMPT_SENTINEL" not in encoded
+    assert "SECRET_COMMAND_SENTINEL" not in encoded
+    assert "SECRET_DIFF_SENTINEL" not in encoded
+    assert "SECRET_BLOCKED_DIFF_SENTINEL" not in encoded
+    assert "SECRET_HOME" not in encoded
 
 
 def test_apply_proposal_checks_remote_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

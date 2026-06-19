@@ -72,7 +72,7 @@ If you are Claude Code, Codex, or another LLM agent reading this repo:
 
 ## Install
 
-Spark Researcher requires Python `3.10+`.
+Spark Researcher requires Python `3.11+`.
 
 If you want the bundled demo project and docs exactly as they ship in this repo:
 
@@ -314,7 +314,7 @@ Spark Researcher tries to stay in the middle:
 - one experiment at a time
 - visible artifacts on disk
 - memory stays local and file-first
-- self-editing is proposal-first, never silent auto-apply
+- self-editing is proposal-first and Governor-authorized, never silent auto-apply
 
 ## Main Pieces
 

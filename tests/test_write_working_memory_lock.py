@@ -19,14 +19,17 @@ import pytest
 from contextlib import contextmanager
 from pathlib import Path
 
+from memory_governor import memory_governor_decision
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _write(runtime_root: Path, **kwargs) -> dict:
-    from spark_researcher.memory import write_working_memory
+    from spark_researcher.memory import working_memory_authority_refs, write_working_memory
     defaults = {"kind": "advisor", "focus": "test focus", "status": "running"}
+    defaults["governor_decision"] = memory_governor_decision(working_memory_authority_refs(runtime_root))
     defaults.update(kwargs)
     return write_working_memory(runtime_root, **defaults)
 

@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .beliefs import build_beliefs
+from .authority import memory_authority_refs, require_memory_write_authority
+from .beliefs import beliefs_authority_refs, build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .paths import beliefs_root, memory_root, self_edit_root
 from .runner import locked_file, read_jsonl
@@ -41,6 +42,24 @@ def _working_path(runtime_root: Path) -> Path:
 
 def _episodes_path(runtime_root: Path) -> Path:
     return memory_root(runtime_root) / "episodes.jsonl"
+
+
+def working_memory_authority_refs(runtime_root: Path) -> tuple[str, ...]:
+    return memory_authority_refs("working", _working_path(runtime_root))
+
+
+def episode_memory_authority_refs(runtime_root: Path) -> tuple[str, ...]:
+    return memory_authority_refs("episode", _episodes_path(runtime_root))
+
+
+def sync_memory_authority_refs(repo_root: Path, runtime_root: Path, config_path: Path | None = None) -> tuple[str, ...]:
+    refs = [
+        *memory_authority_refs("sync", _documents_root(runtime_root), _manifest_path(runtime_root), runtime_root / "artifacts" / "ledger" / "runs.jsonl"),
+        *beliefs_authority_refs(repo_root, runtime_root),
+    ]
+    if config_path is not None:
+        refs.extend(memory_authority_refs("sync.config", config_path))
+    return tuple(dict.fromkeys(refs))
 
 
 def _safe_unlink(path: Path) -> None:
@@ -119,7 +138,24 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
-def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, Any]:
+def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
+    docs_root = _documents_root(runtime_root)
+    return {
+        "backend": "local",
+        "document_count": 0,
+        "documents_root": str(docs_root),
+        "source_runs": 0,
+        "kinds": {},
+        "memory_tiers": {},
+        "outcomes": [],
+        "self_edit_documents": [],
+        "chip_documents": [],
+        "working_memory": load_working_memory(runtime_root),
+        "episode_count": len(load_episode_memory(runtime_root)),
+    }
+
+
+def _local_manifest(runtime_root: Path) -> dict[str, Any]:
     manifest_path = _manifest_path(runtime_root)
     if manifest_path.exists():
         try:
@@ -127,7 +163,7 @@ def _local_manifest(runtime_root: Path, *, repo_root: Path, goal: str, config_pa
         except json.JSONDecodeError:
             # A concurrent memory sync may briefly leave the manifest half-written.
             pass
-    return sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
+    return _empty_manifest(runtime_root)
 
 
 def _kind_priority(kind: str) -> int:
@@ -205,7 +241,7 @@ def _infer_document_kind(path: Path) -> str:
 
 
 def _manifest_docs_by_path(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, dict[str, Any]]:
-    manifest = _local_manifest(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
+    manifest = _local_manifest(runtime_root)
     mapped: dict[str, dict[str, Any]] = {}
     for collection_name in ("chip_documents",):
         collection = manifest.get(collection_name, [])
@@ -440,7 +476,9 @@ def write_working_memory(
     trace_id: str | None = None,
     notes: list[str] | None = None,
     questions: list[str] | None = None,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    require_memory_write_authority(governor_decision, binding_refs=working_memory_authority_refs(runtime_root))
     payload = {
         "updated_at": _now_iso(),
         "kind": kind,
@@ -474,7 +512,9 @@ def record_episode(
     summary: str,
     status: str,
     trace_id: str | None = None,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    require_memory_write_authority(governor_decision, binding_refs=episode_memory_authority_refs(runtime_root))
     payload = {
         "created_at": _now_iso(),
         "kind": kind,
@@ -538,14 +578,22 @@ def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, 
     return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
 
 
-def sync_memory(repo_root: Path, runtime_root: Path, *, goal: str = "minimize", config_path: Path | None = None) -> dict[str, Any]:
+def sync_memory(
+    repo_root: Path,
+    runtime_root: Path,
+    *,
+    goal: str = "minimize",
+    config_path: Path | None = None,
+    governor_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    require_memory_write_authority(governor_decision, binding_refs=sync_memory_authority_refs(repo_root, runtime_root, config_path))
     rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
     docs_root = _documents_root(runtime_root)
     docs_root.mkdir(parents=True, exist_ok=True)
     for path in docs_root.glob("*"):
         if path.is_file():
             _safe_unlink(path)
-    build_beliefs(repo_root, runtime_root)
+    build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
     tier_counts: dict[str, int] = defaultdict(int)
@@ -688,7 +736,6 @@ def search_memory(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    sync_memory(repo_root, runtime_root, goal=goal, config_path=config_path)
     docs_root = _documents_root(runtime_root)
     local_results = _local_search_results(
         runtime_root,
@@ -727,7 +774,7 @@ def memory_status(
     config_path: Path | None = None,
 ) -> dict[str, Any]:
     manifest_path = _manifest_path(runtime_root)
-    manifest = _local_manifest(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
+    manifest = _local_manifest(runtime_root)
     if backend == "ruvector":
         status = ruvector_status()
         status["configured_backend"] = configured_backend

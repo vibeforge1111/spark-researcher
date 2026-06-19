@@ -6,14 +6,16 @@ from pathlib import Path
 
 import pytest
 
+from memory_governor import memory_governor_decision
 from spark_researcher import obsidian
-from spark_researcher import candidates, runner
-from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, load_config
+from spark_researcher.obsidian import vault_authority_refs
+from spark_researcher import candidates, runner, trainers, trial_queue
+from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
 from spark_researcher.outcomes import load_advisory_outcomes
 from spark_researcher.paths import ledger_path, trainers_root
-from spark_researcher.trainers import read_state
+from spark_researcher.trainers import read_state, write_state
 from spark_researcher.tracing import start_trace, trace_status
-from spark_researcher.trial_queue import load_queue_trials
+from spark_researcher.trial_queue import append_queue_trials, load_queue_trials, queue_path_for_config
 
 
 def _write_ledger(runtime_root: Path, rows: list[dict]) -> None:
@@ -149,6 +151,25 @@ def test_trainer_state_recovers_from_malformed_or_non_object_json(tmp_path: Path
     assert read_state(path) == {}
 
 
+def test_trainer_state_write_preserves_existing_file_when_replace_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "trainer.json"
+    path.write_text(json.dumps({"name": "writer", "last_status": "old"}) + "\n", encoding="utf-8")
+    replace_calls: list[tuple[Path, Path]] = []
+
+    def fail_replace(source: str | bytes | Path, target: str | bytes | Path) -> None:
+        replace_calls.append((Path(source), Path(target)))
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(trainers.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated replace failure"):
+        write_state(path, {"name": "writer", "last_status": "new"})
+
+    assert json.loads(path.read_text(encoding="utf-8"))["last_status"] == "old"
+    assert replace_calls and replace_calls[0][1] == path
+    assert list(path.parent.glob(f".{path.name}.*.tmp")) == []
+
+
 def test_trial_queue_recovers_from_malformed_or_non_object_json(tmp_path: Path) -> None:
     config_path = tmp_path / "spark-researcher.project.json"
     queue_path = tmp_path / "artifacts" / "frontier" / "queue.json"
@@ -159,6 +180,51 @@ def test_trial_queue_recovers_from_malformed_or_non_object_json(tmp_path: Path) 
 
     queue_path.write_text(json.dumps(["not", "a", "queue"]), encoding="utf-8")
     assert load_queue_trials(config_path) == []
+
+
+def test_trial_queue_append_preserves_existing_file_when_replace_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    path = queue_path_for_config(config_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "candidate_trials": [
+                    {
+                        "candidate_id": "existing",
+                        "mutations": {"learning_rate": "0.001"},
+                        "commands": ["train"],
+                    }
+                ]
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    replace_calls: list[tuple[Path, Path]] = []
+
+    def fail_replace(source: str | bytes | Path, target: str | bytes | Path) -> None:
+        replace_calls.append((Path(source), Path(target)))
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(trial_queue.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated replace failure"):
+        append_queue_trials(
+            config_path,
+            [
+                CandidateTrial(
+                    candidate_id="new",
+                    mutations={"learning_rate": "0.002"},
+                    commands=["train"],
+                )
+            ],
+        )
+
+    assert [trial.candidate_id for trial in load_queue_trials(config_path)] == ["existing"]
+    assert replace_calls and replace_calls[0][1] == path
+    assert list(path.parent.glob(f".{path.name}.*.tmp")) == []
 
 
 def test_self_edit_queue_skips_malformed_and_non_object_proposals(tmp_path: Path) -> None:
@@ -217,7 +283,13 @@ def test_build_vault_skips_malformed_and_non_object_trainer_rows(tmp_path: Path,
     monkeypatch.setattr(obsidian, "load_episode_memory", lambda *args, **kwargs: [])
     monkeypatch.setattr(obsidian, "chip_has_hook", lambda *args, **kwargs: False)
 
-    result = obsidian.build_vault(repo_root, runtime_root, config, config_path=config_path)
+    result = obsidian.build_vault(
+        repo_root,
+        runtime_root,
+        config,
+        config_path=config_path,
+        governor_decision=memory_governor_decision(vault_authority_refs(repo_root, runtime_root, config_path)),
+    )
 
     assert result["trainer_entries"] == 1
     trainer_state = (runtime_root / "obsidian-vault" / "05-Runtime" / "Trainer State.md").read_text(encoding="utf-8")

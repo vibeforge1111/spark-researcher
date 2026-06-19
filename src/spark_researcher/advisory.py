@@ -8,7 +8,6 @@ from .chips import load_chip_context
 from .config import load_config
 from .failures import surprise_status
 from .intent import build_intent_brief
-from .memory import write_working_memory
 from .optimizer import optimizer_status
 from .packets import search_packets
 from .paths import resolve_runtime_root
@@ -200,15 +199,6 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
             "trace_path": str(trace.path),
         }
         advisory["adapter_request"] = adapter_request(model, task, advisory)
-        write_working_memory(
-            runtime_root,
-            kind="advisory",
-            focus=task,
-            status=str(epistemic.get("status") or "unknown"),
-            trace_id=trace.trace_id,
-            notes=[*guidance[:2], *epistemic.get("recommended_actions", [])[:2]],
-            questions=list(epistemic.get("clarifying_questions", []))[:3],
-        )
         trace.event(
             "epistemic_status",
             attributes={

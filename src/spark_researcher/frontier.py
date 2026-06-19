@@ -11,6 +11,7 @@ from urllib.request import Request
 
 from .adapters import execute_advisory
 from .advisory import build_advisory
+from .authority import require_advisory_execution_authority
 from .chips import load_chip_context
 from .config import load_config
 from .failures import surprise_status
@@ -84,7 +85,14 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
         if clean:
             notes.append(clean)
     return notes
-def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[str, Any]], limit: int = 3) -> dict[str, Any]:
+def frontier_suggest(
+    config_path: Path,
+    command_name: str,
+    *,
+    rows: list[dict[str, Any]],
+    limit: int = 3,
+    governor_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     config = load_config(config_path)
     runtime_root = resolve_runtime_root(config_path)
     trace = start_trace(runtime_root, kind="frontier_suggest", name=command_name, attributes={"limit": limit})
@@ -100,6 +108,19 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     if not allowed:
         trace.finish(status="ok", attributes={"suggestion_count": 0, "reason": "missing_allowed_mutations"})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": ["No allowed mutation grammar is defined for this chip frontier."]}
+    try:
+        authority = require_advisory_execution_authority(governor_decision)
+    except (RuntimeError, OSError) as exc:
+        trace.finish(status="error", attributes={"error": str(exc)})
+        return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": [f"Frontier execution unavailable: {exc}"]}
+    trace.event(
+        "authority_verified",
+        attributes={
+            "decision_id": authority.get("decision_id"),
+            "ledger_id": authority.get("ledger_id"),
+            "tool_name": authority.get("tool_name"),
+        },
+    )
     existing = {_signature(trial.mutations) for trial in merged_candidate_trials(config_path, config=config)}
     tested = {
         _signature({str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])})
@@ -150,7 +171,13 @@ def frontier_suggest(config_path: Path, command_name: str, *, rows: list[dict[st
     )
     advisory = build_advisory(config_path, task, model=str(spec.get("model", "generic")), limit=3, domain=str(context.manifest.get("domain", "generic")))
     try:
-        response = execute_advisory(runtime_root, advisory=advisory, model=str(spec.get("model", "generic")), dry_run=False)
+        response = execute_advisory(
+            runtime_root,
+            advisory=advisory,
+            model=str(spec.get("model", "generic")),
+            dry_run=False,
+            governor_decision=governor_decision,
+        )
     except (RuntimeError, OSError) as exc:
         trace.finish(status="error", attributes={"error": str(exc)})
         return {"source": "frontier", "suggestion_count": 0, "suggestions": [], "reasons": [f"Frontier execution unavailable: {exc}"]}

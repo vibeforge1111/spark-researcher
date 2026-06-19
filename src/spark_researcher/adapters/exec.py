@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..authority import require_advisory_execution_authority
 from ..paths import advisory_root
 from ..tracing import start_trace
 
@@ -233,18 +234,30 @@ def execute_advisory(
     model: str,
     command_override: list[str] | None = None,
     dry_run: bool = False,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    command = _resolve_command(model, command_override)
+    if not command:
+        raise RuntimeError(f"No execution command configured for model `{model}`.")
+    authority = None if dry_run else require_advisory_execution_authority(governor_decision)
     trace = start_trace(
         runtime_root,
         kind="advisory_execute",
         name=model,
         parent_trace_id=str(advisory.get("trace_id") or "") or None,
-        attributes={"model": model, "dry_run": dry_run},
+        attributes={
+            "model": model,
+            "dry_run": dry_run,
+            "authority": {
+                "allowed": True,
+                "decision_id": authority.get("decision_id"),
+                "ledger_id": authority.get("ledger_id"),
+                "tool_name": authority.get("tool_name"),
+            }
+            if authority
+            else {"mode": "dry_run"},
+        },
     )
-    command = _resolve_command(model, command_override)
-    if not command:
-        trace.finish(status="error", attributes={"error": f"No execution command configured for model `{model}`."})
-        raise RuntimeError(f"No execution command configured for model `{model}`.")
     root = advisory_root(runtime_root) / "requests"
     root.mkdir(parents=True, exist_ok=True)
     stamp = _now_slug()

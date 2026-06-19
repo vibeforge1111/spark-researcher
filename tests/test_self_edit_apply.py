@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
+for HARNESS_CORE_SRC in (
+    Path(__file__).resolve().parents[2] / "spark-harness-core" / "src",
+    Path.home() / ".spark" / "modules" / "spark-harness-core" / "source" / "src",
+):
+    if HARNESS_CORE_SRC.exists() and str(HARNESS_CORE_SRC) not in sys.path:
+        sys.path.insert(0, str(HARNESS_CORE_SRC))
+        break
+
+from spark_harness_core import HarnessKernel, evidence_ref
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
 from spark_researcher.self_edit import _proposal_path, _review_path, apply_proposal, proposal_public_summary
 
@@ -96,7 +106,13 @@ def test_apply_proposal_checks_remote_before_copy(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("spark_researcher.self_edit._remote_exists", lambda repo_root: False)
 
     with pytest.raises(RuntimeError, match="origin"):
-        apply_proposal(config_path, proposal_id, git_mode_override="main", push_override=True)
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=True,
+            governor_decision=_governor_decision(proposal_id),
+        )
 
     assert target.read_text(encoding="utf-8") == "old\n"
     proposal = json.loads(_proposal_path(tmp_path / "repo", proposal_id).read_text(encoding="utf-8"))
@@ -120,7 +136,13 @@ def test_apply_proposal_records_push_failure_state(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("spark_researcher.self_edit._push_branch", _raise_push)
 
     with pytest.raises(RuntimeError, match="push broke"):
-        apply_proposal(config_path, proposal_id, git_mode_override="main", push_override=True)
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=True,
+            governor_decision=_governor_decision(proposal_id),
+        )
 
     assert target.read_text(encoding="utf-8") == "new\n"
     proposal = json.loads(_proposal_path(repo_root, proposal_id).read_text(encoding="utf-8"))
@@ -128,3 +150,65 @@ def test_apply_proposal_records_push_failure_state(monkeypatch: pytest.MonkeyPat
     assert proposal["git_commit_sha"] == "abc123"
     assert proposal["git_pushed"] is False
     assert proposal["apply_error"] == "push broke"
+    assert proposal["authority"]["schema_version"] == "governor-decision-v1"
+    assert proposal["apply_result_status"] == "failure"
+    ledger = json.loads(_apply_result_ledger_path(repo_root, proposal_id).read_text(encoding="utf-8"))
+    assert ledger["schema_version"] == "tool-call-ledger-v1"
+    assert ledger["result"]["status"] == "failure"
+
+
+def test_apply_proposal_requires_governor_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-3"
+    config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+
+    with pytest.raises(RuntimeError, match="GovernorDecisionV1"):
+        apply_proposal(config_path, proposal_id, git_mode_override="manual")
+
+    assert target.read_text(encoding="utf-8") == "old\n"
+
+
+def test_apply_proposal_rejects_governor_for_another_proposal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-4"
+    config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+
+    with pytest.raises(RuntimeError, match="proposal_id_not_bound"):
+        apply_proposal(config_path, proposal_id, git_mode_override="manual", governor_decision=_governor_decision("other-proposal"))
+
+    assert target.read_text(encoding="utf-8") == "old\n"
+
+
+def test_apply_proposal_rejects_copied_pre_execution_ledger(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-copied-ledger"
+    config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+
+    governor_decision = _governor_decision(proposal_id)
+    governor_decision["tool_ledgers"][0]["action_id"] = "action:copied-stale-ledger"
+    governor_decision["tool_ledgers"][0]["authorization"]["action_id"] = "action:copied-stale-ledger"
+
+    with pytest.raises(RuntimeError, match="governor_missing_matching_tool_ledger"):
+        apply_proposal(config_path, proposal_id, git_mode_override="manual", governor_decision=governor_decision)
+
+    assert target.read_text(encoding="utf-8") == "old\n"
+
+
+def test_apply_proposal_records_success_result_ledger(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-5"
+    repo_root = tmp_path / "repo"
+    config_path, target = _write_self_edit_fixture(repo_root, proposal_id)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+
+    result = apply_proposal(config_path, proposal_id, git_mode_override="manual", governor_decision=_governor_decision(proposal_id))
+
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert result["applied_files"] == ["README.md"]
+    proposal = json.loads(_proposal_path(repo_root, proposal_id).read_text(encoding="utf-8"))
+    assert proposal["authority"]["decision_id"].startswith("governor-decision:")
+    assert proposal["apply_result_status"] == "success"
+    ledger = json.loads(_apply_result_ledger_path(repo_root, proposal_id).read_text(encoding="utf-8"))
+    assert ledger["schema_version"] == "tool-call-ledger-v1"
+    assert ledger["tool_name"] == SELF_EDIT_APPLY_TOOL_NAME
+    assert ledger["result"]["status"] == "success"

@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .authority import memory_authority_refs, require_memory_write_authority
 from .config import load_config
 from .paths import beliefs_root, resolve_runtime_root
 from .runner import read_jsonl
@@ -38,6 +39,17 @@ def _self_edit_root(runtime_root: Path) -> Path:
 
 def _ledger_path(runtime_root: Path) -> Path:
     return runtime_root / "artifacts" / "ledger" / "runs.jsonl"
+
+
+def beliefs_authority_refs(repo_root: Path, runtime_root: Path) -> tuple[str, ...]:
+    output_root = _beliefs_root(runtime_root)
+    return memory_authority_refs(
+        "beliefs",
+        output_root,
+        output_root / "manifest.json",
+        _ledger_path(runtime_root),
+        repo_root / "spark-researcher.project.json",
+    )
 
 
 def _belief_id(prefix: str, source_id: str) -> str:
@@ -273,8 +285,14 @@ def _render_self_edit_belief(proposal: dict[str, Any], review: dict[str, Any]) -
     )
 
 
-def build_beliefs(repo_root: Path, runtime_root: Path | None = None) -> dict[str, Any]:
+def build_beliefs(
+    repo_root: Path,
+    runtime_root: Path | None = None,
+    *,
+    governor_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     runtime_root = runtime_root or resolve_runtime_root(repo_root / "spark-researcher.project.json")
+    require_memory_write_authority(governor_decision, binding_refs=beliefs_authority_refs(repo_root, runtime_root))
     config = load_config(repo_root / "spark-researcher.project.json")
     output_root = _beliefs_root(runtime_root)
     output_root.mkdir(parents=True, exist_ok=True)

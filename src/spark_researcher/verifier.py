@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters import adapter_request, execute_advisory
+from .authority import require_advisory_execution_authority
 from .failures import record_failure
 from .tracing import start_trace
 
@@ -407,13 +408,26 @@ def execute_with_verifier(
     model: str,
     command_override: list[str] | None = None,
     dry_run: bool = False,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    authority = None if dry_run else require_advisory_execution_authority(governor_decision)
     trace = start_trace(
         runtime_root,
         kind="advisory_verify",
         name=model,
         parent_trace_id=str(advisory.get("trace_id") or "") or None,
-        attributes={"model": model, "dry_run": dry_run},
+        attributes={
+            "model": model,
+            "dry_run": dry_run,
+            "authority": {
+                "allowed": True,
+                "decision_id": authority.get("decision_id"),
+                "ledger_id": authority.get("ledger_id"),
+                "tool_name": authority.get("tool_name"),
+            }
+            if authority
+            else {"mode": "dry_run"},
+        },
     )
     epistemic = advisory.get("epistemic_status", {})
     status = str(epistemic.get("status") or "unknown")
@@ -434,7 +448,7 @@ def execute_with_verifier(
         trace.finish(status="ok", attributes={"decision": packet.get("decision", packet.get("status", "unknown")), "reason": "advisory_under_supported"})
         return packet
     if dry_run:
-        draft = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=True)
+        draft = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=True, governor_decision=governor_decision)
         trace.finish(status="ok", attributes={"mode": "dry_run", "steps": ["draft_a", "draft_b", "select", "optional_revise"]})
         return {
             "status": "dry_run",
@@ -445,16 +459,16 @@ def execute_with_verifier(
             "trace_path": str(trace.path),
         }
     with trace.span("draft_a"):
-        draft_a = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=False)
+        draft_a = execute_advisory(runtime_root, advisory=advisory, model=model, command_override=command_override, dry_run=False, governor_decision=governor_decision)
     draft_a_text = _response_text(draft_a.get("response", {}))
     draft_b_advisory = _advisory_clone(advisory, task=_alternative_draft_task(str(advisory.get("task") or "")), model=model)
     with trace.span("draft_b"):
-        draft_b = execute_advisory(runtime_root, advisory=draft_b_advisory, model=model, command_override=command_override, dry_run=False)
+        draft_b = execute_advisory(runtime_root, advisory=draft_b_advisory, model=model, command_override=command_override, dry_run=False, governor_decision=governor_decision)
     draft_b_text = _response_text(draft_b.get("response", {}))
     critique_task = _critique_task(advisory, draft_a_text, draft_b_text)
     critique_advisory = _advisory_clone(advisory, task=critique_task, model=model)
     with trace.span("select"):
-        critique_result = execute_advisory(runtime_root, advisory=critique_advisory, model=model, command_override=command_override, dry_run=False)
+        critique_result = execute_advisory(runtime_root, advisory=critique_advisory, model=model, command_override=command_override, dry_run=False, governor_decision=governor_decision)
     critique_text = _response_text(critique_result.get("response", {}))
     critique = _parse_json(critique_text) or {
         "decision": "needs_verification",
@@ -520,7 +534,7 @@ def execute_with_verifier(
         revision_task = _revision_task(draft_text, critique)
         revision_advisory = _advisory_clone(advisory, task=revision_task, model=model)
         with trace.span("revise"):
-            revised = execute_advisory(runtime_root, advisory=revision_advisory, model=model, command_override=command_override, dry_run=False)
+            revised = execute_advisory(runtime_root, advisory=revision_advisory, model=model, command_override=command_override, dry_run=False, governor_decision=governor_decision)
         trace.finish(
             status="ok",
             attributes={

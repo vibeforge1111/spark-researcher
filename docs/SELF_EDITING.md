@@ -14,8 +14,11 @@ Self editing is split into `propose` and `apply`.
 ## Apply
 
 - rechecks git cleanliness when configured
+- requires a `GovernorDecisionV1` file authorizing this exact proposal id
+- requires an allow `AuthorizationDecisionV1` and pre-execution `ToolCallLedgerV1`
 - refuses proposals with out-of-scope file changes
 - copies only allowed changed files back into the repo
+- records a final apply result ledger beside the proposal
 - optionally commits to a review branch or directly on `main`
 - optionally pushes the resulting branch/commit to `origin`
 
@@ -62,6 +65,6 @@ spark-researcher self-edit policy --git-mode manual --no-push
 Examples:
 
 ```powershell
-spark-researcher self-edit apply --proposal-id <id> --git-mode branch --push
-spark-researcher self-edit apply --proposal-id <id> --git-mode main --push
+spark-researcher self-edit apply --proposal-id <id> --governor-decision artifacts/self-edit/<id>/governor-decision.json --git-mode branch --push
+spark-researcher self-edit apply --proposal-id <id> --governor-decision artifacts/self-edit/<id>/governor-decision.json --git-mode main --push
 ```

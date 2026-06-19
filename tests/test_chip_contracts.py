@@ -217,6 +217,28 @@ def test_invoke_chip_hook_accepts_well_formed_packet_documents(tmp_path: Path) -
     assert response["documents"][0]["title"] == "Benchmark packet"
 
 
+def test_invoke_chip_hook_missing_hook_lists_defined_hooks(tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(
+        tmp_path / "chip",
+        response_payload={
+            "documents": [
+                {
+                    "kind": "benchmark_evidence",
+                    "title": "Unused",
+                    "content": "# Unused",
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(config_path, "suggest", {"limit": 1})
+
+    message = str(error.value)
+    assert "Chip hook `suggest` is not defined" in message
+    assert "Defined hooks: `packets`." in message
+
+
 def test_invoke_chip_hook_supports_src_layout_module_commands(tmp_path: Path) -> None:
     config_path = _write_src_layout_chip_fixture(
         tmp_path / "chip",

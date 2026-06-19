@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import difflib
+import copy
 import json
 import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +16,11 @@ from typing import Any
 from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
 from .tracing import start_trace
+
+
+SELF_EDIT_APPLY_TOOL_NAME = "spark-researcher.self_edit.apply"
+SELF_EDIT_APPLY_CAPABILITY_ID = "capability:spark-researcher:self-edit.apply"
+SELF_EDIT_APPLY_ACTION_TYPE = "edit_file"
 
 
 def now_stamp() -> str:
@@ -50,6 +57,10 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     write_text(path, json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _iso_now() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
     return self_edit_root(runtime_root) / proposal_id
 
@@ -66,8 +77,228 @@ def _review_path(runtime_root: Path, proposal_id: str) -> Path:
     return _proposal_dir(runtime_root, proposal_id) / "review.json"
 
 
+def _apply_result_ledger_path(runtime_root: Path, proposal_id: str) -> Path:
+    return _proposal_dir(runtime_root, proposal_id) / "apply-result-ledger.json"
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def _harness_artifact_ref(kind: str, path_or_uri: str, summary: str) -> dict[str, Any]:
+    return {
+        "id": f"artifact:self-edit-apply-{now_stamp()}",
+        "kind": kind,
+        "path_or_uri": path_or_uri,
+        "redaction_class": "metadata_only",
+        "summary": summary,
+    }
+
+
+def _harness_trace_ref(summary: str) -> dict[str, Any]:
+    return {
+        "id": f"trace:self-edit-apply-{now_stamp()}",
+        "redaction_class": "metadata_only",
+        "summary": summary,
+    }
+
+
+def _contains_string(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, dict):
+        return any(_contains_string(item, needle) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_string(item, needle) for item in value)
+    return False
+
+
+def _harness_core_source_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    spark_home = os.environ.get("SPARK_HOME")
+    if spark_home:
+        candidates.append(Path(spark_home).expanduser() / "modules" / "spark-harness-core" / "source" / "src")
+    candidates.append(Path.home() / ".spark" / "modules" / "spark-harness-core" / "source" / "src")
+    return candidates
+
+
+def _load_harness_kernel_class() -> type[Any]:
+    try:
+        from spark_harness_core import HarnessKernel
+
+        return HarnessKernel
+    except ModuleNotFoundError:
+        pass
+
+    for candidate in _harness_core_source_candidates():
+        if not (candidate / "spark_harness_core" / "__init__.py").exists():
+            continue
+        candidate_text = str(candidate)
+        if candidate_text not in sys.path:
+            sys.path.insert(0, candidate_text)
+        try:
+            from spark_harness_core import HarnessKernel
+
+            return HarnessKernel
+        except ModuleNotFoundError:
+            continue
+    raise RuntimeError("spark_harness_core_unavailable")
+
+
+def _self_edit_apply_action_id(decision: dict[str, Any]) -> str | None:
+    envelope = decision.get("envelope") if isinstance(decision.get("envelope"), dict) else {}
+    proposed_actions = envelope.get("proposed_actions") if isinstance(envelope.get("proposed_actions"), list) else []
+    for action in proposed_actions:
+        if not isinstance(action, dict):
+            continue
+        if action.get("capability_id") != SELF_EDIT_APPLY_CAPABILITY_ID:
+            continue
+        action_id = str(action.get("action_id") or "")
+        return action_id or None
+    return None
+
+
+def _verify_self_edit_apply_governor(decision: dict[str, Any]) -> dict[str, Any]:
+    HarnessKernel = _load_harness_kernel_class()
+    kernel = HarnessKernel(surface=str(decision.get("surface") or "cli"))
+    verifier = getattr(kernel, "verify_governor_execution_authority", None)
+    if not callable(verifier):
+        return {"allowed": False, "reason_codes": ["harness_core_governor_verifier_unavailable"]}
+    return verifier(
+        decision,
+        expected_capability_id=SELF_EDIT_APPLY_CAPABILITY_ID,
+        expected_action_type=SELF_EDIT_APPLY_ACTION_TYPE,
+        tool_name=SELF_EDIT_APPLY_TOOL_NAME,
+        action_id=_self_edit_apply_action_id(decision),
+    )
+
+
+def _matching_self_edit_authorization(decision: dict[str, Any], *, action_id: str | None = None) -> dict[str, Any] | None:
+    turn_id = str(decision.get("turn_id") or "")
+    for authorization in decision.get("authorizations", []):
+        if (
+            isinstance(authorization, dict)
+            and authorization.get("schema_version") == "authorization-decision-v1"
+            and authorization.get("capability_id") == SELF_EDIT_APPLY_CAPABILITY_ID
+            and authorization.get("verdict") == "allow"
+            and str(authorization.get("turn_id") or "") == turn_id
+            and str(authorization.get("action_id") or "")
+            and (action_id is None or str(authorization.get("action_id") or "") == action_id)
+            and str(authorization.get("decision_id") or "")
+        ):
+            return authorization
+    return None
+
+
+def _matching_self_edit_ledger(decision: dict[str, Any], *, authorization: dict[str, Any]) -> dict[str, Any] | None:
+    turn_id = str(decision.get("turn_id") or "")
+    authorization_action_id = str(authorization.get("action_id") or "")
+    authorization_decision_id = str(authorization.get("decision_id") or "")
+    for ledger in decision.get("tool_ledgers", []):
+        if (
+            isinstance(ledger, dict)
+            and ledger.get("schema_version") == "tool-call-ledger-v1"
+            and str(ledger.get("turn_id") or "") == turn_id
+            and str(ledger.get("action_id") or "") == authorization_action_id
+            and ledger.get("tool_name") == SELF_EDIT_APPLY_TOOL_NAME
+            and ledger.get("capability_id") == SELF_EDIT_APPLY_CAPABILITY_ID
+        ):
+            result = ledger.get("result") if isinstance(ledger.get("result"), dict) else {}
+            ledger_authorization = ledger.get("authorization") if isinstance(ledger.get("authorization"), dict) else {}
+            if (
+                result.get("status") == "not_started"
+                and ledger_authorization.get("verdict") == "allow"
+                and str(ledger_authorization.get("turn_id") or "") == turn_id
+                and str(ledger_authorization.get("action_id") or "") == authorization_action_id
+                and str(ledger_authorization.get("capability_id") or "") == SELF_EDIT_APPLY_CAPABILITY_ID
+                and str(ledger_authorization.get("decision_id") or "") == authorization_decision_id
+            ):
+                return ledger
+    return None
+
+
+def _validate_self_edit_apply_governor(decision: dict[str, Any], *, proposal_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    errors: list[str] = []
+    boundary = decision.get("execution_boundary") if isinstance(decision.get("execution_boundary"), dict) else {}
+    envelope = decision.get("envelope") if isinstance(decision.get("envelope"), dict) else {}
+    action_authority = envelope.get("action_authority") if isinstance(envelope.get("action_authority"), dict) else {}
+    proposed_actions = envelope.get("proposed_actions") if isinstance(envelope.get("proposed_actions"), list) else []
+
+    if decision.get("schema_version") != "governor-decision-v1":
+        errors.append("schema_version_not_governor_decision_v1")
+    if decision.get("outcome") != "execute":
+        errors.append("outcome_not_execute")
+    if decision.get("authority_state") != "executable":
+        errors.append("authority_state_not_executable")
+    if boundary.get("action_authorized") is not True:
+        errors.append("execution_boundary_not_authorized")
+    if boundary.get("legacy_authority_demoted") is not True:
+        errors.append("legacy_authority_not_demoted")
+    if boundary.get("requires_human_confirmation") is not True:
+        errors.append("human_confirmation_not_required")
+    if envelope.get("schema_version") != "turn-intent-envelope-vnext":
+        errors.append("envelope_not_vnext")
+    if action_authority.get("state") != "executable":
+        errors.append("envelope_authority_not_executable")
+    if not any(isinstance(action, dict) and action.get("capability_id") == SELF_EDIT_APPLY_CAPABILITY_ID for action in proposed_actions):
+        errors.append("self_edit_apply_action_missing")
+    if not _contains_string(decision, proposal_id):
+        errors.append("proposal_id_not_bound_to_governor_decision")
+
+    try:
+        verification = _verify_self_edit_apply_governor(decision)
+    except RuntimeError as exc:
+        verification = {"allowed": False, "reason_codes": [str(exc) or "harness_core_governor_verifier_failed"]}
+    for reason in verification.get("reason_codes", []):
+        reason_text = str(reason)
+        if reason_text and reason_text not in errors:
+            errors.append(reason_text)
+
+    verification_action_id = str(verification.get("action_id") or "") or _self_edit_apply_action_id(decision)
+    authorization = _matching_self_edit_authorization(decision, action_id=verification_action_id)
+    if not authorization:
+        errors.append("allow_authorization_missing")
+    else:
+        approval = authorization.get("approval") if isinstance(authorization.get("approval"), dict) else {}
+        if approval.get("required") is not True or approval.get("status") != "approved":
+            errors.append("approved_human_confirmation_missing")
+
+    ledger = _matching_self_edit_ledger(decision, authorization=authorization) if authorization else None
+    if not ledger:
+        errors.append("pre_execution_tool_ledger_missing")
+
+    if errors:
+        raise RuntimeError("Self-edit apply requires GovernorDecisionV1 authority: " + ", ".join(errors))
+    return authorization or {}, ledger or {}
+
+
+def _finalize_self_edit_apply_ledger(
+    source_ledger: dict[str, Any],
+    *,
+    status: str,
+    output_path: Path,
+    summary: str,
+    error_path: Path | None = None,
+) -> dict[str, Any]:
+    ledger = copy.deepcopy(source_ledger)
+    verdict = "passed" if status == "success" else "failed" if status == "failure" else "pending"
+    lifecycle = [dict(item) for item in ledger.get("lifecycle", []) if isinstance(item, dict)]
+    execute_stage = {"stage": "execute", "at": _iso_now(), "verdict": verdict}
+    if lifecycle and lifecycle[-1].get("stage") == "execute":
+        lifecycle[-1] = execute_stage
+    else:
+        lifecycle.append(execute_stage)
+    result = {
+        "status": status,
+        "summary": summary,
+        "sanitized_output_ref": _harness_artifact_ref("tool_output", str(output_path), summary),
+    }
+    if error_path is not None:
+        result["error_ref"] = _harness_artifact_ref("tool_error", str(error_path), "Sanitized self-edit apply error reference.")
+    ledger["lifecycle"] = lifecycle
+    ledger["result"] = result
+    ledger["trace"] = _harness_trace_ref(f"Final ledger for {SELF_EDIT_APPLY_TOOL_NAME}.")
+    return ledger
 
 
 def backend_profiles() -> list[dict[str, Any]]:
@@ -476,6 +707,8 @@ def apply_proposal(
     push_override: bool | None = None,
     branch_name_override: str | None = None,
     commit_message_override: str | None = None,
+    governor_decision_path: Path | None = None,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
@@ -489,6 +722,25 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
     proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    if governor_decision is None:
+        if governor_decision_path is None:
+            trace.finish(status="error", attributes={"error": "Self-edit apply requires GovernorDecisionV1 authority."})
+            raise RuntimeError("Self-edit apply requires a GovernorDecisionV1 file.")
+        if not governor_decision_path.exists():
+            trace.finish(status="error", attributes={"error": f"GovernorDecisionV1 file not found: {governor_decision_path}"})
+            raise FileNotFoundError(f"GovernorDecisionV1 file not found: {governor_decision_path}")
+        governor_decision = json.loads(governor_decision_path.read_text(encoding="utf-8"))
+    authorization, pre_execution_ledger = _validate_self_edit_apply_governor(governor_decision, proposal_id=proposal_id)
+    authority_summary = {
+        "schema_version": governor_decision.get("schema_version"),
+        "decision_id": governor_decision.get("decision_id"),
+        "authorization_decision_id": authorization.get("decision_id"),
+        "pre_execution_ledger_id": pre_execution_ledger.get("ledger_id"),
+        "tool_name": SELF_EDIT_APPLY_TOOL_NAME,
+        "capability_id": SELF_EDIT_APPLY_CAPABILITY_ID,
+        "governor_decision_path": str(governor_decision_path) if governor_decision_path else "<in-memory>",
+    }
+    apply_ledger_path = _apply_result_ledger_path(runtime_root, proposal_id)
     review = _load_json(_review_path(runtime_root, proposal_id))
     if not review:
         trace.finish(status="error", attributes={"error": "Proposal must be reviewed before apply."})
@@ -555,6 +807,14 @@ def apply_proposal(
                 _push_branch(repo_root, _current_branch(repo_root))
                 pushed = True
     except Exception as exc:
+        result_ledger = _finalize_self_edit_apply_ledger(
+            pre_execution_ledger,
+            status="failure",
+            output_path=proposal_path,
+            error_path=proposal_path,
+            summary=f"Self-edit proposal {proposal_id} failed during apply; see sanitized proposal status.",
+        )
+        _write_json(apply_ledger_path, result_ledger)
         proposal["status"] = "applied_push_failed" if commit_sha and should_push and not pushed else "apply_failed"
         proposal["git_mode"] = git_mode
         proposal["git_branch"] = _current_branch(repo_root)
@@ -563,6 +823,10 @@ def apply_proposal(
         proposal["apply_trace_id"] = trace.trace_id
         proposal["apply_trace_path"] = str(trace.path)
         proposal["apply_error"] = str(exc)
+        proposal["authority"] = authority_summary
+        proposal["apply_result_ledger_path"] = str(apply_ledger_path)
+        proposal["apply_result_ledger_id"] = result_ledger.get("ledger_id")
+        proposal["apply_result_status"] = "failure"
         _write_json(proposal_path, proposal)
         trace.finish(
             status="error",
@@ -575,6 +839,17 @@ def apply_proposal(
     proposal["git_pushed"] = pushed
     proposal["apply_trace_id"] = trace.trace_id
     proposal["apply_trace_path"] = str(trace.path)
+    result_ledger = _finalize_self_edit_apply_ledger(
+        pre_execution_ledger,
+        status="success",
+        output_path=proposal_path,
+        summary=f"Self-edit proposal {proposal_id} applied {len(applied)} file(s).",
+    )
+    _write_json(apply_ledger_path, result_ledger)
+    proposal["authority"] = authority_summary
+    proposal["apply_result_ledger_path"] = str(apply_ledger_path)
+    proposal["apply_result_ledger_id"] = result_ledger.get("ledger_id")
+    proposal["apply_result_status"] = "success"
     proposal.pop("apply_error", None)
     _write_json(proposal_path, proposal)
     trace.finish(status="ok", attributes={"git_mode": git_mode, "applied_file_count": len(applied), "pushed": pushed})

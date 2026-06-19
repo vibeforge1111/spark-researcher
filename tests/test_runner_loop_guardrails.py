@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 import spark_researcher.runner as runner
-from spark_researcher.config import CandidateTrial, CommandSpec, GuardrailSpec, MetricSpec, ProjectConfig, save_config
+from spark_researcher.config import CandidateTrial, CommandSpec, GuardrailSpec, MetricSpec, MutationSpec, ProjectConfig, save_config
 
 
 def _write_loop_config(tmp_path: Path, *, max_loop_iterations: int) -> Path:
@@ -24,6 +24,60 @@ def _write_loop_config(tmp_path: Path, *, max_loop_iterations: int) -> Path:
         ),
     )
     return config_path
+
+
+def test_apply_mutations_unknown_param_names_known_parameters(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = ProjectConfig(
+        project_name="demo",
+        project_root=".",
+        eval_metric="score",
+        eval_goal="maximize",
+        commands={"train": CommandSpec(args=["python", "-c", "print('score=1')"])},
+        metrics={"score": MetricSpec(pattern=r"score=(?P<value>\d+)")},
+        mutable_parameters=[
+            MutationSpec(
+                name="learning_rate",
+                file="config.json",
+                pattern=r'"learning_rate":\s*[0-9.]+',
+                template='"learning_rate": {value}',
+            ),
+            MutationSpec(
+                name="weight_decay",
+                file="config.json",
+                pattern=r'"weight_decay":\s*[0-9.]+',
+                template='"weight_decay": {value}',
+            ),
+        ],
+    )
+
+    with pytest.raises(KeyError) as error:
+        runner.apply_mutations(workspace, config, {"learnig_rate": "0.001"})
+
+    message = str(error.value)
+    assert "Unknown mutable parameter: learnig_rate" in message
+    assert "Known mutable parameters: learning_rate, weight_decay" in message
+
+
+def test_apply_mutations_unknown_param_when_none_defined_names_config_field(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = ProjectConfig(
+        project_name="demo",
+        project_root=".",
+        eval_metric="score",
+        eval_goal="maximize",
+        commands={"train": CommandSpec(args=["python", "-c", "print('score=1')"])},
+        metrics={"score": MetricSpec(pattern=r"score=(?P<value>\d+)")},
+    )
+
+    with pytest.raises(KeyError) as error:
+        runner.apply_mutations(workspace, config, {"learning_rate": "0.001"})
+
+    message = str(error.value)
+    assert "Unknown mutable parameter: learning_rate" in message
+    assert "`mutable_parameters`" in message
 
 
 def test_run_loop_reports_when_requested_limit_is_capped_by_guardrail(

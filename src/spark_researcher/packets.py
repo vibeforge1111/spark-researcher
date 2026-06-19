@@ -8,7 +8,6 @@ from typing import Any
 
 from .chips import load_chip_context
 from .config import load_config
-from .memory import sync_memory
 from .paths import memory_root, resolve_runtime_root
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
@@ -216,12 +215,7 @@ def load_packets(config_path: Path, *, include_non_packets: bool = False) -> lis
                 collected.append(packet)
         return collected
 
-    if not docs_root.exists() or not any(docs_root.glob("*.md")):
-        sync_memory(config_path.parent.resolve(), runtime_root, goal=config.eval_goal, config_path=config_path)
     packets = collect()
-    if not packets:
-        sync_memory(config_path.parent.resolve(), runtime_root, goal=config.eval_goal, config_path=config_path)
-        packets = collect()
     return packets
 
 

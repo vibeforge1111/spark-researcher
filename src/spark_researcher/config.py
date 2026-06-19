@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+SECRET_PATH_PATTERN = re.compile(r"(?:sk-[a-z0-9_-]+|api[-_]?key|credential|password|secret|token)", re.IGNORECASE)
 
 
 @dataclass
@@ -223,6 +226,15 @@ def save_config(path: Path, config: ProjectConfig) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def public_config_path(path: Path) -> str:
+    resolved = path.resolve(strict=False)
+    try:
+        display = str(resolved.relative_to(Path.cwd().resolve(strict=False)))
+    except ValueError:
+        return "<external-config>"
+    return "<redacted-config-path>" if SECRET_PATH_PATTERN.search(display) else display
+
+
 def self_edit_policy(config: ProjectConfig) -> dict[str, object]:
     return {
         "git_mode": config.self_edit.git_mode,
@@ -313,8 +325,15 @@ def update_intent_policy(
 def load_config(path: Path) -> ProjectConfig:
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (json.JSONDecodeError, OSError) as exc:
-        raise SystemExit(f"Failed to parse config file {path}: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Config file not found: {public_config_path(path)}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"Failed to parse config file {public_config_path(path)}: invalid JSON at line {exc.lineno}, column {exc.colno}"
+        ) from exc
+    except OSError as exc:
+        detail = exc.strerror or exc.__class__.__name__
+        raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
     commands = {
         name: CommandSpec(
             args=list(spec["args"]),

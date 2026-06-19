@@ -11,7 +11,7 @@ from .candidates import append_suggestions, run_autoloop, run_continuous_autoloo
 from .chip_starter import init_chip, normalize_chip_name, resolve_chip_target
 from .chips import chip_status, chip_validation
 from .collective import absorb, collective_readiness, collective_status, publish_latest, sync_local_collective, write_spark_swarm_collective_payload_from_latest
-from .config import intent_policy, load_config, memory_policy, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
+from .config import intent_policy, load_config, memory_policy, public_config_path, save_config, self_edit_policy, update_intent_policy, update_memory_policy, update_self_edit_policy
 from .failures import surprise_status
 from .intent import build_intent_brief
 from .line_budget import build_line_budget
@@ -48,6 +48,45 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
+def _action_requires_config(args: argparse.Namespace) -> bool:
+    action = getattr(args, "action", None)
+    if action in {None, "init", "line-budget", "optimizer", "failures"}:
+        return False
+    if action == "advisory":
+        return getattr(args, "advisory_command", None) in {None, "build", "execute"}
+    if action == "chips":
+        return getattr(args, "chips_command", None) != "init"
+    if action == "collective":
+        return getattr(args, "collective_command", None) == "spark-swarm-payload"
+    if action == "self-edit":
+        return getattr(args, "self_edit_command", None) in {"propose", "policy", "apply"}
+    return True
+
+
+def _require_config_file(config_path: Path) -> None:
+    if config_path.exists():
+        return
+    print_json(
+        {
+            "ok": False,
+            "error_code": "config_file_not_found",
+            "error": "Config file not found.",
+            "config_path": public_config_path(config_path),
+            "next_action": (
+                "Run `spark-researcher init --path . --preset toy --project-name <name>` "
+                "or pass --config to an existing spark-researcher.project.json file."
+            ),
+        }
+    )
+    raise SystemExit(1)
+
+
+def _load_governor_decision(path: str | None) -> dict | None:
+    if not path:
+        return None
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
     sub = parser.add_subparsers(dest="action")
@@ -63,12 +102,15 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--candidate-id")
     run_parser.add_argument("--set", action="append")
     run_parser.add_argument("--dry-run", action="store_true")
+    run_parser.add_argument("--governor-decision")
+    run_parser.add_argument("--memory-governor-decision")
 
     loop_parser = sub.add_parser("loop")
     add_config_argument(loop_parser)
     loop_parser.add_argument("--command", dest="project_command", required=True)
     loop_parser.add_argument("--limit", type=int)
     loop_parser.add_argument("--dry-run", action="store_true")
+    loop_parser.add_argument("--governor-decision")
 
     autoloop_parser = sub.add_parser("autoloop")
     add_config_argument(autoloop_parser)
@@ -82,6 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     autoloop_parser.add_argument("--max-passes", type=_positive_int)
     autoloop_parser.add_argument("--max-seconds", type=int)
     autoloop_parser.add_argument("--stop-file")
+    autoloop_parser.add_argument("--governor-decision")
 
     candidates_parser = sub.add_parser("candidates")
     candidates_sub = candidates_parser.add_subparsers(dest="candidates_command")
@@ -123,6 +166,8 @@ def build_parser() -> argparse.ArgumentParser:
     advisory_execute_parser.add_argument("--command", action="append")
     advisory_execute_parser.add_argument("--dry-run", action="store_true")
     advisory_execute_parser.add_argument("--no-verify", action="store_true")
+    advisory_execute_parser.add_argument("--governor-decision")
+    advisory_execute_parser.add_argument("--memory-governor-decision")
     advisory_log_parser = advisory_sub.add_parser("log")
     add_config_argument(advisory_log_parser)
     advisory_log_parser.add_argument("--task", required=True)
@@ -156,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
     chips_init_parser.add_argument("--goal", choices=["maximize", "minimize"], default="maximize")
     chips_init_parser.add_argument("--package-name")
     chips_init_parser.add_argument("--preset", choices=["generic", "crypto-trading", "xcontent"], default="generic")
+    chips_init_parser.add_argument("--governor-decision")
     chips_status_parser = chips_sub.add_parser("status")
     add_config_argument(chips_status_parser)
     chips_validate_parser = chips_sub.add_parser("validate")
@@ -189,6 +235,7 @@ def build_parser() -> argparse.ArgumentParser:
     memory_sub = memory_parser.add_subparsers(dest="memory_command")
     memory_sync = memory_sub.add_parser("sync")
     add_config_argument(memory_sync)
+    memory_sync.add_argument("--governor-decision")
     memory_search = memory_sub.add_parser("search")
     add_config_argument(memory_search)
     memory_search.add_argument("query")
@@ -209,11 +256,13 @@ def build_parser() -> argparse.ArgumentParser:
     beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
     beliefs_build = beliefs_sub.add_parser("build")
     add_config_argument(beliefs_build)
+    beliefs_build.add_argument("--governor-decision")
 
     obsidian_parser = sub.add_parser("obsidian")
     obsidian_sub = obsidian_parser.add_subparsers(dest="obsidian_command")
     obsidian_build = obsidian_sub.add_parser("build")
     add_config_argument(obsidian_build)
+    obsidian_build.add_argument("--governor-decision")
 
     collective_parser = sub.add_parser("collective")
     collective_sub = collective_parser.add_subparsers(dest="collective_command")
@@ -272,6 +321,7 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_apply.add_argument("--no-push", action="store_true")
     self_edit_apply.add_argument("--branch-name")
     self_edit_apply.add_argument("--commit-message")
+    self_edit_apply.add_argument("--governor-decision", required=True)
     self_edit_status = self_edit_sub.add_parser("status")
     add_config_argument(self_edit_status)
 
@@ -368,7 +418,15 @@ def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Pa
         print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
         return
     if args.memory_command == "sync":
-        print_json(sync_memory(repo_root, runtime_root, goal=config.eval_goal, config_path=config_path))
+        print_json(
+            sync_memory(
+                repo_root,
+                runtime_root,
+                goal=config.eval_goal,
+                config_path=config_path,
+                governor_decision=_load_governor_decision(args.governor_decision),
+            )
+        )
         return
     if args.memory_command == "search":
         print_json(
@@ -500,6 +558,7 @@ def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
                 push_override=push_override,
                 branch_name_override=args.branch_name,
                 commit_message_override=args.commit_message,
+                governor_decision_path=Path(args.governor_decision),
             )
         )
         return
@@ -522,6 +581,8 @@ def main() -> None:
         print_json(budget)
         return
     config_path = resolve_config_path(getattr(args, "config", None))
+    if _action_requires_config(args):
+        _require_config_file(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
     if args.action == "run":
@@ -534,10 +595,28 @@ def main() -> None:
                 f"Candidate id {args.candidate_id!r} was not found in the trial queue. "
                 f"Known candidate ids: {known}."
             )
-        print_json(run_once(config_path, args.project_command, trial=trial, overrides=parse_overrides(args.set), dry_run=args.dry_run))
+        print_json(
+            run_once(
+                config_path,
+                args.project_command,
+                trial=trial,
+                overrides=parse_overrides(args.set),
+                dry_run=args.dry_run,
+                governor_decision=_load_governor_decision(args.governor_decision),
+                memory_governor_decision=_load_governor_decision(args.memory_governor_decision),
+            )
+        )
         return
     if args.action == "loop":
-        print_json(run_loop(config_path, args.project_command, dry_run=args.dry_run, limit=args.limit))
+        print_json(
+            run_loop(
+                config_path,
+                args.project_command,
+                dry_run=args.dry_run,
+                limit=args.limit,
+                governor_decision=_load_governor_decision(args.governor_decision),
+            )
+        )
         return
     if args.action == "autoloop":
         runner = run_continuous_autoloop if args.continuous else run_autoloop
@@ -546,6 +625,7 @@ def main() -> None:
             "suggest_limit": args.suggest_limit,
             "dry_run": args.dry_run,
             "apply_suggestions": not args.no_apply_suggestions,
+            "governor_decision": _load_governor_decision(args.governor_decision),
         }
         if args.continuous:
             kwargs["pause_seconds"] = args.pause_seconds
@@ -590,9 +670,10 @@ def main() -> None:
                         goal=args.goal,
                         package_name=args.package_name,
                         preset=args.preset,
+                        governor_decision=_load_governor_decision(args.governor_decision),
                     )
                 )
-            except ValueError as exc:
+            except (RuntimeError, ValueError) as exc:
                 raise SystemExit(str(exc))
             return
         if args.chips_command == "validate":
@@ -616,10 +697,18 @@ def main() -> None:
         print_json(surprise_status(runtime_root, limit=args.limit))
         return
     if args.action == "beliefs":
-        print_json(build_beliefs(repo_root, runtime_root))
+        print_json(build_beliefs(repo_root, runtime_root, governor_decision=_load_governor_decision(args.governor_decision)))
         return
     if args.action == "obsidian":
-        print_json(build_vault(repo_root, runtime_root, load_config(config_path), config_path=config_path))
+        print_json(
+            build_vault(
+                repo_root,
+                runtime_root,
+                load_config(config_path),
+                config_path=config_path,
+                governor_decision=_load_governor_decision(args.governor_decision),
+            )
+        )
         return
     if args.action == "collective":
         _handle_collective(args, config_path=config_path, repo_root=repo_root, runtime_root=runtime_root)

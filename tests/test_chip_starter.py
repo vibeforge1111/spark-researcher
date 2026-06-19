@@ -1,12 +1,82 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import subprocess
 import sys
 import json
 
+for HARNESS_CORE_SRC in (
+    Path(__file__).resolve().parents[2] / "spark-harness-core" / "src",
+    Path.home() / ".spark" / "modules" / "spark-harness-core" / "source" / "src",
+):
+    if HARNESS_CORE_SRC.exists() and str(HARNESS_CORE_SRC) not in sys.path:
+        sys.path.insert(0, str(HARNESS_CORE_SRC))
+        break
+
+from spark_harness_core import HarnessKernel, evidence_ref
 from spark_researcher import chip_starter
+from spark_researcher.authority import CHIP_CREATE_ACTION_TYPE, CHIP_CREATE_CAPABILITY_ID, CHIP_CREATE_TOOL_NAME
 from spark_researcher.chips import validate_manifest
+
+
+def _chip_create_governor_decision(chip_name: str = "domain-chip-marketing") -> dict:
+    kernel = HarnessKernel(surface="cli")
+    action = kernel.proposed_action(
+        capability_id=CHIP_CREATE_CAPABILITY_ID,
+        action_type=CHIP_CREATE_ACTION_TYPE,
+        risk_tier="medium",
+        summary=f"Create Spark Researcher domain chip scaffold {chip_name}.",
+        args_path=f"chip:{chip_name}",
+        requires_confirmation=True,
+    )
+    fresh_intent = evidence_ref(
+        "fresh_user_intent",
+        "test",
+        f"Fresh owner request to create domain chip scaffold {chip_name}.",
+        confidence=1.0,
+    )
+    approval = evidence_ref(
+        "human_confirmation",
+        "test",
+        f"Owner approved chip scaffold creation for {chip_name}.",
+        confidence=1.0,
+    )
+    envelope = kernel.create_envelope(
+        selected_move="execute_action",
+        intent_summary=f"Create domain chip scaffold {chip_name}.",
+        raw_turn_summary=f"Owner explicitly requested Researcher chip scaffold {chip_name}.",
+        evidence=[fresh_intent, approval],
+        proposed_actions=[action],
+        authority_state="executable",
+        risk_tier="medium",
+        confidence=1.0,
+    )
+    authorization = kernel.authorize(envelope, action, approval_ref=approval)
+    ledger = kernel.record_tool_call(
+        envelope=envelope,
+        action=action,
+        authorization=authorization,
+        tool_name=CHIP_CREATE_TOOL_NAME,
+        status="not_started",
+        output_path=f"chip:{chip_name}",
+        summary=f"Researcher chip scaffold {chip_name} is authorized but not created.",
+    )
+    return kernel.governor_decision(
+        envelope,
+        authorizations=[authorization],
+        tool_ledgers=[ledger],
+        reply_style="compact_status",
+        reply_instruction="Create the governed chip scaffold.",
+    )
+
+
+def _subprocess_env(repo_root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    src_path = str(repo_root / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = src_path + (os.pathsep + existing if existing else "")
+    return env
 
 
 def test_normalize_chip_name_uses_domain_prefix_by_default() -> None:
@@ -47,6 +117,7 @@ def test_init_chip_writes_readme_with_resolved_root(tmp_path: Path) -> None:
         chip_name="domain-chip-marketing",
         domain="marketing",
         metric_name="marketing_score",
+        governor_decision=_chip_create_governor_decision(),
     )
 
     readme = (chip_root / "README.md").read_text(encoding="utf-8")
@@ -60,6 +131,47 @@ def test_init_chip_writes_readme_with_resolved_root(tmp_path: Path) -> None:
     assert "docs/CHIP_SYSTEMS.md" in readme
     assert "python -m pip install -e ..\\spark-researcher" in readme
     assert "$env:PYTHONPATH='..\\spark-researcher\\src;src'" in readme
+    assert result["authority"]["allowed"] is True
+    assert result["authority"]["tool_name"] == CHIP_CREATE_TOOL_NAME
+
+
+def test_init_chip_requires_governor_before_creating_target(tmp_path: Path) -> None:
+    chip_root = tmp_path / "domain-chip-marketing"
+
+    try:
+        chip_starter.init_chip(
+            chip_root,
+            chip_name="domain-chip-marketing",
+            domain="marketing",
+            metric_name="marketing_score",
+        )
+    except RuntimeError as exc:
+        assert "missing_governor_decision" in str(exc)
+    else:
+        raise AssertionError("Expected chip creation to require Governor authority")
+
+    assert not chip_root.exists()
+
+
+def test_init_chip_rejects_wrong_governor_before_creating_target(tmp_path: Path) -> None:
+    chip_root = tmp_path / "domain-chip-marketing"
+    governor_decision = _chip_create_governor_decision()
+    governor_decision["tool_ledgers"][0]["tool_name"] = "researcher.chip.preview"
+
+    try:
+        chip_starter.init_chip(
+            chip_root,
+            chip_name="domain-chip-marketing",
+            domain="marketing",
+            metric_name="marketing_score",
+            governor_decision=governor_decision,
+        )
+    except RuntimeError as exc:
+        assert "governor_missing_matching_tool_ledger" in str(exc)
+    else:
+        raise AssertionError("Expected chip creation to reject non-matching Governor authority")
+
+    assert not chip_root.exists()
 
 
 def test_preset_readmes_reference_chip_systems_and_relative_spark_repo() -> None:
@@ -154,6 +266,7 @@ def test_cli_chips_init_refusal_is_clean() -> None:
             "bad_score",
         ],
         cwd=repo_root,
+        env=_subprocess_env(repo_root),
         capture_output=True,
         text=True,
     )
@@ -164,6 +277,13 @@ def test_cli_chips_init_refusal_is_clean() -> None:
 
 
 def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    governor_path = tmp_path / "chip-create-governor.json"
+    governor_path.write_text(
+        json.dumps(_chip_create_governor_decision("domain-chip-bootstrap"), indent=2),
+        encoding="utf-8",
+    )
+
     result = subprocess.run(
         [
             sys.executable,
@@ -177,8 +297,11 @@ def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> No
             "bootstrap",
             "--metric-name",
             "bootstrap_score",
+            "--governor-decision",
+            str(governor_path),
         ],
-        cwd=Path(__file__).resolve().parents[1],
+        cwd=repo_root,
+        env=_subprocess_env(repo_root),
         capture_output=True,
         text=True,
     )
@@ -190,3 +313,34 @@ def test_cli_chips_init_returns_standalone_bootstrap_steps(tmp_path: Path) -> No
     assert payload["next_steps"][0] == f"cd {(tmp_path / 'bootstrap-chip').resolve()}"
     assert "git init" in payload["next_steps"]
     assert any("chips validate --config" in step for step in payload["next_steps"])
+    assert payload["authority"]["allowed"] is True
+    assert payload["authority"]["tool_name"] == CHIP_CREATE_TOOL_NAME
+
+
+def test_cli_chips_init_requires_governor_before_creating_target(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    chip_root = tmp_path / "bootstrap-chip"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spark_researcher.cli",
+            "chips",
+            "init",
+            "--path",
+            str(chip_root),
+            "--domain",
+            "bootstrap",
+            "--metric-name",
+            "bootstrap_score",
+        ],
+        cwd=repo_root,
+        env=_subprocess_env(repo_root),
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing_governor_decision" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not chip_root.exists()

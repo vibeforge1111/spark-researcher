@@ -15,7 +15,7 @@ from .config import CandidateTrial, MutationSpec, intent_policy, load_config, tr
 from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
-from .runner import locked_file, read_jsonl, run_once
+from .runner import locked_file, read_jsonl, run_authority_args_path, run_once
 from .trial_queue import append_queue_trials, merged_candidate_trials
 
 
@@ -634,11 +634,20 @@ def _run_pending_trials(
     max_iterations: int,
     discard_limit: int,
     dry_run: bool,
+    governor_decision: dict[str, Any] | None = None,
+    authority_args_path: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     for trial in pending[:max_iterations]:
-        record = run_once(config_path, command_name, trial=trial, dry_run=dry_run)
+        record = run_once(
+            config_path,
+            command_name,
+            trial=trial,
+            dry_run=dry_run,
+            governor_decision=governor_decision,
+            authority_args_path=authority_args_path,
+        )
         results.append(record)
         if record["verdict"] == "improved":
             consecutive_discards = 0
@@ -657,10 +666,12 @@ def run_autoloop(
     suggest_limit: int = 3,
     dry_run: bool = False,
     apply_suggestions: bool = True,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     history: list[dict[str, Any]] = []
     queued_packet: dict[str, Any] | None = None
     doctrine_only = _doctrine_only_mode()
+    authority_args_path = run_authority_args_path(config_path, command_name, mode="autoloop", rounds=rounds)
     for round_index in range(1, rounds + 1):
         config = load_config(config_path)
         config.candidate_trials = merged_candidate_trials(config_path, config=config)
@@ -705,6 +716,8 @@ def run_autoloop(
             max_iterations=config.guardrails.max_loop_iterations,
             discard_limit=config.guardrails.consecutive_discard_limit,
             dry_run=dry_run,
+            governor_decision=governor_decision,
+            authority_args_path=authority_args_path,
         )
 
         next_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
@@ -744,6 +757,7 @@ def run_continuous_autoloop(
     stop_file: Path | None = None,
     dry_run: bool = False,
     apply_suggestions: bool = True,
+    governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     passes: list[dict[str, Any]] = []
     runtime_root = resolve_runtime_root(config_path)
@@ -833,6 +847,7 @@ def run_continuous_autoloop(
                 suggest_limit=suggest_limit,
                 dry_run=dry_run,
                 apply_suggestions=apply_suggestions,
+                governor_decision=governor_decision,
             )
             artifact_after = _tracked_loop_artifacts(runtime_root)
             pass_finished_at = _now_iso()

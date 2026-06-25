@@ -496,7 +496,8 @@ def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     assert payload["insights"][0]["id"] == f"insight:{record['run_id']}"
     assert "benchmarkMetrics" not in payload["outcomes"][0]
     assert not Path(record["workspace_root"]).exists()
-    assert Path(record["log_path"]).exists()
+    # log_path is now stored relative to run_dir (absolute prefix redacted).
+    assert Path(record["run_dir"], record["log_path"]).exists()
     assert Path(record["run_dir"], "result.json").exists()
     assert record["authority"]["allowed"] is True
 

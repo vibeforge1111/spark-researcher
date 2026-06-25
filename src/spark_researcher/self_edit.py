@@ -340,6 +340,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=60,
     )
 
 
@@ -701,7 +702,11 @@ def apply_proposal(
     if not proposal_path.exists():
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
-    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        trace.finish(status="error", attributes={"error": f"Failed to parse proposal JSON: {exc}"})
+        raise ValueError(f"Corrupt or unreadable proposal file: {proposal_path}") from exc
     if governor_decision is None:
         if governor_decision_path is None:
             trace.finish(status="error", attributes={"error": "Self-edit apply requires GovernorDecisionV1 authority."})
@@ -709,7 +714,11 @@ def apply_proposal(
         if not governor_decision_path.exists():
             trace.finish(status="error", attributes={"error": f"GovernorDecisionV1 file not found: {governor_decision_path}"})
             raise FileNotFoundError(f"GovernorDecisionV1 file not found: {governor_decision_path}")
-        governor_decision = json.loads(governor_decision_path.read_text(encoding="utf-8"))
+        try:
+            governor_decision = json.loads(governor_decision_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            trace.finish(status="error", attributes={"error": f"Failed to parse governor decision JSON: {exc}"})
+            raise ValueError(f"Corrupt or unreadable governor decision file: {governor_decision_path}") from exc
     authorization, pre_execution_ledger = _validate_self_edit_apply_governor(governor_decision, proposal_id=proposal_id)
     authority_summary = {
         "schema_version": governor_decision.get("schema_version"),

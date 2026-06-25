@@ -346,7 +346,9 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def _git_output(repo_root: Path, *args: str) -> str:
     result = _git(repo_root, *args)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+        # Do not surface raw git stderr: it can embed absolute repo paths and
+        # other environment detail. Report only the failing subcommand.
+        raise RuntimeError(f"git {' '.join(args)} failed")
     return result.stdout.strip()
 
 

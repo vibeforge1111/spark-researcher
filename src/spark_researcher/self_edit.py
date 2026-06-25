@@ -469,10 +469,28 @@ def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path
     ]
 
 
+def _strip_whitespace(value: str) -> str:
+    return "".join(value.split())
+
+
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
+    # Match each blocked fragment two ways so it cannot be evaded by splitting
+    # it across argv tokens:
+    #   1. against the space-joined command (catches the literal fragment), and
+    #   2. against the whitespace-stripped command compared to the
+    #      whitespace-stripped fragment, so e.g. blocking "rm -rf" also catches
+    #      ["rm", "-rf"], ["rm", "-", "r", "f"], or ["rm","-r","-f"] — all of
+    #      which collapse to "rm-rf" once whitespace is removed.
     lowered = " ".join(parts).lower()
+    collapsed = _strip_whitespace(lowered)
     for fragment in blocked_fragments:
-        if fragment.lower() in lowered:
+        frag = fragment.lower()
+        frag_collapsed = _strip_whitespace(frag)
+        if not frag_collapsed:
+            # An empty/whitespace-only fragment can't meaningfully block a
+            # command; skip it instead of matching every command.
+            continue
+        if frag in lowered or frag_collapsed in collapsed:
             raise RuntimeError(f"Blocked self-edit command fragment detected: {fragment}")
 
 

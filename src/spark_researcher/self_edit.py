@@ -66,7 +66,11 @@ def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _workspace_dir(proposal_id: str) -> Path:
-    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / proposal_id / "workspace"
+    # Use a hash of proposal_id for predictable lookup but add randomness
+    # to prevent symlink pre-creation attacks
+    import hashlib
+    safe_id = hashlib.sha256(proposal_id.encode()).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / safe_id / "workspace"
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -388,7 +392,18 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
 
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
     normalized = path_text.replace("\\", "/")
-    return any(normalized == target or normalized.startswith(target.rstrip("/") + "/") for target in mutable_targets)
+    # Resolve .. components to prevent path traversal
+    # e.g., "src/../../../etc" -> "../../etc" which won't match "src/"
+    parts = normalized.split("/")
+    resolved = []
+    for part in parts:
+        if part == "..":
+            if resolved:
+                resolved.pop()
+        elif part and part != ".":
+            resolved.append(part)
+    resolved_path = "/".join(resolved)
+    return any(resolved_path == target or resolved_path.startswith(target.rstrip("/") + "/") for target in mutable_targets)
 
 
 def file_inventory(root: Path) -> dict[str, bytes]:

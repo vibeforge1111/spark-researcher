@@ -218,14 +218,20 @@ def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
     track_summaries = chip_result.get("track_summaries", [])
     if isinstance(track_summaries, list) and track_summaries:
         metrics["trackSummaries"] = track_summaries
+        def _safe_float(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value) if value is not None else default
+            except (ValueError, TypeError):
+                return default
+
         strongest = max(
             (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            key=lambda item: _safe_float(item.get("scenario_score_mean")),
             default=None,
         )
         weakest = min(
             (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            key=lambda item: _safe_float(item.get("scenario_score_mean")),
             default=None,
         )
         if isinstance(strongest, dict):

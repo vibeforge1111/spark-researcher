@@ -291,7 +291,8 @@ def _local_search_results(
         doc_meta = docs_by_path.get(str(path), {})
         kind = str(doc_meta.get("kind") or "unknown")
         memory_tier = str(doc_meta.get("memory_tier") or _default_memory_tier(kind))
-        title = str(doc_meta.get("title") or (text.splitlines()[0].lstrip("# ").strip() if text else path.stem))
+        _title_lines = text.splitlines() if text else []
+        title = str(doc_meta.get("title") or (_title_lines[0].lstrip("# ").strip() if _title_lines else path.stem))
         title_lower = title.lower()
         title_bonus = sum(4 for term in terms if term in title_lower)
         phrase_bonus = 6 if normalized_query.lower() in lowered else 0

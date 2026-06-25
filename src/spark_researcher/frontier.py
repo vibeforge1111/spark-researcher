@@ -68,7 +68,8 @@ def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str],
             continue
         rationale = re.search(r"Rationale\s*:\s*(.*)", block)
         hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
-        proposals.append({"candidate_summary": block.splitlines()[0][:160], "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
+        _lines = block.splitlines()
+        proposals.append({"candidate_summary": (_lines[0][:160] if _lines else ""), "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
     return {"proposals": proposals}
 def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     url = "https://html.duckduckgo.com/html/?" + urlencode({"q": query})

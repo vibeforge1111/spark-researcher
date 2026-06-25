@@ -241,6 +241,23 @@ def execute_advisory(
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
+    if not system_prompt.strip() and not user_prompt.strip():
+        trace.finish(status="error", attributes={"error": "empty_prompts", "skipped_subprocess": True})
+        return {
+            "model": model,
+            "returncode": -1,
+            "command": expanded,
+            "request_path": str(request_path),
+            "system_prompt_path": str(system_prompt_path),
+            "user_prompt_path": str(user_prompt_path),
+            "response_path": str(response_path),
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "response": {"raw_response": "", "skipped_reason": "empty_prompts"},
+            "skipped_reason": "empty_prompts",
+            "trace_id": trace.trace_id,
+            "trace_path": str(trace.path),
+        }
     with trace.span("subprocess", attributes={"command": expanded}):
         result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
     stdout_path.write_text(result.stdout, encoding="utf-8")

@@ -198,6 +198,47 @@ class AdapterExecTests(unittest.TestCase):
             self.assertEqual(result["response"], {"raw_response": "provider ok"})
             self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
 
+    def test_execute_advisory_short_circuits_on_empty_prompts(self) -> None:
+        # Both prompts blank/whitespace: the adapter must skip the subprocess
+        # entirely and report the skip rather than invoking the provider on an
+        # empty request.
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "   ", "user_prompt": ""}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch("spark_researcher.adapters.exec.subprocess.run") as run_mock:
+                result = execute_advisory(
+                    runtime_root,
+                    advisory=advisory,
+                    model="codex",
+                    command_override=["codex", "exec", "--json-out", "{response_path}"],
+                    dry_run=False,
+                    governor_decision=_governor_decision(),
+                )
+            run_mock.assert_not_called()
+            self.assertEqual(result["returncode"], -1)
+            self.assertEqual(result["skipped_reason"], "empty_prompts")
+            self.assertEqual(result["response"]["skipped_reason"], "empty_prompts")
+
+    def test_execute_advisory_runs_when_only_user_prompt_present(self) -> None:
+        # A non-empty user prompt (even with a blank system prompt) is a real
+        # request and must NOT be short-circuited.
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "", "user_prompt": "do the thing"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            completed = subprocess.CompletedProcess(args=["codex"], returncode=0, stdout="provider ok", stderr="")
+            with patch("spark_researcher.adapters.exec.subprocess.run", return_value=completed) as run_mock:
+                result = execute_advisory(
+                    runtime_root,
+                    advisory=advisory,
+                    model="codex",
+                    command_override=["codex", "exec", "--json-out", "{response_path}"],
+                    dry_run=False,
+                    governor_decision=_governor_decision(),
+                )
+            run_mock.assert_called_once()
+            self.assertEqual(result["returncode"], 0)
+            self.assertNotIn("skipped_reason", result)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,7 +18,7 @@ for HARNESS_CORE_SRC in (
 
 from spark_harness_core import HarnessKernel, evidence_ref
 from spark_researcher.adapters.base import adapter_request
-from spark_researcher.adapters.exec import _default_command, _expand_command_template, _resolve_command, execute_advisory, execution_status
+from spark_researcher.adapters.exec import _default_command, _expand_command_template, _resolve_command, execute_advisory, execution_public_summary, execution_status
 from spark_researcher.authority import ADVISORY_EXECUTE_ACTION_TYPE, ADVISORY_EXECUTE_CAPABILITY_ID, ADVISORY_EXECUTE_TOOL_NAME
 
 
@@ -121,6 +121,48 @@ class AdapterExecTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=False):
             command = _resolve_command("generic")
         self.assertEqual(command[:2], ["runner", "--input"])
+
+    def test_execution_status_redacts_configured_command_arguments(self) -> None:
+        env = {"SPARK_RESEARCHER_ADAPTER_CODEX_COMMAND": "codex --token SECRET_VALUE --json-out {response_path}"}
+        with patch.dict(os.environ, env, clear=False):
+            status = execution_status()
+
+        encoded = repr(status)
+        codex = next(item for item in status["providers"] if item["model"] == "codex")
+        self.assertNotIn("SECRET_VALUE", encoded)
+        self.assertNotIn("command", codex)
+        self.assertEqual(codex["executable"], "codex")
+        self.assertEqual(codex["arg_count"], 4)
+
+    def test_execution_public_summary_omits_provider_response_text(self) -> None:
+        result = {
+            "model": "codex",
+            "returncode": 0,
+            "status": "ok",
+            "decision": "approve",
+            "request_path": "/SECRET_HOME/private/request.json",
+            "response_path": "/SECRET_HOME/private/response.json",
+            "stdout_path": "/SECRET_HOME/private/stdout.log",
+            "stderr_path": "/SECRET_HOME/private/stderr.log",
+            "trace_id": "trace-1",
+            "trace_path": "/SECRET_HOME/private/trace.jsonl",
+            "citations": [{"title": "source"}],
+            "response": {"raw_response": "SECRET_PROVIDER_SENTINEL"},
+            "command": ["codex", "--token", "SECRET_COMMAND_SENTINEL"],
+        }
+
+        summary = execution_public_summary(result)
+        encoded = repr(summary)
+        self.assertTrue(summary["has_response"])
+        self.assertEqual(summary["status"], "ok")
+        self.assertEqual(summary["decision"], "approve")
+        self.assertEqual(summary["citation_count"], 1)
+        self.assertEqual(summary["artifacts"]["response"], {"present": True, "name": "response.json"})
+        self.assertNotIn("response", {key: value for key, value in summary.items() if key != "artifacts"})
+        self.assertNotIn("command", summary)
+        self.assertNotIn("SECRET_PROVIDER_SENTINEL", encoded)
+        self.assertNotIn("SECRET_COMMAND_SENTINEL", encoded)
+        self.assertNotIn("SECRET_HOME", encoded)
 
     def test_execution_status_marks_default_codex_source(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

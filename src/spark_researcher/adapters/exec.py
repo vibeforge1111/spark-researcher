@@ -159,7 +159,8 @@ def execution_status() -> dict[str, Any]:
                 "env_key": env_key,
                 "configured": bool(parts),
                 "source": source,
-                "command": parts,
+                "executable": _executable_name(executable) if executable else "",
+                "arg_count": max(len(parts) - 1, 0),
                 "executable_present": shutil.which(executable) is not None if executable else False,
                 "allowed": not validation_error,
                 "validation_error": validation_error,
@@ -172,6 +173,58 @@ def execution_status() -> dict[str, Any]:
             }
         )
     return {"providers": rows}
+
+
+def _artifact_name(value: Any) -> str:
+    text = str(value or "").strip()
+    return Path(text).name if text else ""
+
+
+def _public_artifacts(result: dict[str, Any], mapping: dict[str, str]) -> dict[str, dict[str, Any]]:
+    artifacts: dict[str, dict[str, Any]] = {}
+    for label, key in mapping.items():
+        if key not in result:
+            continue
+        artifacts[label] = {"present": bool(result.get(key)), "name": _artifact_name(result.get(key))}
+    return artifacts
+
+
+def execution_public_summary(result: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        key: result[key]
+        for key in (
+            "model",
+            "status",
+            "decision",
+            "dry_run",
+            "returncode",
+            "steps",
+            "research_attempted",
+            "research_result_count",
+            "trace_id",
+            "research_trace_id",
+        )
+        if key in result
+    }
+    citations = result.get("citations")
+    if isinstance(citations, list):
+        summary["citation_count"] = len(citations)
+    summary["has_response"] = bool(result.get("response"))
+    summary["artifacts"] = _public_artifacts(
+        result,
+        {
+            "request": "request_path",
+            "system_prompt": "system_prompt_path",
+            "user_prompt": "user_prompt_path",
+            "response": "response_path",
+            "stdout": "stdout_path",
+            "stderr": "stderr_path",
+            "trace": "trace_path",
+            "research_trace": "research_trace_path",
+            "research": "research_artifact_path",
+        },
+    )
+    return summary
 
 
 def execute_advisory(

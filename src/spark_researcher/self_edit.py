@@ -640,6 +640,43 @@ def propose(
     return proposal
 
 
+def _public_artifact_name(value: Any) -> str:
+    text = str(value or "").strip()
+    return Path(text).name if text else ""
+
+
+def proposal_public_summary(proposal: dict[str, Any]) -> dict[str, Any]:
+    blocked_changes = proposal.get("blocked_changes", [])
+    blocked_count = len(blocked_changes) if isinstance(blocked_changes, list) else 0
+    summary = {
+        key: proposal[key]
+        for key in (
+            "proposal_id",
+            "created_at",
+            "status",
+            "backend_profile",
+            "trace_id",
+            "mutable_targets",
+            "change_count",
+        )
+        if key in proposal
+    }
+    summary["blocked_change_count"] = blocked_count
+    summary["workspace_present"] = bool(proposal.get("workspace_root"))
+    summary["artifacts"] = {
+        label: {"present": bool(proposal.get(key)), "name": _public_artifact_name(proposal.get(key))}
+        for label, key in {
+            "request": "request_path",
+            "stdout": "stdout_path",
+            "stderr": "stderr_path",
+            "last_message": "last_message_path",
+            "trace": "trace_path",
+        }.items()
+        if key in proposal
+    }
+    return summary
+
+
 def review_proposal(
     config_path: Path,
     proposal_id: str,

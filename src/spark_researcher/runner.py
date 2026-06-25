@@ -258,7 +258,10 @@ def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
     parsed: dict[str, Any] = {}
     for name, spec in metrics.items():
         match = re.search(spec.pattern, text, re.MULTILINE)
-        parsed[name] = parse_metric_value(spec.kind, match.group(1)) if match else None
+        if match and match.lastindex and match.lastindex >= 1:
+            parsed[name] = parse_metric_value(spec.kind, match.group(1))
+        else:
+            parsed[name] = None
     return parsed
 
 

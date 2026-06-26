@@ -140,6 +140,26 @@ def test_working_memory_rejects_stale_memory_governor_binding(tmp_path: Path) ->
     assert not (memory_root(tmp_path) / "working.json").exists()
 
 
+def test_working_memory_rejects_uncanonical_governor_binding(tmp_path: Path) -> None:
+    decision = memory_governor_decision(working_memory_authority_refs(tmp_path))
+    decision["evidence"] = [
+        item
+        for item in decision["evidence"]
+        if item.get("source") != "issuer:spark-harness-core/governor"
+    ]
+
+    with pytest.raises(RuntimeError, match="canonical_governor_binding_missing"):
+        write_working_memory(
+            tmp_path,
+            kind="test",
+            focus="uncanonical authority",
+            status="blocked",
+            governor_decision=decision,
+        )
+
+    assert not (memory_root(tmp_path) / "working.json").exists()
+
+
 def test_working_memory_accepts_bound_memory_governor(tmp_path: Path) -> None:
     payload = write_working_memory(
         tmp_path,

@@ -10,6 +10,18 @@ function Import-DspyEnvFile {
             return
         }
         $name, $value = $_ -split '=', 2
+        if ($null -eq $name -or $null -eq $value) {
+            return
+        }
+        $name = $name.Trim()
+        $value = $value.Trim()
+        if ($value.Length -ge 2) {
+            $first = $value[0]
+            $last = $value[$value.Length - 1]
+            if (($first -eq '"' -and $last -eq '"') -or ($first -eq "'" -and $last -eq "'")) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+        }
         Set-Item -Path "Env:$name" -Value $value
     }
 }

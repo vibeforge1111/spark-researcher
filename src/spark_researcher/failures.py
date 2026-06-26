@@ -21,9 +21,15 @@ def failures_path(runtime_root: Path) -> Path:
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    # Lazy import to avoid a circular import: runner imports record_failure
+    # from this module at top level, so importing locked_file from runner at
+    # module load time would leave one of the two modules partially initialized.
+    from .runner import locked_file
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def record_failure(

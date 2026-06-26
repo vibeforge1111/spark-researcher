@@ -116,6 +116,22 @@ def _contains_string(payload: Any, needle: str) -> bool:
     return str(payload) == needle
 
 
+def governor_decision_has_canonical_binding(governor_decision: dict[str, Any] | None) -> bool:
+    if not isinstance(governor_decision, dict):
+        return False
+    evidence = governor_decision.get("evidence") if isinstance(governor_decision.get("evidence"), list) else []
+    sources_by_kind = {
+        str(item.get("kind") or ""): str(item.get("source") or "")
+        for item in evidence
+        if isinstance(item, dict)
+    }
+    return (
+        sources_by_kind.get("policy") == "issuer:spark-harness-core/governor"
+        and sources_by_kind.get("authority_binding_ref") == "provenance:spark-harness-core/authorization"
+        and sources_by_kind.get("runtime_state") == "current-binding:spark-researcher"
+    )
+
+
 def memory_authority_ref(kind: str, value: str | Path) -> str:
     return f"spark-researcher.memory.{kind}:{Path(value) if isinstance(value, Path) else value}"
 
@@ -177,6 +193,8 @@ def require_memory_write_authority(
                 "allowed": False,
                 "reason_codes": ["authority_binding_missing", *missing_refs],
             }
+    if verification.get("allowed") and not governor_decision_has_canonical_binding(governor_decision):
+        verification = {**verification, "allowed": False, "reason_codes": ["canonical_governor_binding_missing"]}
     if not verification.get("allowed"):
         reasons = [str(item) for item in verification.get("reason_codes", []) if str(item).strip()]
         reason_text = ", ".join(reasons) if reasons else "governor_authority_denied"

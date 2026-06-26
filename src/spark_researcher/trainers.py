@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+# Matches POSIX-style absolute paths and Windows drive paths so they can be
+# stripped from captured subprocess stderr before it is persisted to state.
+_ABS_PATH_RE = re.compile(r"(?:[A-Za-z]:\\|/)[^\s\"']+")
+
+
+def _redact_stderr_excerpt(stderr: str, *, limit: int = 400) -> str:
+    """Return a length-capped trainer stderr excerpt with absolute filesystem
+    paths redacted, so debugging signal is retained without leaking the
+    operator's directory layout into persisted trainer state."""
+    redacted = _ABS_PATH_RE.sub("<path>", stderr)
+    return redacted[:limit]
 
 from .config import TrainerSpec, load_config, resolve_project_root
 from .paths import resolve_runtime_root, trainers_root
@@ -122,7 +135,7 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
         "last_status": "ok" if process.returncode == 0 else "failed",
         "last_reason": reason,
         "stdout_excerpt": process.stdout[:400],
-        "stderr_excerpt": process.stderr[:400],
+        "stderr_excerpt": _redact_stderr_excerpt(process.stderr),
         "command": spec.compile_command,
     }
     write_state(state_path, updated)

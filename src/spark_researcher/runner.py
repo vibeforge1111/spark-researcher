@@ -96,6 +96,38 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _is_pid_running(pid: int) -> bool:
+    """Check if a process with the given PID is still running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        # EPERM means the process exists but is owned by another user.
+        return True
+
+
+def _read_lock_token(lock_path: Path) -> str | None:
+    """Return the raw PID token recorded in a lock file, or None if unreadable."""
+    try:
+        token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+    except OSError:
+        return None
+    return token or None
+
+
+def _lock_token_is_stale(token: str | None) -> bool:
+    """A lock token is stale when it is empty/invalid or its PID is dead."""
+    if not token:
+        return True
+    try:
+        pid = int(token.split()[0])
+    except (ValueError, IndexError):
+        return True
+    return not _is_pid_running(pid)
+
+
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     ensure_parent(path)
@@ -106,14 +138,21 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
         try:
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            if time.monotonic() >= deadline:
-                owner = None
+            # Recover a stale lock (holder process is dead / token invalid).
+            # Capture the token first, then re-read immediately before unlinking
+            # so we never delete a lock a different live process re-created
+            # between the staleness check and the unlink (TOCTOU double-acquire).
+            token = _read_lock_token(lock_path)
+            if _lock_token_is_stale(token):
                 try:
-                    owner = lock_path.read_text(encoding="utf-8", errors="ignore").strip()[:64] or None
-                except OSError:
-                    owner = None
-                suffix = f" (owner={owner})" if owner else ""
-                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
+                    if _read_lock_token(lock_path) == token:
+                        lock_path.unlink()
+                    continue
+                except FileNotFoundError:
+                    continue
+            if time.monotonic() >= deadline:
+                # Do not leak the lock path or holder PID into the error.
+                raise TimeoutError("Timed out waiting for file lock")
             time.sleep(0.05)
     try:
         os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
@@ -199,7 +238,7 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
         preview = {"cwd": str(cwd), "command": command}
         log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
         return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
     return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 
@@ -219,7 +258,10 @@ def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
     parsed: dict[str, Any] = {}
     for name, spec in metrics.items():
         match = re.search(spec.pattern, text, re.MULTILINE)
-        parsed[name] = parse_metric_value(spec.kind, match.group(1)) if match else None
+        if match and match.lastindex and match.lastindex >= 1:
+            parsed[name] = parse_metric_value(spec.kind, match.group(1))
+        else:
+            parsed[name] = None
     return parsed
 
 
@@ -359,6 +401,19 @@ def row_counts_as_discard(row: dict[str, Any]) -> bool:
     return str(row.get("verdict") or "") in {"regressed", "unknown"}
 
 
+def _relative_log_path(log_path: Path, run_dir: Path) -> str:
+    """Return the log path relative to run_dir, redacting the absolute prefix.
+
+    The absolute log path reveals the operator's home/filesystem layout. The
+    run record already stores ``run_dir`` so consumers can reconstruct the full
+    path via ``Path(record["run_dir"], record["log_path"])`` when needed.
+    """
+    try:
+        return str(log_path.relative_to(run_dir))
+    except ValueError:
+        return log_path.name
+
+
 def build_record(
     config: ProjectConfig,
     command_name: str,
@@ -391,7 +446,10 @@ def build_record(
         "cwd": command_result.cwd,
         "run_dir": str(run_dir),
         "workspace_root": str(run_dir / "workspace"),
-        "log_path": str(log_path),
+        # Store the log path relative to run_dir so consumers can still locate
+        # the log (run_dir is recorded above) without leaking the absolute,
+        # home-revealing filesystem path into the run record.
+        "log_path": _relative_log_path(log_path, run_dir),
         "metrics": metrics,
         "stdout_excerpt": command_result.stdout[:500],
         "stderr_excerpt": command_result.stderr[:500],
@@ -429,8 +487,14 @@ def _refresh_chip_working_memory(
     if isinstance(track_summaries, list) and track_summaries:
         scored_tracks = [item for item in track_summaries if isinstance(item, dict)]
         if scored_tracks:
-            best_track = max(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
-            weakest_track = min(scored_tracks, key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0))
+            def _safe_float(value: object, default: float = 0.0) -> float:
+                try:
+                    return float(value) if value is not None else default  # type: ignore[arg-type]
+                except (ValueError, TypeError):
+                    return default
+
+            best_track = max(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
+            weakest_track = min(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
     focus = (
         f"{config.project_name} state: benchmark-grounded doctrine is led by {operator_label} "
         f"on {benchmark_profile} at {config.eval_metric} {metric_value}. "

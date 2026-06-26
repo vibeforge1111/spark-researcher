@@ -627,9 +627,15 @@ def sync_memory(
     proposals_root = self_edit_root(runtime_root)
     if proposals_root.exists():
         for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
             review_path = proposal_path.parent / "review.json"
-            review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
+            try:
+                review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
+            except (json.JSONDecodeError, OSError):
+                review = None
             target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
             write_text(target, build_self_edit_doc(proposal, review))
             written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})

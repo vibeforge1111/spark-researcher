@@ -13,11 +13,20 @@ MAX_QUERY_LENGTH = 500
 RESERVED_COMMAND_TOKENS = {"brain", "search", "--json"}
 
 
+ALLOWED_RUVECTOR_EXECUTABLES = {"npx", "node", "python", "python3", "ruvector"}
+
 def _resolve_command() -> list[str]:
     command = os.environ.get("SPARK_RUVECTOR_COMMAND", DEFAULT_COMMAND).strip() or DEFAULT_COMMAND
     resolved = shlex.split(command)
     if not resolved:
         raise RuntimeError("RuVector command is empty.")
+    # Validate executable is in allowlist to prevent arbitrary command execution
+    executable = os.path.basename(resolved[0])
+    if executable not in ALLOWED_RUVECTOR_EXECUTABLES:
+        raise RuntimeError(
+            f"SPARK_RUVECTOR_COMMAND executable {resolved[0]!r} is not in "
+            f"allowlist: {sorted(ALLOWED_RUVECTOR_EXECUTABLES)}"
+        )
     reserved = RESERVED_COMMAND_TOKENS.intersection(token.lower() for token in resolved[1:])
     if reserved:
         raise RuntimeError("SPARK_RUVECTOR_COMMAND must be only the launcher prefix. Spark appends search subcommands.")

@@ -242,6 +242,34 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     assert payload["outcomes"][0]["context"]["scorecard"]["components"][0]["key"] == "outcome_score"
 
 
+def test_collective_payload_omits_raw_stderr_excerpt(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    _write_frontmatter_manifest(repo_root)
+    config_path = _write_config(repo_root)
+    runtime_root = repo_root
+    row = {
+        "run_id": "20260603-train",
+        "created_at": "2026-06-03T12:00:00+00:00",
+        "command_name": "train",
+        "status": "failed",
+        "returncode": 1,
+        "metric_name": "score",
+        "metric_value": 0.0,
+        "verdict": "unknown",
+        "stderr_excerpt": "SECRET_STDERR_SENTINEL",
+    }
+    ledger = ledger_path(runtime_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path))
+
+    payload = json.loads(spark_swarm_collective_payload_path(repo_root).read_text(encoding="utf-8"))
+    encoded = json.dumps(payload, sort_keys=True)
+    assert "SECRET_STDERR_SENTINEL" not in encoded
+    assert payload["runtimePulse"]["blocker"] == "Run failed with returncode 1."
+
+
 def test_frontmatter_manifest_drives_identity(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_frontmatter_manifest(repo_root)
@@ -496,7 +524,8 @@ def test_run_once_writes_spark_swarm_collective_payload(tmp_path: Path) -> None:
     assert payload["insights"][0]["id"] == f"insight:{record['run_id']}"
     assert "benchmarkMetrics" not in payload["outcomes"][0]
     assert not Path(record["workspace_root"]).exists()
-    assert Path(record["log_path"]).exists()
+    # log_path is now stored relative to run_dir (absolute prefix redacted).
+    assert Path(record["run_dir"], record["log_path"]).exists()
     assert Path(record["run_dir"], "result.json").exists()
     assert record["authority"]["allowed"] is True
 

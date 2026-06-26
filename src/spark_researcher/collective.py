@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 import argparse
@@ -15,6 +16,23 @@ from .paths import spark_swarm_collective_payload_path
 
 
 COLLECTIVE_COMMAND_TIMEOUT_SECONDS = 120
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any], **kwargs: Any) -> None:
+    """Write JSON atomically via temp-file + replace to avoid corruption on crash."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            json.dump(data, tmp_file, indent=2, sort_keys=True, **kwargs)
+            tmp_file.write("\n")
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -693,8 +711,7 @@ def write_spark_swarm_collective_payload(
 ) -> dict[str, Any]:
     payload = build_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
     path = spark_swarm_collective_payload_path(repo_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_write_json(path, payload)
     return {
         "payload_path": str(path),
         "workspace_id": payload.get("workspaceId") or None,
@@ -760,7 +777,7 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
     md_path = root / f"{capsule_id}.md"
     json_path = root / f"{capsule_id}.manifest.json"
     md_path.write_text(markdown + "\n", encoding="utf-8")
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_write_json(json_path, payload)
     return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
 
 
@@ -1044,7 +1061,7 @@ def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | N
         if label:
             entry["label"] = label
     payload["sources"] = sources
-    config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_write_json(config_path, payload)
     commands_run = []
     if rebuild:
         for script_name in ("build-collective-data.mjs", "build-graph-data.mjs"):

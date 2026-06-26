@@ -280,7 +280,10 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
         spec = lookup[name]
         target_path = (workspace_root / spec.file).resolve()
         text = target_path.read_text(encoding="utf-8-sig")
-        replacement = spec.template.format(value=value)
+        # Safe substitution: only replace the {value} placeholder.
+        # Using str.replace instead of str.format avoids leaking
+        # internal placeholders like {proposal_id} (CWE-134).
+        replacement = spec.template.replace("{value}", value)
         updated, count = re.subn(spec.pattern, replacement, text, count=1)
         if count != 1:
             raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")

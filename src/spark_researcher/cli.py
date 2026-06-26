@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .adapters import adapter_status, execute_advisory, execution_status
+from .adapters import adapter_status, execute_advisory, execution_public_summary, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
 from .candidates import append_suggestions, run_autoloop, run_continuous_autoloop, suggest_trials
@@ -24,7 +24,7 @@ from .paths import resolve_config_path, resolve_runtime_root
 from .presets import init_project, preset_names
 from .research import execute_with_research
 from .runner import ledger_summary, parse_overrides, run_loop, run_once
-from .self_edit import apply_proposal, backend_profiles, proposal_status, propose, review_proposal
+from .self_edit import apply_proposal, backend_profiles, proposal_public_summary, proposal_status, propose, review_proposal
 from .tracing import trace_status
 from .trial_queue import merged_candidate_trials
 from .trainers import run_all_trainers, trainer_status
@@ -84,7 +84,12 @@ def _require_config_file(config_path: Path) -> None:
 def _load_governor_decision(path: str | None) -> dict | None:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, FileNotFoundError) as exc:
+        raise SystemExit(f"Cannot read governor decision file {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid JSON in governor decision file {path}: {exc}") from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -366,7 +371,7 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
                 governor_decision=governor_decision,
                 memory_governor_decision=memory_governor_decision,
             )
-        print_json(result)
+        print_json(execution_public_summary(result))
         return
     if args.advisory_command == "log":
         print_json(
@@ -498,15 +503,14 @@ def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root
 
 def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
     if args.self_edit_command == "propose":
-        print_json(
-            propose(
-                config_path,
-                args.prompt,
-                dry_run=args.dry_run,
-                command_override=args.backend_command,
-                backend_profile=args.backend_profile,
-            )
+        proposal = propose(
+            config_path,
+            args.prompt,
+            dry_run=args.dry_run,
+            command_override=args.backend_command,
+            backend_profile=args.backend_profile,
         )
+        print_json(proposal_public_summary(proposal))
         return
     if args.self_edit_command == "profiles":
         print_json({"profiles": backend_profiles()})
@@ -650,6 +654,14 @@ def main() -> None:
         print_json(runner(config_path, args.project_command, **kwargs))
         return
     if args.action == "candidates":
+        if args.candidates_command is None:
+            print_json({
+                "ok": False,
+                "error_code": "candidates_subcommand_required",
+                "error": "`spark-researcher candidates` requires a subcommand.",
+                "next_action": "Run `spark-researcher candidates suggest --command <name>` or `spark-researcher candidates apply --command <name>`.",
+            })
+            raise SystemExit(2)
         if args.candidates_command == "apply":
             packet = suggest_trials(config_path, args.project_command, limit=args.limit)
             print_json({"suggestions": packet, "apply": append_suggestions(config_path, packet["suggestions"], command_name=args.project_command)})

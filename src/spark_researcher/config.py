@@ -343,10 +343,15 @@ def load_config(path: Path) -> ProjectConfig:
         )
         for name, spec in payload["commands"].items()
     }
-    metrics = {
-        name: MetricSpec(pattern=str(spec["pattern"]), kind=str(spec.get("kind", "float")))
-        for name, spec in payload["metrics"].items()
-    }
+    metrics = {}
+    for name, spec in payload["metrics"].items():
+        pattern_str = str(spec["pattern"])
+        compiled = re.compile(pattern_str)
+        if not compiled.groups:
+            raise ValueError(
+                f"Metric '{name}' pattern must contain at least one capture group: {pattern_str}"
+            )
+        metrics[name] = MetricSpec(pattern=pattern_str, kind=str(spec.get("kind", "float")))
     mutable_parameters = [
         MutationSpec(
             name=str(item["name"]),

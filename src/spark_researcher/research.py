@@ -32,10 +32,10 @@ INVISIBLE_UNICODE_CHARS = {
 }
 STORED_PROMPT_INJECTION_PATTERNS = (
     ("instruction-override", re.compile(r"\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+instructions\b", re.I)),
-    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b.*\b(override|replace|ignore)\b", re.I)),
+    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b[\s\S]{0,200}\b(override|replace|ignore)\b", re.I)),
     ("hidden-html", re.compile(r"<!--|<\s*(?:div|span)[^>]*(?:display\s*:\s*none|visibility\s*:\s*hidden)", re.I)),
-    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b.*\b(\.env|secret|token|api[_-]?key|password)\b", re.I)),
-    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b.*(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I)),
+    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b[\s\S]{0,200}\b(\.env|secret|token|api[_-]?key|password)\b", re.I)),
+    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b[\s\S]{0,200}(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I)),
     ("private-key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.I)),
 )
 

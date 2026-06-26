@@ -187,7 +187,7 @@ def _research_task(original_task: str, research: dict[str, Any]) -> str:
         "If the notes still do not support a strong answer, prefer `needs_verification` over bluffing.",
         "",
         "Original Task",
-        original_task,
+        sanitize_untrusted_research_text(original_task),
         "",
         f"Research Query: {research.get('query', '')}",
         f"Collected At: {research.get('collected_at', '')}",

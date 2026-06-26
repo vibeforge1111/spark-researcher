@@ -14,7 +14,7 @@ from .adapters import adapter_request
 from .authority import memory_authority_refs, require_advisory_execution_authority, require_memory_write_authority
 from .memory import episode_memory_authority_refs, record_episode, working_memory_authority_refs, write_working_memory
 from .paths import advisory_root
-from .safe_url import safe_urlopen
+from .safe_url import UnsafeURL, assert_safe_url, safe_urlopen
 from .tracing import start_trace
 from .verifier import execute_with_verifier
 
@@ -104,7 +104,12 @@ def _clean_result_url(url: str) -> str:
     parsed = urlparse(raw)
     query_url = parse_qs(parsed.query).get("uddg", [""])[0].strip()
     if query_url:
-        return unescape(query_url)
+        clean_url = unescape(query_url)
+        try:
+            assert_safe_url(clean_url)
+        except UnsafeURL:
+            return ""
+        return clean_url
     return raw
 
 

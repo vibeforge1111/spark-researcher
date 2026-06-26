@@ -68,7 +68,8 @@ def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str],
             continue
         rationale = re.search(r"Rationale\s*:\s*(.*)", block)
         hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
-        proposals.append({"candidate_summary": block.splitlines()[0][:160], "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
+        _lines = block.splitlines()
+        proposals.append({"candidate_summary": (_lines[0][:160] if _lines else ""), "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
     return {"proposals": proposals}
 def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     url = "https://html.duckduckgo.com/html/?" + urlencode({"q": query})
@@ -76,7 +77,10 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     try:
         with safe_urlopen(request, timeout=6) as response:
             page = response.read().decode("utf-8", errors="replace")
-    except (URLError, OSError, ValueError):
+    except (URLError, OSError, ValueError) as exc:
+        import logging
+
+        logging.warning("spark-researcher: web notes fetch failed for query %r: %s", query, exc)
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     notes = []

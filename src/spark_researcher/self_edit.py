@@ -15,6 +15,7 @@ from typing import Any
 
 from .config import load_config
 from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
+from .runner import locked_file
 from .tracing import start_trace
 
 
@@ -835,18 +836,25 @@ def apply_proposal(
     if git_mode in {"branch", "main"} and should_push and not _remote_exists(repo_root):
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
-    applied = []
-    for change in proposal.get("allowed_changes", []):
-        rel = change["path"]
-        source = workspace_root / rel
-        target = repo_root / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if change["status"] == "deleted":
-            if target.exists():
-                target.unlink()
-        else:
-            shutil.copyfile(source, target)
-        applied.append(rel)
+    # Hold a lock during the check-and-apply window to prevent TOCTOU races
+    # (CWE-367): another process could modify the worktree between the clean
+    # check above and the file copies below without this guard.
+    with locked_file(repo_root / ".self-edit"):
+        if run_git_status(repo_root):
+            trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
+            raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
+        applied = []
+        for change in proposal.get("allowed_changes", []):
+            rel = change["path"]
+            source = workspace_root / rel
+            target = repo_root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if change["status"] == "deleted":
+                if target.exists():
+                    target.unlink()
+            else:
+                shutil.copyfile(source, target)
+            applied.append(rel)
     proposal["status"] = "applied"
     proposal["applied_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
     commit_sha = None

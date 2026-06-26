@@ -48,11 +48,31 @@ def memory_governor_decision(binding_refs: tuple[str, ...] = ("memory:materializ
         )
         for ref in refs
     ]
+    canonical_binding_evidence = [
+        evidence_ref(
+            "policy",
+            "issuer:spark-harness-core/governor",
+            "Harness Core Governor issued this memory-write decision.",
+            confidence=1.0,
+        ),
+        evidence_ref(
+            "authority_binding_ref",
+            "provenance:spark-harness-core/authorization",
+            "Harness Core authorization provenance is bound to this decision.",
+            confidence=1.0,
+        ),
+        evidence_ref(
+            "runtime_state",
+            "current-binding:spark-researcher",
+            "Decision is bound to the current Spark Researcher runtime.",
+            confidence=1.0,
+        ),
+    ]
     envelope = kernel.create_envelope(
         selected_move="execute_action",
         intent_summary="Materialize Spark memory.",
         raw_turn_summary="Owner requested governed memory materialization.",
-        evidence=[fresh_intent, approval, *binding_evidence],
+        evidence=[fresh_intent, approval, *binding_evidence, *canonical_binding_evidence],
         proposed_actions=[action],
         authority_state="executable",
         risk_tier="low",

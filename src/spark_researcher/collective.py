@@ -218,14 +218,20 @@ def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
     track_summaries = chip_result.get("track_summaries", [])
     if isinstance(track_summaries, list) and track_summaries:
         metrics["trackSummaries"] = track_summaries
+        def _safe_float(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value) if value is not None else default
+            except (ValueError, TypeError):
+                return default
+
         strongest = max(
             (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            key=lambda item: _safe_float(item.get("scenario_score_mean")),
             default=None,
         )
         weakest = min(
             (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: float(item.get("scenario_score_mean", 0.0) or 0.0),
+            key=lambda item: _safe_float(item.get("scenario_score_mean")),
             default=None,
         )
         if isinstance(strongest, dict):
@@ -490,6 +496,17 @@ def _resolved_spark_swarm_workspace_id() -> str | None:
     return workspace_id or None
 
 
+def _runtime_blocker(record: dict[str, Any]) -> str | None:
+    status = str(record.get("status") or "").strip()
+    verdict = str(record.get("verdict") or "").strip()
+    if status and status != "ok":
+        returncode = record.get("returncode")
+        return f"Run failed with returncode {returncode}." if returncode is not None else "Run failed."
+    if verdict and verdict not in {"improved", "flat", "baseline", "near_best"}:
+        return f"Run verdict: {verdict}."
+    return None
+
+
 def build_spark_swarm_collective_payload(
     repo_root: Path,
     runtime_root: Path,
@@ -609,7 +626,7 @@ def build_spark_swarm_collective_payload(
             "passNumber": len(read_jsonl(ledger_path(runtime_root))),
             "stageKey": command_name,
             "stageLabel": command_name.replace("-", " ").title(),
-            "blocker": str(record.get("stderr_excerpt") or "").strip() or None,
+            "blocker": _runtime_blocker(record),
             "recommendation": "Review the newest insight and outcome." if improvement_like else "Review the contradiction and latest outcome.",
             "lastUpdatedAt": emitted_at,
         },

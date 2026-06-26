@@ -291,7 +291,8 @@ def _local_search_results(
         doc_meta = docs_by_path.get(str(path), {})
         kind = str(doc_meta.get("kind") or "unknown")
         memory_tier = str(doc_meta.get("memory_tier") or _default_memory_tier(kind))
-        title = str(doc_meta.get("title") or (text.splitlines()[0].lstrip("# ").strip() if text else path.stem))
+        _title_lines = text.splitlines() if text else []
+        title = str(doc_meta.get("title") or (_title_lines[0].lstrip("# ").strip() if _title_lines else path.stem))
         title_lower = title.lower()
         title_bonus = sum(4 for term in terms if term in title_lower)
         phrase_bonus = 6 if normalized_query.lower() in lowered else 0
@@ -593,11 +594,15 @@ def sync_memory(
     for path in docs_root.glob("*"):
         if path.is_file():
             _safe_unlink(path)
+    # Re-glob after deletion: collect any locked files that could not be removed.
+    # Seed used_paths with them so _unique_document_path never collides, and
+    # exclude them from the written manifest so stale content is not searched.
+    locked_files: set[Path] = {p for p in docs_root.glob("*") if p.is_file()}
     build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
     written: list[dict[str, str]] = []
     kind_counts: dict[str, int] = defaultdict(int)
     tier_counts: dict[str, int] = defaultdict(int)
-    used_paths: set[str] = set()
+    used_paths: set[str] = {str(p) for p in locked_files}
 
     for record in rows:
         path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)

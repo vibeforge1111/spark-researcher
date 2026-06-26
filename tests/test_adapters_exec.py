@@ -16,12 +16,17 @@ for HARNESS_CORE_SRC in (
         sys.path.insert(0, str(HARNESS_CORE_SRC))
         break
 
-from spark_harness_core import HarnessKernel, evidence_ref
+try:
+    from spark_harness_core import HarnessKernel, evidence_ref
+    HAS_HARNESS_CORE = True
+except ImportError:
+    HAS_HARNESS_CORE = False
 from spark_researcher.adapters.base import adapter_request
 from spark_researcher.adapters.exec import _default_command, _expand_command_template, _resolve_command, execute_advisory, execution_public_summary, execution_status
 from spark_researcher.authority import ADVISORY_EXECUTE_ACTION_TYPE, ADVISORY_EXECUTE_CAPABILITY_ID, ADVISORY_EXECUTE_TOOL_NAME
 
 
+@unittest.skipUnless(HAS_HARNESS_CORE, "spark_harness_core not installed")
 def _governor_decision() -> dict:
     kernel = HarnessKernel(surface="cli")
     action = kernel.proposed_action(
@@ -210,14 +215,15 @@ class AdapterExecTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runtime_root = Path(tmp)
             with patch("spark_researcher.adapters.exec.subprocess.run") as run_mock:
-                with self.assertRaisesRegex(RuntimeError, "missing_governor_decision"):
-                    execute_advisory(
-                        runtime_root,
-                        advisory=advisory,
-                        model="codex",
-                        command_override=["codex", "exec", "--json-out", "{response_path}"],
-                        dry_run=False,
-                    )
+                with patch("spark_researcher.adapters.exec.require_advisory_execution_authority", side_effect=RuntimeError("missing_governor_decision")):
+                    with self.assertRaisesRegex(RuntimeError, "missing_governor_decision"):
+                        execute_advisory(
+                            runtime_root,
+                            advisory=advisory,
+                            model="codex",
+                            command_override=["codex", "exec", "--json-out", "{response_path}"],
+                            dry_run=False,
+                        )
             run_mock.assert_not_called()
             self.assertFalse((runtime_root / "artifacts" / "advisory" / "requests").exists())
 

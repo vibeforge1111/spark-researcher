@@ -23,6 +23,7 @@ from spark_researcher.self_edit import (
     _proposal_path,
     _review_path,
     apply_proposal,
+    proposal_public_summary,
 )
 
 
@@ -125,6 +126,45 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
         encoding="utf-8",
     )
     return config_path, target
+
+
+def test_proposal_public_summary_omits_prompt_diffs_and_raw_agent_text() -> None:
+    proposal = {
+        "proposal_id": "proposal-private",
+        "created_at": "2026-06-03T00:00:00+00:00",
+        "status": "pending_review",
+        "prompt": "SECRET_PROMPT_SENTINEL",
+        "request_path": "/SECRET_HOME/private/request.md",
+        "workspace_root": "/SECRET_HOME/private/workspace",
+        "stdout_path": "/SECRET_HOME/private/stdout.log",
+        "stderr_path": "/SECRET_HOME/private/stderr.log",
+        "last_message_path": "/SECRET_HOME/private/agent-last-message.txt",
+        "backend_profile": "local",
+        "trace_id": "trace-1",
+        "trace_path": "/private/trace.jsonl",
+        "command": ["agent", "SECRET_COMMAND_SENTINEL"],
+        "mutable_targets": ["src"],
+        "change_count": 1,
+        "allowed_changes": [{"path": "src/example.py", "diff": "SECRET_DIFF_SENTINEL"}],
+        "blocked_changes": [{"path": "secrets.env", "diff": "SECRET_BLOCKED_DIFF_SENTINEL"}],
+    }
+
+    summary = proposal_public_summary(proposal)
+    encoded = repr(summary)
+    assert summary["blocked_change_count"] == 1
+    assert summary["change_count"] == 1
+    assert summary["workspace_present"] is True
+    assert summary["artifacts"]["request"] == {"present": True, "name": "request.md"}
+    assert "prompt" not in summary
+    assert "command" not in summary
+    assert "allowed_changes" not in summary
+    assert "blocked_changes" not in summary
+    assert "workspace_root" not in summary
+    assert "SECRET_PROMPT_SENTINEL" not in encoded
+    assert "SECRET_COMMAND_SENTINEL" not in encoded
+    assert "SECRET_DIFF_SENTINEL" not in encoded
+    assert "SECRET_BLOCKED_DIFF_SENTINEL" not in encoded
+    assert "SECRET_HOME" not in encoded
 
 
 def test_apply_proposal_checks_remote_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

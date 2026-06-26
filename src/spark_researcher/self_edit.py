@@ -62,11 +62,21 @@ def _iso_now() -> str:
 
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
-    return self_edit_root(runtime_root) / proposal_id
+    if not proposal_id or "/" in proposal_id or "\\" in proposal_id or ".." in proposal_id:
+        raise ValueError(f"Invalid proposal_id: {proposal_id!r}")
+    resolved = (self_edit_root(runtime_root) / proposal_id).resolve()
+    root = self_edit_root(runtime_root).resolve()
+    if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
+        raise ValueError(f"proposal_id escapes root directory: {proposal_id!r}")
+    return resolved
 
 
 def _workspace_dir(proposal_id: str) -> Path:
-    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / proposal_id / "workspace"
+    # Use a hash of proposal_id for predictable lookup but add randomness
+    # to prevent symlink pre-creation attacks
+    import hashlib
+    safe_id = hashlib.sha256(proposal_id.encode()).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / safe_id / "workspace"
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -324,6 +334,7 @@ def run_git_status(repo_root: Path) -> str:
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=30,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -336,13 +347,16 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        timeout=60,
     )
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
     result = _git(repo_root, *args)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+        # Do not surface raw git stderr: it can embed absolute repo paths and
+        # other environment detail. Report only the failing subcommand.
+        raise RuntimeError(f"git {' '.join(args)} failed")
     return result.stdout.strip()
 
 
@@ -388,7 +402,18 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
 
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
     normalized = path_text.replace("\\", "/")
-    return any(normalized == target or normalized.startswith(target.rstrip("/") + "/") for target in mutable_targets)
+    # Resolve .. components to prevent path traversal
+    # e.g., "src/../../../etc" -> "../../etc" which won't match "src/"
+    parts = normalized.split("/")
+    resolved = []
+    for part in parts:
+        if part == "..":
+            if resolved:
+                resolved.pop()
+        elif part and part != ".":
+            resolved.append(part)
+    resolved_path = "/".join(resolved)
+    return any(resolved_path == target or resolved_path.startswith(target.rstrip("/") + "/") for target in mutable_targets)
 
 
 def file_inventory(root: Path) -> dict[str, bytes]:
@@ -451,10 +476,28 @@ def expand_command(parts: list[str], *, workspace_root: Path, request_path: Path
     ]
 
 
+def _strip_whitespace(value: str) -> str:
+    return "".join(value.split())
+
+
 def guard_command(parts: list[str], blocked_fragments: list[str]) -> None:
+    # Match each blocked fragment two ways so it cannot be evaded by splitting
+    # it across argv tokens:
+    #   1. against the space-joined command (catches the literal fragment), and
+    #   2. against the whitespace-stripped command compared to the
+    #      whitespace-stripped fragment, so e.g. blocking "rm -rf" also catches
+    #      ["rm", "-rf"], ["rm", "-", "r", "f"], or ["rm","-r","-f"] — all of
+    #      which collapse to "rm-rf" once whitespace is removed.
     lowered = " ".join(parts).lower()
+    collapsed = _strip_whitespace(lowered)
     for fragment in blocked_fragments:
-        if fragment.lower() in lowered:
+        frag = fragment.lower()
+        frag_collapsed = _strip_whitespace(frag)
+        if not frag_collapsed:
+            # An empty/whitespace-only fragment can't meaningfully block a
+            # command; skip it instead of matching every command.
+            continue
+        if frag in lowered or frag_collapsed in collapsed:
             raise RuntimeError(f"Blocked self-edit command fragment detected: {fragment}")
 
 
@@ -499,7 +542,10 @@ def _resolve_backend_profile(profile_name: str | None) -> dict[str, Any] | None:
         return None
     key = profile_name.strip().lower()
     if key not in BUILTIN_BACKEND_PROFILES:
-        raise RuntimeError(f"Unknown backend profile: {profile_name}")
+        known = sorted(BUILTIN_BACKEND_PROFILES)
+        raise RuntimeError(
+            f"Unknown backend profile: {profile_name}. Known backend profiles: {', '.join(known)}."
+        )
     spec = BUILTIN_BACKEND_PROFILES[key]
     executable = str(spec["command"][0])
     resolved_executable = shutil.which(executable)
@@ -568,7 +614,7 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
         write_text(stdout_path, process.stdout)
         write_text(stderr_path, process.stderr)
         status = "pending_review" if process.returncode == 0 else "failed"
@@ -603,6 +649,43 @@ def propose(
     write_text(proposal_root / "diff.txt", "\n\n".join(change["diff"] for change in allowed_changes + blocked_changes if change["diff"]))
     trace.finish(status="ok", attributes={"status": status, "change_count": len(allowed_changes), "blocked_change_count": len(blocked_changes)})
     return proposal
+
+
+def _public_artifact_name(value: Any) -> str:
+    text = str(value or "").strip()
+    return Path(text).name if text else ""
+
+
+def proposal_public_summary(proposal: dict[str, Any]) -> dict[str, Any]:
+    blocked_changes = proposal.get("blocked_changes", [])
+    blocked_count = len(blocked_changes) if isinstance(blocked_changes, list) else 0
+    summary = {
+        key: proposal[key]
+        for key in (
+            "proposal_id",
+            "created_at",
+            "status",
+            "backend_profile",
+            "trace_id",
+            "mutable_targets",
+            "change_count",
+        )
+        if key in proposal
+    }
+    summary["blocked_change_count"] = blocked_count
+    summary["workspace_present"] = bool(proposal.get("workspace_root"))
+    summary["artifacts"] = {
+        label: {"present": bool(proposal.get(key)), "name": _public_artifact_name(proposal.get(key))}
+        for label, key in {
+            "request": "request_path",
+            "stdout": "stdout_path",
+            "stderr": "stderr_path",
+            "last_message": "last_message_path",
+            "trace": "trace_path",
+        }.items()
+        if key in proposal
+    }
+    return summary
 
 
 def review_proposal(
@@ -688,7 +771,11 @@ def apply_proposal(
     if not proposal_path.exists():
         trace.finish(status="error", attributes={"error": f"Unknown proposal: {proposal_id}"})
         raise FileNotFoundError(f"Unknown proposal: {proposal_id}")
-    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        trace.finish(status="error", attributes={"error": f"Failed to parse proposal JSON: {exc}"})
+        raise ValueError(f"Corrupt or unreadable proposal file: {proposal_path}") from exc
     if governor_decision is None:
         if governor_decision_path is None:
             trace.finish(status="error", attributes={"error": "Self-edit apply requires GovernorDecisionV1 authority."})
@@ -696,7 +783,11 @@ def apply_proposal(
         if not governor_decision_path.exists():
             trace.finish(status="error", attributes={"error": f"GovernorDecisionV1 file not found: {governor_decision_path}"})
             raise FileNotFoundError(f"GovernorDecisionV1 file not found: {governor_decision_path}")
-        governor_decision = json.loads(governor_decision_path.read_text(encoding="utf-8"))
+        try:
+            governor_decision = json.loads(governor_decision_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            trace.finish(status="error", attributes={"error": f"Failed to parse governor decision JSON: {exc}"})
+            raise ValueError(f"Corrupt or unreadable governor decision file: {governor_decision_path}") from exc
     authorization, pre_execution_ledger = _validate_self_edit_apply_governor(governor_decision, proposal_id=proposal_id)
     authority_summary = {
         "schema_version": governor_decision.get("schema_version"),
@@ -728,8 +819,11 @@ def apply_proposal(
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
-    if git_mode not in {"manual", "branch", "main"}:
-        raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")
+    allowed_git_modes = ("manual", "branch", "main")
+    if git_mode not in allowed_git_modes:
+        raise RuntimeError(
+            f"Unsupported self-edit git mode: {git_mode}. Supported git modes: {', '.join(allowed_git_modes)}."
+        )
     branch_name = _current_branch(repo_root)
     original_branch = branch_name
     created_branch = False

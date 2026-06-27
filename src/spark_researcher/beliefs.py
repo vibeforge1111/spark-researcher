@@ -328,7 +328,10 @@ def build_beliefs(
             review_path = proposal_path.parent / "review.json"
             if not review_path.exists():
                 continue
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ValueError("Invalid JSON (beliefs.py)") from exc
             review = json.loads(review_path.read_text(encoding="utf-8"))
             if review.get("decision") != "approve":
                 continue

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -20,6 +21,9 @@ from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, m
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -452,8 +456,13 @@ def build_record(
         "log_path": _relative_log_path(log_path, run_dir),
         "metrics": metrics,
         "stdout_excerpt": command_result.stdout[:500],
-        "stderr_excerpt": command_result.stderr[:500],
     }
+    if command_result.stderr:
+        _logger.warning(
+            "run %s stderr: %s",
+            run_dir.name if run_dir else "unknown",
+            command_result.stderr,
+        )
     if chip_result:
         record["chip_result"] = chip_result
     return record

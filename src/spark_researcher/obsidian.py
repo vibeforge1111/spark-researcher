@@ -429,7 +429,10 @@ def build_vault(
             page_path = str(item.get("path") or "").strip().replace("\\", "/")
             if not page_path:
                 continue
-            write_text(output_root / page_path, str(item.get("content") or ""))
+            resolved = (output_root / page_path).resolve()
+            if not str(resolved).startswith(str(output_root.resolve())):
+                continue
+            write_text(resolved, str(item.get("content") or ""))
             domain_pages.append(page_path.removesuffix(".md"))
     copy_docs(repo_root, output_root / "06-References")
     copy_runtime_beliefs(runtime_root, output_root / "06-References" / "beliefs")

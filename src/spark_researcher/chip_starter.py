@@ -834,7 +834,10 @@ def _xcontent_cli(package_name: str) -> str:
         BASELINE = {{"engagement_quality_score": 0.32, "useful_reach_score": 0.28, "grok_relevance_score": 0.18, "verdict_confidence": 0.50}}
 
         def _load(path: str) -> dict[str, Any]:
-            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+                        try:
+                            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+                        except json.JSONDecodeError:
+                            return {}
 
         def _write(path: str, payload: dict[str, Any]) -> None:
             Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")

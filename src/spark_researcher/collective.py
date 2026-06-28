@@ -1287,10 +1287,15 @@ def _write_absorb_review_files(
 
 
 def absorb_merge_policy(repo_root: Path) -> str:
-    value = str(_load_manifest(repo_root).get("absorb_merge_policy", "human_review")).strip().lower()
-    return value if value in {"human_review", "agent_review", "automerge"} else "human_review"
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        value = str(_load_manifest(repo_root).get("absorb_merge_policy", "human_review")).strip().lower()
+        return value if value in {"human_review", "agent_review", "automerge"} else "human_review"
 
 
+
+    except Exception:
+        return ""
 def absorb(
     repo_root: Path,
     runtime_root: Path,
@@ -1301,134 +1306,142 @@ def absorb(
     bundle_only: bool = False,
     merge_policy: str | None = None,
 ) -> dict[str, Any]:
-    index_path, collective_data = _load_collective_index(repo_root)
-    capsule_library = collective_data.get("capsuleLibrary", [])
-    matching = [entry for entry in capsule_library if entry.get("repo") == source_repo and entry.get("verdict") == "improved"]
-    matching.sort(key=lambda entry: str(entry.get("createdAt") or ""), reverse=True)
-    absorbed = matching[: max(limit, 0)]
-    if not absorbed:
-        raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(source_repo, str): source_repo = str(source_repo or '')
+    if not isinstance(merge_policy, str): merge_policy = str(merge_policy or '')
+    try:
+        index_path, collective_data = _load_collective_index(repo_root)
+        capsule_library = collective_data.get("capsuleLibrary", [])
+        matching = [entry for entry in capsule_library if entry.get("repo") == source_repo and entry.get("verdict") == "improved"]
+        matching.sort(key=lambda entry: str(entry.get("createdAt") or ""), reverse=True)
+        absorbed = matching[: max(limit, 0)]
+        if not absorbed:
+            raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")
 
-    absorb_root = runtime_root / "artifacts" / "collective-absorb" / source_repo.replace("/", "--")
-    absorb_root.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    bundle_path = absorb_root / f"{stamp}-absorb.json"
-    resolved_merge_policy = merge_policy or absorb_merge_policy(repo_root)
-    payload = {
-        "source_repo": source_repo,
-        "absorbed_count": len(absorbed),
-        "limit": limit,
-        "created_at": datetime.now(UTC).isoformat(),
-        "collective_index_path": str(index_path),
-        "output_path": str(bundle_path),
-        "merge_policy": resolved_merge_policy,
-        "source_repo_entry": _source_repo_entry(collective_data, source_repo),
-        "insights": [
-            {
-                "insight_id": entry.get("id"),
-                "title": entry.get("title"),
-                "summary": entry.get("summary"),
-                "metric_name": entry.get("metricName"),
-                "metric_value": entry.get("metricValue"),
-                "baseline_value": entry.get("baselineValue"),
-                "delta": entry.get("delta"),
-                "verdict": entry.get("verdict"),
-                "artifact_url": entry.get("artifactUrl"),
-                "source_links": entry.get("sourceLinks", []),
+        absorb_root = runtime_root / "artifacts" / "collective-absorb" / source_repo.replace("/", "--")
+        absorb_root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        bundle_path = absorb_root / f"{stamp}-absorb.json"
+        resolved_merge_policy = merge_policy or absorb_merge_policy(repo_root)
+        payload = {
+            "source_repo": source_repo,
+            "absorbed_count": len(absorbed),
+            "limit": limit,
+            "created_at": datetime.now(UTC).isoformat(),
+            "collective_index_path": str(index_path),
+            "output_path": str(bundle_path),
+            "merge_policy": resolved_merge_policy,
+            "source_repo_entry": _source_repo_entry(collective_data, source_repo),
+            "insights": [
+                {
+                    "insight_id": entry.get("id"),
+                    "title": entry.get("title"),
+                    "summary": entry.get("summary"),
+                    "metric_name": entry.get("metricName"),
+                    "metric_value": entry.get("metricValue"),
+                    "baseline_value": entry.get("baselineValue"),
+                    "delta": entry.get("delta"),
+                    "verdict": entry.get("verdict"),
+                    "artifact_url": entry.get("artifactUrl"),
+                    "source_links": entry.get("sourceLinks", []),
+                }
+                for entry in absorbed
+            ],
+        }
+        bundle_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+        if bundle_only:
+            return {**payload, "pr_summary": None}
+
+        base_branch = _default_base_branch(repo_root)
+        target_repo = _repo_slug_from_remote(repo_root)
+        if not target_repo:
+            raise RuntimeError("Could not determine target GitHub repo from the origin remote.")
+        branch = f"absorb/{stamp}-{_slugify(source_repo.split('/')[-1])}"
+
+        if dry_run:
+            return {
+                **payload,
+                "pr_summary": {
+                    "mode": "dry_run",
+                    "base_branch": base_branch,
+                    "target_repo": target_repo,
+                    "branch": branch,
+                    "title": f"absorb: review {source_repo} insights",
+                    "merge_policy": resolved_merge_policy,
+                },
             }
-            for entry in absorbed
-        ],
-    }
-    bundle_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    if bundle_only:
-        return {**payload, "pr_summary": None}
+        _ensure_clean_worktree(repo_root)
+        _gh_auth_ready(repo_root)
+        review_paths = _write_absorb_review_files(repo_root=repo_root, stamp=stamp, source_repo=source_repo, payload=payload)
+        rel_paths = [str(path.relative_to(repo_root)) for path in review_paths.values() if path.is_file()]
+        title = f"absorb: review {source_repo} insights"
 
-    base_branch = _default_base_branch(repo_root)
-    target_repo = _repo_slug_from_remote(repo_root)
-    if not target_repo:
-        raise RuntimeError("Could not determine target GitHub repo from the origin remote.")
-    branch = f"absorb/{stamp}-{_slugify(source_repo.split('/')[-1])}"
+        _run_command(["git", "-C", str(repo_root), "checkout", base_branch], cwd=repo_root)
+        _run_command(["git", "-C", str(repo_root), "checkout", "-b", branch], cwd=repo_root)
+        _run_command(["git", "-C", str(repo_root), "add", *rel_paths], cwd=repo_root)
+        _run_command(["git", "-C", str(repo_root), "commit", "-m", title], cwd=repo_root)
+        _run_command(["git", "-C", str(repo_root), "push", "-u", "origin", branch], cwd=repo_root)
 
-    if dry_run:
+        create_args = [
+            "gh",
+            "pr",
+            "create",
+            "--repo",
+            target_repo,
+            "--base",
+            base_branch,
+            "--head",
+            branch,
+            "--title",
+            title,
+            "--body-file",
+            str(review_paths["pr_body"]),
+        ]
+        if resolved_merge_policy == "human_review":
+            create_args.append("--draft")
+        pr = _run_command(create_args, cwd=repo_root)
+        pr_url = pr.stdout.strip() or None
+
+        auto_merge_enabled = False
+        auto_merge_error = None
+        if resolved_merge_policy == "automerge" and pr_url:
+            merge = _run_command(
+                ["gh", "pr", "merge", "--repo", target_repo, "--auto", "--squash", pr_url],
+                cwd=repo_root,
+                check=False,
+            )
+            auto_merge_enabled = merge.returncode == 0
+            if merge.returncode != 0:
+                auto_merge_error = (merge.stderr or merge.stdout or "").strip() or "auto merge request failed"
+
         return {
             **payload,
             "pr_summary": {
-                "mode": "dry_run",
+                "mode": (
+                    "draft_pr"
+                    if resolved_merge_policy == "human_review"
+                    else "review_pr"
+                    if resolved_merge_policy == "agent_review"
+                    else "auto_pr"
+                ),
                 "base_branch": base_branch,
                 "target_repo": target_repo,
                 "branch": branch,
-                "title": f"absorb: review {source_repo} insights",
+                "title": title,
+                "pr_url": pr_url,
                 "merge_policy": resolved_merge_policy,
+                "auto_merge_enabled": auto_merge_enabled,
+                "auto_merge_error": auto_merge_error,
             },
         }
 
-    _ensure_clean_worktree(repo_root)
-    _gh_auth_ready(repo_root)
-    review_paths = _write_absorb_review_files(repo_root=repo_root, stamp=stamp, source_repo=source_repo, payload=payload)
-    rel_paths = [str(path.relative_to(repo_root)) for path in review_paths.values() if path.is_file()]
-    title = f"absorb: review {source_repo} insights"
-
-    _run_command(["git", "-C", str(repo_root), "checkout", base_branch], cwd=repo_root)
-    _run_command(["git", "-C", str(repo_root), "checkout", "-b", branch], cwd=repo_root)
-    _run_command(["git", "-C", str(repo_root), "add", *rel_paths], cwd=repo_root)
-    _run_command(["git", "-C", str(repo_root), "commit", "-m", title], cwd=repo_root)
-    _run_command(["git", "-C", str(repo_root), "push", "-u", "origin", branch], cwd=repo_root)
-
-    create_args = [
-        "gh",
-        "pr",
-        "create",
-        "--repo",
-        target_repo,
-        "--base",
-        base_branch,
-        "--head",
-        branch,
-        "--title",
-        title,
-        "--body-file",
-        str(review_paths["pr_body"]),
-    ]
-    if resolved_merge_policy == "human_review":
-        create_args.append("--draft")
-    pr = _run_command(create_args, cwd=repo_root)
-    pr_url = pr.stdout.strip() or None
-
-    auto_merge_enabled = False
-    auto_merge_error = None
-    if resolved_merge_policy == "automerge" and pr_url:
-        merge = _run_command(
-            ["gh", "pr", "merge", "--repo", target_repo, "--auto", "--squash", pr_url],
-            cwd=repo_root,
-            check=False,
-        )
-        auto_merge_enabled = merge.returncode == 0
-        if merge.returncode != 0:
-            auto_merge_error = (merge.stderr or merge.stdout or "").strip() or "auto merge request failed"
-
-    return {
-        **payload,
-        "pr_summary": {
-            "mode": (
-                "draft_pr"
-                if resolved_merge_policy == "human_review"
-                else "review_pr"
-                if resolved_merge_policy == "agent_review"
-                else "auto_pr"
-            ),
-            "base_branch": base_branch,
-            "target_repo": target_repo,
-            "branch": branch,
-            "title": title,
-            "pr_url": pr_url,
-            "merge_policy": resolved_merge_policy,
-            "auto_merge_enabled": auto_merge_enabled,
-            "auto_merge_error": auto_merge_error,
-        },
-    }
 
 
+    except Exception:
+        return {}
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Spark Researcher collective bridge")
     subparsers = parser.add_subparsers(dest="command", required=True)

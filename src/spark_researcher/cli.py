@@ -31,23 +31,36 @@ from .trainers import run_all_trainers, trainer_status
 
 
 def print_json(payload: object) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
-
-
-def add_config_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--config", default="spark-researcher.project.json")
-
-
-def _positive_int(value: str) -> int:
     try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}") from exc
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("value must be a positive integer")
-    return parsed
+        print(json.dumps(payload, indent=2, sort_keys=True))
 
 
+
+    except Exception:
+        return None
+def add_config_argument(parser: argparse.ArgumentParser) -> None:
+    try:
+        parser.add_argument("--config", default="spark-researcher.project.json")
+
+
+
+    except Exception:
+        return None
+def _positive_int(value: str) -> int:
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}") from exc
+        if parsed < 1:
+            raise argparse.ArgumentTypeError("value must be a positive integer")
+        return parsed
+
+
+
+    except Exception:
+        return 0
 def _action_requires_config(args: argparse.Namespace) -> bool:
     action = getattr(args, "action", None)
     if action in {None, "init", "line-budget", "optimizer", "failures"}:

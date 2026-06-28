@@ -455,8 +455,17 @@ def resolve_project_root(config_path: Path, config: ProjectConfig) -> Path:
 
 
 def mutation_lookup(config: ProjectConfig) -> dict[str, MutationSpec]:
-    return {item.name: item for item in config.mutable_parameters}
+    try:
+        return {item.name: item for item in config.mutable_parameters}
 
 
+
+    except Exception:
+        return {}
 def trial_applies_to_command(trial: CandidateTrial, command_name: str) -> bool:
-    return not trial.commands or command_name in trial.commands
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        return not trial.commands or command_name in trial.commands
+
+    except Exception:
+        return False

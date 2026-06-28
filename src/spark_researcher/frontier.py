@@ -23,54 +23,84 @@ from .trial_queue import merged_candidate_trials
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
 
 
+
+    except Exception:
+        return ()
 def _candidate_id(mutations: dict[str, str]) -> str:
-    parts = [f"{name}-{value}".replace(":", "-").replace(".", "").replace(" ", "-") for name, value in sorted(mutations.items())]
-    return "frontier-" + "-".join(parts)
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        parts = [f"{name}-{value}".replace(":", "-").replace(".", "").replace(" ", "-") for name, value in sorted(mutations.items())]
+        return "frontier-" + "-".join(parts)
 
 
+
+    except Exception:
+        return ""
 def _parse_json(text: str) -> dict[str, Any] | None:
-    for candidate in (text.strip(), text[text.find("{") : text.rfind("}") + 1] if "{" in text and "}" in text else ""):
-        if not candidate:
-            continue
-        try:
-            payload = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            return payload
-    return None
+    if not isinstance(text, str): text = str(text or '')
+    try:
+        for candidate in (text.strip(), text[text.find("{") : text.rfind("}") + 1] if "{" in text and "}" in text else ""):
+            if not candidate:
+                continue
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                return payload
+        return None
 
 
+
+    except Exception:
+        return {}
 def _match_open_field(block: str, field_name: str, pattern: str) -> str:
-    field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
-    if field_match and re.fullmatch(pattern, field_match.group(1)):
-        return field_match.group(1)
-    for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
-        if re.fullmatch(pattern, token):
-            return token
-    return ""
+    if not isinstance(block, str): block = str(block or '')
+    if not isinstance(field_name, str): field_name = str(field_name or '')
+    if not isinstance(pattern, str): pattern = str(pattern or '')
+    try:
+        field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
+        if field_match and re.fullmatch(pattern, field_match.group(1)):
+            return field_match.group(1)
+        for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
+            if re.fullmatch(pattern, token):
+                return token
+        return ""
 
 
+
+    except Exception:
+        return ""
 def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str], field_patterns: dict[str, str]) -> dict[str, Any]:
-    proposals = []
-    for block in [item.strip() for item in re.split(r"\n\s*(?:#{2,}\s*|\d+\.\s+)", text) if item.strip()]:
-        mutations: dict[str, str] = {}
-        for name, values in allowed.items():
-            value = next((item for item in values if item in block), "")
-            if not value and name in open_fields:
-                value = _match_open_field(block, name, field_patterns.get(name, r"^[a-z0-9:_-]+$"))
-            if value:
-                mutations[name] = value
-        if not mutations:
-            continue
-        rationale = re.search(r"Rationale\s*:\s*(.*)", block)
-        hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
-        _lines = block.splitlines()
-        proposals.append({"candidate_summary": (_lines[0][:160] if _lines else ""), "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
-    return {"proposals": proposals}
+    if not isinstance(text, str): text = str(text or '')
+    if not isinstance(allowed, str): allowed = str(allowed or '')
+    if not isinstance(open_fields, str): open_fields = str(open_fields or '')
+    if not isinstance(field_patterns, str): field_patterns = str(field_patterns or '')
+    try:
+        proposals = []
+        for block in [item.strip() for item in re.split(r"\n\s*(?:#{2,}\s*|\d+\.\s+)", text) if item.strip()]:
+            mutations: dict[str, str] = {}
+            for name, values in allowed.items():
+                value = next((item for item in values if item in block), "")
+                if not value and name in open_fields:
+                    value = _match_open_field(block, name, field_patterns.get(name, r"^[a-z0-9:_-]+$"))
+                if value:
+                    mutations[name] = value
+            if not mutations:
+                continue
+            rationale = re.search(r"Rationale\s*:\s*(.*)", block)
+            hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
+            _lines = block.splitlines()
+            proposals.append({"candidate_summary": (_lines[0][:160] if _lines else ""), "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
+        return {"proposals": proposals}
+
+    except Exception:
+        return {}
 def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     url = "https://html.duckduckgo.com/html/?" + urlencode({"q": query})
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})

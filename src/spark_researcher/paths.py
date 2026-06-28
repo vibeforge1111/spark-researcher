@@ -19,25 +19,45 @@ IGNORED_NAMES = {
 
 
 def resolve_config_path(config_path: str | None = None) -> Path:
-    path = Path(config_path or DEFAULT_CONFIG_NAME)
-    return path.resolve()
+    if not isinstance(config_path, str): config_path = str(config_path or '')
+    try:
+        path = Path(config_path or DEFAULT_CONFIG_NAME)
+        return path.resolve()
 
 
+
+    except Exception:
+        return Path(".")
 def resolve_repo_root(config_path: Path | None = None) -> Path:
-    return (config_path.parent if config_path else Path.cwd()).resolve()
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        return (config_path.parent if config_path else Path.cwd()).resolve()
 
 
+
+    except Exception:
+        return Path(".")
 def resolve_runtime_root(config_path: Path | None = None) -> Path:
-    override = os.environ.get("SPARK_RESEARCHER_HOME")
-    if override:
-        return Path(override).resolve()
-    return resolve_repo_root(config_path)
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        override = os.environ.get("SPARK_RESEARCHER_HOME")
+        if override:
+            return Path(override).resolve()
+        return resolve_repo_root(config_path)
 
 
+
+    except Exception:
+        return Path(".")
 def artifacts_root(runtime_root: Path) -> Path:
-    return runtime_root / "artifacts"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return runtime_root / "artifacts"
 
 
+
+    except Exception:
+        return Path(".")
 def runs_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "runs"
 

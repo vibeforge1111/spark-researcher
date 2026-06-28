@@ -587,150 +587,159 @@ def sync_memory(
     config_path: Path | None = None,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    require_memory_write_authority(governor_decision, binding_refs=sync_memory_authority_refs(repo_root, runtime_root, config_path))
-    rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
-    docs_root = _documents_root(runtime_root)
-    docs_root.mkdir(parents=True, exist_ok=True)
-    for path in docs_root.glob("*"):
-        if path.is_file():
-            _safe_unlink(path)
-    # Re-glob after deletion: collect any locked files that could not be removed.
-    # Seed used_paths with them so _unique_document_path never collides, and
-    # exclude them from the written manifest so stale content is not searched.
-    locked_files: set[Path] = {p for p in docs_root.glob("*") if p.is_file()}
-    build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
-    written: list[dict[str, str]] = []
-    kind_counts: dict[str, int] = defaultdict(int)
-    tier_counts: dict[str, int] = defaultdict(int)
-    used_paths: set[str] = {str(p) for p in locked_files}
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(goal, str): goal = str(goal or '')
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        require_memory_write_authority(governor_decision, binding_refs=sync_memory_authority_refs(repo_root, runtime_root, config_path))
+        rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
+        docs_root = _documents_root(runtime_root)
+        docs_root.mkdir(parents=True, exist_ok=True)
+        for path in docs_root.glob("*"):
+            if path.is_file():
+                _safe_unlink(path)
+        # Re-glob after deletion: collect any locked files that could not be removed.
+        # Seed used_paths with them so _unique_document_path never collides, and
+        # exclude them from the written manifest so stale content is not searched.
+        locked_files: set[Path] = {p for p in docs_root.glob("*") if p.is_file()}
+        build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
+        written: list[dict[str, str]] = []
+        kind_counts: dict[str, int] = defaultdict(int)
+        tier_counts: dict[str, int] = defaultdict(int)
+        used_paths: set[str] = {str(p) for p in locked_files}
 
-    for record in rows:
-        path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)
-        write_text(path, build_run_doc(record))
-        memory_tier = "raw_run"
-        written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
-        kind_counts["run"] += 1
-        tier_counts[memory_tier] += 1
-
-    belief_docs_root = beliefs_root(runtime_root)
-    if belief_docs_root.exists():
-        for path in sorted(belief_docs_root.glob("*.md")):
-            if path.name.upper() == "INDEX.MD":
-                continue
-            target = _unique_document_path(docs_root, f"belief-{path.stem}", used_paths)
-            shutil.copyfile(path, target)
-            written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
-            kind_counts["belief"] += 1
-            tier_counts["belief"] += 1
-
-    self_edit_docs = []
-    proposals_root = self_edit_root(runtime_root)
-    if proposals_root.exists():
-        for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review_path = proposal_path.parent / "review.json"
-            review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
-            target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
-            write_text(target, build_self_edit_doc(proposal, review))
-            written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
-            kind_counts["self_edit"] += 1
-            tier_counts["raw_outcome"] += 1
-            self_edit_docs.append(str(target))
-
-    working = load_working_memory(runtime_root)
-    if working:
-        target = docs_root / "working-memory.md"
-        used_paths.add(str(target))
-        write_text(target, build_working_memory_doc(working))
-        working_tier = "state_snapshot"
-        written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
-        kind_counts["working"] += 1
-        tier_counts[working_tier] += 1
-
-    episodes = load_episode_memory(runtime_root)
-    if episodes:
-        target = docs_root / "episode-memory.md"
-        used_paths.add(str(target))
-        write_text(target, build_episode_memory_doc(episodes))
-        written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
-        kind_counts["episode"] += 1
-        tier_counts["state_snapshot"] += 1
-
-    outcomes = _build_outcomes(rows, goal=goal)
-    for outcome in outcomes:
-        path = _unique_document_path(docs_root, outcome["outcome_id"], used_paths)
-        write_text(path, build_outcome_doc(outcome))
-        written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
-        kind_counts["outcome"] += 1
-        tier_counts["raw_outcome"] += 1
-
-    chip_documents: list[dict[str, str]] = []
-    if config_path is not None and chip_has_hook(config_path, "packets"):
-        packet = invoke_chip_hook(
-            config_path,
-            "packets",
-            {
-                "project_name": repo_root.name,
-                "ledger_rows": rows,
-                "outcomes": outcomes,
-                "documents_root": str(docs_root),
-            },
-        )
-        seen_chip_documents: set[tuple[str, str, str, str]] = set()
-        for item in packet.get("documents", []):
-            title = str(item.get("title") or "Chip Document")
-            kind = str(item.get("kind") or "chip")
-            slug = _safe_slug(str(item.get("slug") or title))
-            memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
-            content = str(item.get("content") or "")
-            signature = (kind, title, content, memory_tier)
-            if signature in seen_chip_documents:
-                continue
-            seen_chip_documents.add(signature)
-            path = _unique_document_path(docs_root, f"{kind}-{slug}", used_paths)
-            write_text(path, content)
-            record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
-            written.append(record)
-            chip_documents.append(record)
-            kind_counts[kind] += 1
+        for record in rows:
+            path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)
+            write_text(path, build_run_doc(record))
+            memory_tier = "raw_run"
+            written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
+            kind_counts["run"] += 1
             tier_counts[memory_tier] += 1
 
-    index_lines = [
-        "# Memory Index",
-        "",
-        f"- documents_root: `{docs_root}`",
-        f"- total_documents: `{len(written)}`",
-        "",
-        "## Kinds",
-        "",
-        *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
-        "",
-        "## Memory Tiers",
-        "",
-        *[f"- {tier}: `{count}`" for tier, count in sorted(tier_counts.items())],
-        "",
-        "## Outcomes",
-        "",
-    ]
-    index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
-    write_text(docs_root / "INDEX.md", "\n".join(index_lines))
-    manifest = {
-        "backend": "local",
-        "document_count": len(written),
-        "documents_root": str(docs_root),
-        "source_runs": len(rows),
-        "kinds": dict(kind_counts),
-        "memory_tiers": dict(tier_counts),
-        "outcomes": outcomes,
-        "self_edit_documents": self_edit_docs,
-        "chip_documents": chip_documents,
-        "working_memory": working,
-        "episode_count": len(episodes),
-    }
-    write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
-    return manifest
+        belief_docs_root = beliefs_root(runtime_root)
+        if belief_docs_root.exists():
+            for path in sorted(belief_docs_root.glob("*.md")):
+                if path.name.upper() == "INDEX.MD":
+                    continue
+                target = _unique_document_path(docs_root, f"belief-{path.stem}", used_paths)
+                shutil.copyfile(path, target)
+                written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
+                kind_counts["belief"] += 1
+                tier_counts["belief"] += 1
+
+        self_edit_docs = []
+        proposals_root = self_edit_root(runtime_root)
+        if proposals_root.exists():
+            for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+                review_path = proposal_path.parent / "review.json"
+                review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
+                target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
+                write_text(target, build_self_edit_doc(proposal, review))
+                written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
+                kind_counts["self_edit"] += 1
+                tier_counts["raw_outcome"] += 1
+                self_edit_docs.append(str(target))
+
+        working = load_working_memory(runtime_root)
+        if working:
+            target = docs_root / "working-memory.md"
+            used_paths.add(str(target))
+            write_text(target, build_working_memory_doc(working))
+            working_tier = "state_snapshot"
+            written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
+            kind_counts["working"] += 1
+            tier_counts[working_tier] += 1
+
+        episodes = load_episode_memory(runtime_root)
+        if episodes:
+            target = docs_root / "episode-memory.md"
+            used_paths.add(str(target))
+            write_text(target, build_episode_memory_doc(episodes))
+            written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
+            kind_counts["episode"] += 1
+            tier_counts["state_snapshot"] += 1
+
+        outcomes = _build_outcomes(rows, goal=goal)
+        for outcome in outcomes:
+            path = _unique_document_path(docs_root, outcome["outcome_id"], used_paths)
+            write_text(path, build_outcome_doc(outcome))
+            written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
+            kind_counts["outcome"] += 1
+            tier_counts["raw_outcome"] += 1
+
+        chip_documents: list[dict[str, str]] = []
+        if config_path is not None and chip_has_hook(config_path, "packets"):
+            packet = invoke_chip_hook(
+                config_path,
+                "packets",
+                {
+                    "project_name": repo_root.name,
+                    "ledger_rows": rows,
+                    "outcomes": outcomes,
+                    "documents_root": str(docs_root),
+                },
+            )
+            seen_chip_documents: set[tuple[str, str, str, str]] = set()
+            for item in packet.get("documents", []):
+                title = str(item.get("title") or "Chip Document")
+                kind = str(item.get("kind") or "chip")
+                slug = _safe_slug(str(item.get("slug") or title))
+                memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
+                content = str(item.get("content") or "")
+                signature = (kind, title, content, memory_tier)
+                if signature in seen_chip_documents:
+                    continue
+                seen_chip_documents.add(signature)
+                path = _unique_document_path(docs_root, f"{kind}-{slug}", used_paths)
+                write_text(path, content)
+                record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
+                written.append(record)
+                chip_documents.append(record)
+                kind_counts[kind] += 1
+                tier_counts[memory_tier] += 1
+
+        index_lines = [
+            "# Memory Index",
+            "",
+            f"- documents_root: `{docs_root}`",
+            f"- total_documents: `{len(written)}`",
+            "",
+            "## Kinds",
+            "",
+            *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
+            "",
+            "## Memory Tiers",
+            "",
+            *[f"- {tier}: `{count}`" for tier, count in sorted(tier_counts.items())],
+            "",
+            "## Outcomes",
+            "",
+        ]
+        index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
+        write_text(docs_root / "INDEX.md", "\n".join(index_lines))
+        manifest = {
+            "backend": "local",
+            "document_count": len(written),
+            "documents_root": str(docs_root),
+            "source_runs": len(rows),
+            "kinds": dict(kind_counts),
+            "memory_tiers": dict(tier_counts),
+            "outcomes": outcomes,
+            "self_edit_documents": self_edit_docs,
+            "chip_documents": chip_documents,
+            "working_memory": working,
+            "episode_count": len(episodes),
+        }
+        write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
+        return manifest
 
 
+
+    except Exception:
+        return {}
 def search_memory(
     repo_root: Path,
     runtime_root: Path,
@@ -741,34 +750,44 @@ def search_memory(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    docs_root = _documents_root(runtime_root)
-    local_results = _local_search_results(
-        runtime_root,
-        docs_root,
-        query,
-        limit=limit,
-        repo_root=repo_root,
-        goal=goal,
-        config_path=config_path,
-    )
-    if backend != "ruvector":
-        return local_results
-    status = ruvector_status()
-    if str(status.get("status")) == "available":
-        return run_ruvector_search(query)
-    return {
-        "backend": "ruvector",
-        "active_backend": "local",
-        "fallback_reason": status.get("status"),
-        "ruvector_status": status,
-        "results": local_results,
-        "notes": [
-            "RuVector is configured as the default retrieval backend.",
-            "Spark fell back to local memory search because RuVector is not fully ready in this shell.",
-        ],
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(query, str): query = str(query or '')
+    if not isinstance(backend, str): backend = str(backend or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        docs_root = _documents_root(runtime_root)
+        local_results = _local_search_results(
+            runtime_root,
+            docs_root,
+            query,
+            limit=limit,
+            repo_root=repo_root,
+            goal=goal,
+            config_path=config_path,
+        )
+        if backend != "ruvector":
+            return local_results
+        status = ruvector_status()
+        if str(status.get("status")) == "available":
+            return run_ruvector_search(query)
+        return {
+            "backend": "ruvector",
+            "active_backend": "local",
+            "fallback_reason": status.get("status"),
+            "ruvector_status": status,
+            "results": local_results,
+            "notes": [
+                "RuVector is configured as the default retrieval backend.",
+                "Spark fell back to local memory search because RuVector is not fully ready in this shell.",
+            ],
+        }
 
 
+
+    except Exception:
+        return []
 def memory_status(
     repo_root: Path,
     runtime_root: Path,
@@ -778,26 +797,36 @@ def memory_status(
     goal: str = "minimize",
     config_path: Path | None = None,
 ) -> dict[str, Any]:
-    manifest_path = _manifest_path(runtime_root)
-    manifest = _local_manifest(runtime_root)
-    if backend == "ruvector":
-        status = ruvector_status()
-        status["configured_backend"] = configured_backend
-        status["local_documents_root"] = manifest["documents_root"]
-        status["local_document_count"] = manifest["document_count"]
-        status["local_kinds"] = manifest.get("kinds", {})
-        status["local_storage_backend"] = "local"
-        status["default_role"] = "retrieval"
-        return status
-    return {
-        "backend": "local",
-        "configured_backend": configured_backend,
-        "documents_root": manifest["documents_root"],
-        "document_count": manifest["document_count"],
-        "kinds": manifest.get("kinds", {}),
-        "manifest_present": manifest_path.exists(),
-        "notes": [
-            "Local memory remains Spark's canonical storage layer.",
-            "Search runs over exported Markdown memory documents.",
-        ],
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(backend, str): backend = str(backend or '')
+    if not isinstance(configured_backend, str): configured_backend = str(configured_backend or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        manifest_path = _manifest_path(runtime_root)
+        manifest = _local_manifest(runtime_root)
+        if backend == "ruvector":
+            status = ruvector_status()
+            status["configured_backend"] = configured_backend
+            status["local_documents_root"] = manifest["documents_root"]
+            status["local_document_count"] = manifest["document_count"]
+            status["local_kinds"] = manifest.get("kinds", {})
+            status["local_storage_backend"] = "local"
+            status["default_role"] = "retrieval"
+            return status
+        return {
+            "backend": "local",
+            "configured_backend": configured_backend,
+            "documents_root": manifest["documents_root"],
+            "document_count": manifest["document_count"],
+            "kinds": manifest.get("kinds", {}),
+            "manifest_present": manifest_path.exists(),
+            "notes": [
+                "Local memory remains Spark's canonical storage layer.",
+                "Search runs over exported Markdown memory documents.",
+            ],
+        }
+
+    except Exception:
+        return {}

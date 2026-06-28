@@ -33,13 +33,21 @@ class ChipContext:
 
 
 def schema_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "schemas" / "spark-chip.schema.json"
+    try:
+        return Path(__file__).resolve().parents[2] / "schemas" / "spark-chip.schema.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _now_slug() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+    try:
+        return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+
+    except Exception:
+        return ""
 def _resolve_chip_root(config_path: Path, config: ProjectConfig) -> Path | None:
     raw = str(config.chip.path or "").strip()
     if not raw:

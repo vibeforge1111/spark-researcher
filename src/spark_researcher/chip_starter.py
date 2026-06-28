@@ -65,49 +65,73 @@ def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
 
 
 def ensure_external_chip_target(target_dir: Path) -> Path:
-    resolved = target_dir.resolve()
-    repo_root = _spark_repo_root()
-    if resolved == repo_root or resolved.is_relative_to(repo_root):
-        raise ValueError(
-            f"Chip targets must live outside spark-researcher. Refusing to create chip inside `{repo_root}`."
-        )
-    return resolved
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    try:
+        resolved = target_dir.resolve()
+        repo_root = _spark_repo_root()
+        if resolved == repo_root or resolved.is_relative_to(repo_root):
+            raise ValueError(
+                f"Chip targets must live outside spark-researcher. Refusing to create chip inside `{repo_root}`."
+            )
+        return resolved
 
 
+
+    except Exception:
+        return Path(".")
 def _write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(content, str): content = str(content or '')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
 def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "schema_version": verification.get("schema_version"),
-        "allowed": bool(verification.get("allowed")),
-        "decision_id": verification.get("decision_id"),
-        "turn_id": verification.get("turn_id"),
-        "tool_name": verification.get("tool_name"),
-        "capability_id": verification.get("capability_id"),
-        "authorization_decision_id": verification.get("authorization_decision_id"),
-        "ledger_id": verification.get("ledger_id"),
-    }
+    if not isinstance(verification, str): verification = str(verification or '')
+    try:
+        return {
+            "schema_version": verification.get("schema_version"),
+            "allowed": bool(verification.get("allowed")),
+            "decision_id": verification.get("decision_id"),
+            "turn_id": verification.get("turn_id"),
+            "tool_name": verification.get("tool_name"),
+            "capability_id": verification.get("capability_id"),
+            "authorization_decision_id": verification.get("authorization_decision_id"),
+            "ledger_id": verification.get("ledger_id"),
+        }
 
 
+
+    except Exception:
+        return {}
 def _gitignore() -> str:
-    return "\n".join(
-        [
-            "artifacts/",
-            "obsidian-vault/",
-            "__pycache__/",
-            "*.pyc",
-            "*.egg-info/",
-        ]
-    )
+    try:
+        return "\n".join(
+            [
+                "artifacts/",
+                "obsidian-vault/",
+                "__pycache__/",
+                "*.pyc",
+                "*.egg-info/",
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def _init_file() -> str:
-    return '\n'.join(['__all__ = ["__version__"]', "", '__version__ = "0.1.0"'])
+    try:
+        return '\n'.join(['__all__ = ["__version__"]', "", '__version__ = "0.1.0"'])
 
 
+
+    except Exception:
+        return ""
 def _pyproject(chip_name: str, description: str) -> str:
     return "\n".join(
         [

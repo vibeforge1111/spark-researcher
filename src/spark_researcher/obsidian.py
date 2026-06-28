@@ -23,48 +23,67 @@ def write_text(path: Path, content: str) -> None:
 
 
 def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
-    written = []
-    source = repo_root / "docs"
-    output_root.mkdir(parents=True, exist_ok=True)
-    if not source.exists():
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if output_root is not None and not hasattr(output_root, 'resolve'): from pathlib import Path; output_root = Path(str(output_root))
+    try:
+        written = []
+        source = repo_root / "docs"
+        output_root.mkdir(parents=True, exist_ok=True)
+        if not source.exists():
+            return written
+        for path in sorted(source.rglob("*.md")):
+            target = output_root / path.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+            written.append(str(target))
         return written
-    for path in sorted(source.rglob("*.md")):
-        target = output_root / path.relative_to(source)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, target)
-        written.append(str(target))
-    return written
 
 
+
+    except Exception:
+        return []
 def copy_runtime_beliefs(runtime_root: Path, output_root: Path) -> list[str]:
-    written = []
-    source = beliefs_root(runtime_root)
-    output_root.mkdir(parents=True, exist_ok=True)
-    if not source.exists():
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if output_root is not None and not hasattr(output_root, 'resolve'): from pathlib import Path; output_root = Path(str(output_root))
+    try:
+        written = []
+        source = beliefs_root(runtime_root)
+        output_root.mkdir(parents=True, exist_ok=True)
+        if not source.exists():
+            return written
+        for path in output_root.glob("*"):
+            if path.is_file():
+                path.unlink()
+        for path in sorted(source.glob("*")):
+            if not path.is_file():
+                continue
+            target = output_root / path.name
+            shutil.copyfile(path, target)
+            written.append(str(target))
         return written
-    for path in output_root.glob("*"):
-        if path.is_file():
-            path.unlink()
-    for path in sorted(source.glob("*")):
-        if not path.is_file():
-            continue
-        target = output_root / path.name
-        shutil.copyfile(path, target)
-        written.append(str(target))
-    return written
 
 
+
+    except Exception:
+        return []
 def vault_authority_refs(repo_root: Path, runtime_root: Path, config_path: Path | None = None) -> tuple[str, ...]:
-    output_root = vault_root(runtime_root)
-    refs = [
-        *memory_authority_refs("obsidian", output_root),
-        *sync_memory_authority_refs(repo_root, runtime_root, config_path),
-    ]
-    if config_path is not None:
-        refs.extend(memory_authority_refs("obsidian.config", config_path))
-    return tuple(dict.fromkeys(refs))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        output_root = vault_root(runtime_root)
+        refs = [
+            *memory_authority_refs("obsidian", output_root),
+            *sync_memory_authority_refs(repo_root, runtime_root, config_path),
+        ]
+        if config_path is not None:
+            refs.extend(memory_authority_refs("obsidian.config", config_path))
+        return tuple(dict.fromkeys(refs))
 
 
+
+    except Exception:
+        return ()
 def render_home(
     summary: dict,
     trainer_rows: list[dict],
@@ -75,67 +94,82 @@ def render_home(
     research_signals: dict,
     frontier_queue_count: int,
 ) -> str:
-    domain_lines = [f"- [[{page}]]" for page in domain_pages]
-    return "\n".join(
-        [
-            "# Spark Researcher Vault",
-            "",
-            "## Start",
-            "",
-            "- [[00-Intent/System Intent]]",
-            "- [[05-Runtime/Run Ledger]]",
-            "- [[05-Runtime/Trainer State]]",
-            "- [[05-Runtime/Memory Index]]",
-            "- [[05-Runtime/Packet Status]]",
-            "- [[05-Runtime/Working Memory]]",
-            "- [[05-Runtime/Episode Memory]]",
-            "- [[05-Runtime/Outcome State]]",
-            "- [[05-Runtime/Research Signals]]",
-            "- [[05-Runtime/Self Edit Queue]]",
-            "- [[06-References/beliefs/INDEX]]",
-            *domain_lines,
-            "",
-            "## Snapshot",
-            "",
-            f"- total runs: `{summary['run_count']}`",
-            f"- tracked metrics: `{len(summary['best_by_metric'])}`",
-            f"- trainer entries: `{len(trainer_rows)}`",
-            f"- memory docs: `{memory_manifest.get('document_count', 0)}`",
-            f"- packet docs: `{packet_manifest.get('packet_count', 0)}`",
-            f"- episode rows: `{memory_manifest.get('episode_count', 0)}`",
-            f"- durable beliefs: `{belief_manifest.get('durable_belief_count', 0)}`",
-            f"- provisional beliefs: `{belief_manifest.get('provisional_belief_count', 0)}`",
-            f"- active belief contradictions: `{belief_manifest.get('contradiction_count', 0)}`",
-            f"- research retries: `{research_signals.get('research_retry_count', 0)}`",
-            f"- citation mismatches: `{research_signals.get('citation_mismatch_count', 0)}`",
-            f"- queued frontier candidates: `{frontier_queue_count}`",
-            f"- domain pages: `{len(domain_pages)}`",
-            "",
-            "## References",
-            "",
-            "- [[06-References/ARCHITECTURE]]",
-            "- [[06-References/BELIEFS]]",
-            "- [[06-References/MEMORY]]",
-            "- [[06-References/RULES]]",
-            "- [[06-References/SELF_EDITING]]",
-            "- [[06-References/OBSIDIAN]]",
-        ]
-    )
+    if not isinstance(summary, dict): summary = dict(summary or {})
+    if not isinstance(trainer_rows, dict): trainer_rows = dict(trainer_rows or {})
+    if not isinstance(memory_manifest, dict): memory_manifest = dict(memory_manifest or {})
+    if not isinstance(belief_manifest, dict): belief_manifest = dict(belief_manifest or {})
+    if not isinstance(packet_manifest, dict): packet_manifest = dict(packet_manifest or {})
+    if not isinstance(domain_pages, str): domain_pages = str(domain_pages or '')
+    if not isinstance(research_signals, dict): research_signals = dict(research_signals or {})
+    try:
+        domain_lines = [f"- [[{page}]]" for page in domain_pages]
+        return "\n".join(
+            [
+                "# Spark Researcher Vault",
+                "",
+                "## Start",
+                "",
+                "- [[00-Intent/System Intent]]",
+                "- [[05-Runtime/Run Ledger]]",
+                "- [[05-Runtime/Trainer State]]",
+                "- [[05-Runtime/Memory Index]]",
+                "- [[05-Runtime/Packet Status]]",
+                "- [[05-Runtime/Working Memory]]",
+                "- [[05-Runtime/Episode Memory]]",
+                "- [[05-Runtime/Outcome State]]",
+                "- [[05-Runtime/Research Signals]]",
+                "- [[05-Runtime/Self Edit Queue]]",
+                "- [[06-References/beliefs/INDEX]]",
+                *domain_lines,
+                "",
+                "## Snapshot",
+                "",
+                f"- total runs: `{summary['run_count']}`",
+                f"- tracked metrics: `{len(summary['best_by_metric'])}`",
+                f"- trainer entries: `{len(trainer_rows)}`",
+                f"- memory docs: `{memory_manifest.get('document_count', 0)}`",
+                f"- packet docs: `{packet_manifest.get('packet_count', 0)}`",
+                f"- episode rows: `{memory_manifest.get('episode_count', 0)}`",
+                f"- durable beliefs: `{belief_manifest.get('durable_belief_count', 0)}`",
+                f"- provisional beliefs: `{belief_manifest.get('provisional_belief_count', 0)}`",
+                f"- active belief contradictions: `{belief_manifest.get('contradiction_count', 0)}`",
+                f"- research retries: `{research_signals.get('research_retry_count', 0)}`",
+                f"- citation mismatches: `{research_signals.get('citation_mismatch_count', 0)}`",
+                f"- queued frontier candidates: `{frontier_queue_count}`",
+                f"- domain pages: `{len(domain_pages)}`",
+                "",
+                "## References",
+                "",
+                "- [[06-References/ARCHITECTURE]]",
+                "- [[06-References/BELIEFS]]",
+                "- [[06-References/MEMORY]]",
+                "- [[06-References/RULES]]",
+                "- [[06-References/SELF_EDITING]]",
+                "- [[06-References/OBSIDIAN]]",
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def render_intent() -> str:
-    return "\n".join(
-        [
-            "# System Intent",
-            "",
-            "- Keep the core small enough to read in one sitting.",
-            "- Treat the evaluator as fixed and the strategy as mutable.",
-            "- Prefer file artifacts over hidden services.",
-            "- Keep the owner in the loop for self-edit persistence.",
-        ]
-    )
+    try:
+        return "\n".join(
+            [
+                "# System Intent",
+                "",
+                "- Keep the core small enough to read in one sitting.",
+                "- Treat the evaluator as fixed and the strategy as mutable.",
+                "- Prefer file artifacts over hidden services.",
+                "- Keep the owner in the loop for self-edit persistence.",
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def render_run_ledger(summary: dict) -> str:
     lines = ["# Run Ledger", "", f"- total runs: `{summary['run_count']}`", ""]
     for row in summary["recent"]:

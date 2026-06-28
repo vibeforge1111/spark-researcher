@@ -214,56 +214,69 @@ def _default_memory_tier(kind: str) -> str:
 
 
 def _infer_document_kind(path: Path) -> str:
-    stem = path.stem
-    if stem == "working-memory":
-        return "working"
-    if stem == "episode-memory":
-        return "episode"
-    if stem.startswith("run-"):
-        return "run"
-    if stem.startswith("outcome-"):
-        return "outcome"
-    if stem.startswith("belief-"):
-        return "belief"
-    if stem.startswith("self-edit-"):
-        return "self_edit"
-    if stem.startswith("startup_doctrine-"):
-        return "startup_doctrine"
-    if stem.startswith("startup_boundary-"):
-        return "startup_boundary"
-    if stem.startswith("startup_benchmark-"):
-        return "startup_benchmark"
-    if stem.startswith("startup_research-"):
-        return "startup_research"
-    if stem.startswith("startup_factor-"):
-        return "startup_factor"
-    return "unknown"
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        stem = path.stem
+        if stem == "working-memory":
+            return "working"
+        if stem == "episode-memory":
+            return "episode"
+        if stem.startswith("run-"):
+            return "run"
+        if stem.startswith("outcome-"):
+            return "outcome"
+        if stem.startswith("belief-"):
+            return "belief"
+        if stem.startswith("self-edit-"):
+            return "self_edit"
+        if stem.startswith("startup_doctrine-"):
+            return "startup_doctrine"
+        if stem.startswith("startup_boundary-"):
+            return "startup_boundary"
+        if stem.startswith("startup_benchmark-"):
+            return "startup_benchmark"
+        if stem.startswith("startup_research-"):
+            return "startup_research"
+        if stem.startswith("startup_factor-"):
+            return "startup_factor"
+        return "unknown"
 
 
+
+    except Exception:
+        return ""
 def _manifest_docs_by_path(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, dict[str, Any]]:
-    manifest = _local_manifest(runtime_root)
-    mapped: dict[str, dict[str, Any]] = {}
-    for collection_name in ("chip_documents",):
-        collection = manifest.get(collection_name, [])
-        if isinstance(collection, list):
-            for item in collection:
-                if isinstance(item, dict) and item.get("path"):
-                    mapped[str(item["path"])] = item
-    docs_root = Path(str(manifest["documents_root"])) if manifest.get("documents_root") else None
-    if docs_root is not None:
-        for path in docs_root.glob("*.md"):
-            mapped.setdefault(
-                str(path),
-                {
-                    "path": str(path),
-                    "kind": _infer_document_kind(path),
-                    "title": path.stem,
-                    "memory_tier": _default_memory_tier(_infer_document_kind(path)),
-                },
-            )
-    return mapped
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if not isinstance(goal, str): goal = str(goal or '')
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        manifest = _local_manifest(runtime_root)
+        mapped: dict[str, dict[str, Any]] = {}
+        for collection_name in ("chip_documents",):
+            collection = manifest.get(collection_name, [])
+            if isinstance(collection, list):
+                for item in collection:
+                    if isinstance(item, dict) and item.get("path"):
+                        mapped[str(item["path"])] = item
+        docs_root = Path(str(manifest["documents_root"])) if manifest.get("documents_root") else None
+        if docs_root is not None:
+            for path in docs_root.glob("*.md"):
+                mapped.setdefault(
+                    str(path),
+                    {
+                        "path": str(path),
+                        "kind": _infer_document_kind(path),
+                        "title": path.stem,
+                        "memory_tier": _default_memory_tier(_infer_document_kind(path)),
+                    },
+                )
+        return mapped
 
 
+
+    except Exception:
+        return {}
 def _local_search_results(
     runtime_root: Path,
     docs_root: Path,
@@ -274,99 +287,120 @@ def _local_search_results(
     goal: str,
     config_path: Path | None,
 ) -> list[dict[str, Any]]:
-    normalized_query = _normalize_query(query)
-    terms = [term for term in normalized_query.lower().split() if term]
-    docs_by_path = _manifest_docs_by_path(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
-    results = []
-    for path in sorted(docs_root.glob("*.md")):
-        try:
-            text = _read_text(path)
-        except FileNotFoundError:
-            # Memory sync rewrites docs in place; skip files that disappeared mid-search.
-            continue
-        lowered = text.lower()
-        lexical_score = sum(1 for term in terms if term in lowered)
-        if lexical_score <= 0:
-            continue
-        doc_meta = docs_by_path.get(str(path), {})
-        kind = str(doc_meta.get("kind") or "unknown")
-        memory_tier = str(doc_meta.get("memory_tier") or _default_memory_tier(kind))
-        _title_lines = text.splitlines() if text else []
-        title = str(doc_meta.get("title") or (_title_lines[0].lstrip("# ").strip() if _title_lines else path.stem))
-        title_lower = title.lower()
-        title_bonus = sum(4 for term in terms if term in title_lower)
-        phrase_bonus = 6 if normalized_query.lower() in lowered else 0
-        score = lexical_score + title_bonus + phrase_bonus + _kind_priority(kind) + _tier_priority(memory_tier)
-        results.append(
-            {
-                "backend": "local",
-                "path": str(path),
-                "title": title,
-                "kind": kind,
-                "memory_tier": memory_tier,
-                "score": score,
-                "snippet": _build_snippet(text, normalized_query),
-            }
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if docs_root is not None and not hasattr(docs_root, 'resolve'): from pathlib import Path; docs_root = Path(str(docs_root))
+    if not isinstance(query, str): query = str(query or '')
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if not isinstance(goal, str): goal = str(goal or '')
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        normalized_query = _normalize_query(query)
+        terms = [term for term in normalized_query.lower().split() if term]
+        docs_by_path = _manifest_docs_by_path(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
+        results = []
+        for path in sorted(docs_root.glob("*.md")):
+            try:
+                text = _read_text(path)
+            except FileNotFoundError:
+                # Memory sync rewrites docs in place; skip files that disappeared mid-search.
+                continue
+            lowered = text.lower()
+            lexical_score = sum(1 for term in terms if term in lowered)
+            if lexical_score <= 0:
+                continue
+            doc_meta = docs_by_path.get(str(path), {})
+            kind = str(doc_meta.get("kind") or "unknown")
+            memory_tier = str(doc_meta.get("memory_tier") or _default_memory_tier(kind))
+            _title_lines = text.splitlines() if text else []
+            title = str(doc_meta.get("title") or (_title_lines[0].lstrip("# ").strip() if _title_lines else path.stem))
+            title_lower = title.lower()
+            title_bonus = sum(4 for term in terms if term in title_lower)
+            phrase_bonus = 6 if normalized_query.lower() in lowered else 0
+            score = lexical_score + title_bonus + phrase_bonus + _kind_priority(kind) + _tier_priority(memory_tier)
+            results.append(
+                {
+                    "backend": "local",
+                    "path": str(path),
+                    "title": title,
+                    "kind": kind,
+                    "memory_tier": memory_tier,
+                    "score": score,
+                    "snippet": _build_snippet(text, normalized_query),
+                }
+            )
+        results.sort(
+            key=lambda item: (
+                -int(item["score"]),
+                -_tier_priority(str(item.get("memory_tier") or "raw_run")),
+                -_kind_priority(str(item.get("kind") or "unknown")),
+                str(item["path"]),
+            )
         )
-    results.sort(
-        key=lambda item: (
-            -int(item["score"]),
-            -_tier_priority(str(item.get("memory_tier") or "raw_run")),
-            -_kind_priority(str(item.get("kind") or "unknown")),
-            str(item["path"]),
-        )
-    )
-    return results[: _normalize_limit(limit)]
+        return results[: _normalize_limit(limit)]
 
 
+
+    except Exception:
+        return []
 def _build_snippet(text: str, query: str, *, width: int = 180) -> str:
-    lowered = text.lower()
-    query_lower = query.lower()
-    index = lowered.find(query_lower)
-    if index < 0:
-        return text[:width].replace("\n", " ").strip()
-    start = max(0, index - width // 3)
-    end = min(len(text), index + len(query) + width // 2)
-    return text[start:end].replace("\n", " ").strip()
+    if not isinstance(text, str): text = str(text or '')
+    if not isinstance(query, str): query = str(query or '')
+    try:
+        lowered = text.lower()
+        query_lower = query.lower()
+        index = lowered.find(query_lower)
+        if index < 0:
+            return text[:width].replace("\n", " ").strip()
+        start = max(0, index - width // 3)
+        end = min(len(text), index + len(query) + width // 2)
+        return text[start:end].replace("\n", " ").strip()
 
 
+
+    except Exception:
+        return ""
 def build_run_doc(record: dict[str, Any]) -> str:
-    title = record.get("candidate_id") or record.get("run_id")
-    mutations = record.get("applied_mutations") or []
-    mutation_lines = [f"- `{item['name']}` -> `{item['value']}`" for item in mutations] or ["- none"]
-    return "\n".join(
-        [
-            f"# Run Memory {title}",
-            "",
-            f"- run_id: `{record.get('run_id')}`",
-            f"- project: `{record.get('project_name')}`",
-            f"- command: `{record.get('command_name')}`",
-            f"- verdict: `{record.get('verdict')}`",
-            f"- metric: `{record.get('metric_name')}` = `{record.get('metric_value')}`",
-            f"- baseline: `{record.get('baseline_value')}`",
-            f"- trace_id: `{record.get('trace_id')}`",
-            "",
-            "## Hypothesis",
-            "",
-            str(record.get("hypothesis") or "n/a"),
-            "",
-            "## Mutations",
-            "",
-            *mutation_lines,
-            "",
-            "## Notes",
-            "",
-            str(record.get("candidate_summary") or "n/a"),
-            "",
-            "## Paths",
-            "",
-            f"- log: `{record.get('log_path')}`",
-            f"- run_dir: `{record.get('run_dir')}`",
-            f"- trace: `{record.get('trace_path')}`",
-        ]
-    )
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        title = record.get("candidate_id") or record.get("run_id")
+        mutations = record.get("applied_mutations") or []
+        mutation_lines = [f"- `{item['name']}` -> `{item['value']}`" for item in mutations] or ["- none"]
+        return "\n".join(
+            [
+                f"# Run Memory {title}",
+                "",
+                f"- run_id: `{record.get('run_id')}`",
+                f"- project: `{record.get('project_name')}`",
+                f"- command: `{record.get('command_name')}`",
+                f"- verdict: `{record.get('verdict')}`",
+                f"- metric: `{record.get('metric_name')}` = `{record.get('metric_value')}`",
+                f"- baseline: `{record.get('baseline_value')}`",
+                f"- trace_id: `{record.get('trace_id')}`",
+                "",
+                "## Hypothesis",
+                "",
+                str(record.get("hypothesis") or "n/a"),
+                "",
+                "## Mutations",
+                "",
+                *mutation_lines,
+                "",
+                "## Notes",
+                "",
+                str(record.get("candidate_summary") or "n/a"),
+                "",
+                "## Paths",
+                "",
+                f"- log: `{record.get('log_path')}`",
+                f"- run_dir: `{record.get('run_dir')}`",
+                f"- trace: `{record.get('trace_path')}`",
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def build_outcome_doc(outcome: dict[str, Any]) -> str:
     return "\n".join(
         [

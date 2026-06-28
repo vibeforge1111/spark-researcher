@@ -15,89 +15,106 @@ class AdapterSpec:
 
 
 def _brief(advisory: dict[str, Any], max_chars: int) -> str:
-    lines = ["Advisory Brief", ""]
-    epistemic = advisory.get("epistemic_status", {})
-    if isinstance(epistemic, dict):
-        status = str(epistemic.get("status") or "").strip()
-        if status:
-            lines.append(f"Evidence Status: {status}")
-        packet_stability = epistemic.get("packet_stability", {})
-        if isinstance(packet_stability, dict):
-            stability_status = str(packet_stability.get("status") or "").strip()
-            if stability_status:
-                lines.append(f"Packet Stability: {stability_status}")
-            durable = int(packet_stability.get("durable_belief_count") or 0)
-            provisional = int(packet_stability.get("provisional_belief_count") or 0)
-            contradictions = int(packet_stability.get("contradiction_count") or 0)
-            if durable or provisional or contradictions:
-                lines.append(
-                    f"- belief mix: durable={durable}, provisional={provisional}, contradictions={contradictions}"
-                )
-        for item in epistemic.get("missing_evidence", [])[:2]:
-            lines.append(f"- Missing: {item}")
-        next_questions = epistemic.get("clarifying_questions", [])
-        if next_questions:
-            lines.extend(["", "Questions Before Strong Claims"])
-            for item in next_questions[:2]:
-                lines.append(f"- {item}")
-        lines.append("")
-    intent = advisory.get("intent", {})
-    if isinstance(intent, dict) and intent.get("active"):
-        goal = str(intent.get("goal") or "").strip()
-        outcome = str(intent.get("outcome") or "").strip()
-        criteria = [str(item) for item in intent.get("success_criteria", [])][:3]
-        if goal:
-            lines.append(f"Goal: {goal}")
-        if outcome:
-            lines.append(f"Target Outcome: {outcome}")
-        if criteria:
-            lines.extend(["", "Success Criteria"])
-            for item in criteria:
-                lines.append(f"- {item}")
-        lines.append("")
-    for item in advisory.get("guidance", [])[:4]:
-        lines.append(f"- {item}")
-    boundaries = advisory.get("boundaries", [])
-    if boundaries:
-        lines.extend(["", "Boundaries"])
-        for item in boundaries[:3]:
+    if not isinstance(advisory, str): advisory = str(advisory or '')
+    try:
+        lines = ["Advisory Brief", ""]
+        epistemic = advisory.get("epistemic_status", {})
+        if isinstance(epistemic, dict):
+            status = str(epistemic.get("status") or "").strip()
+            if status:
+                lines.append(f"Evidence Status: {status}")
+            packet_stability = epistemic.get("packet_stability", {})
+            if isinstance(packet_stability, dict):
+                stability_status = str(packet_stability.get("status") or "").strip()
+                if stability_status:
+                    lines.append(f"Packet Stability: {stability_status}")
+                durable = int(packet_stability.get("durable_belief_count") or 0)
+                provisional = int(packet_stability.get("provisional_belief_count") or 0)
+                contradictions = int(packet_stability.get("contradiction_count") or 0)
+                if durable or provisional or contradictions:
+                    lines.append(
+                        f"- belief mix: durable={durable}, provisional={provisional}, contradictions={contradictions}"
+                    )
+            for item in epistemic.get("missing_evidence", [])[:2]:
+                lines.append(f"- Missing: {item}")
+            next_questions = epistemic.get("clarifying_questions", [])
+            if next_questions:
+                lines.extend(["", "Questions Before Strong Claims"])
+                for item in next_questions[:2]:
+                    lines.append(f"- {item}")
+            lines.append("")
+        intent = advisory.get("intent", {})
+        if isinstance(intent, dict) and intent.get("active"):
+            goal = str(intent.get("goal") or "").strip()
+            outcome = str(intent.get("outcome") or "").strip()
+            criteria = [str(item) for item in intent.get("success_criteria", [])][:3]
+            if goal:
+                lines.append(f"Goal: {goal}")
+            if outcome:
+                lines.append(f"Target Outcome: {outcome}")
+            if criteria:
+                lines.extend(["", "Success Criteria"])
+                for item in criteria:
+                    lines.append(f"- {item}")
+            lines.append("")
+        for item in advisory.get("guidance", [])[:4]:
             lines.append(f"- {item}")
-    failure_priorities = advisory.get("failure_priorities", {})
-    if isinstance(failure_priorities, dict) and failure_priorities.get("priorities"):
-        lines.extend(["", "Current Surprise Priorities"])
-        for item in failure_priorities.get("priorities", [])[:2]:
-            domain = str(item.get("domain") or "generic")
-            surface = str(item.get("surface") or "unknown")
-            score = item.get("surprise_score")
-            lines.append(f"- {domain} / {surface} surprise={score}")
-    text = "\n".join(lines).strip()
-    return text[:max_chars].rstrip()
+        boundaries = advisory.get("boundaries", [])
+        if boundaries:
+            lines.extend(["", "Boundaries"])
+            for item in boundaries[:3]:
+                lines.append(f"- {item}")
+        failure_priorities = advisory.get("failure_priorities", {})
+        if isinstance(failure_priorities, dict) and failure_priorities.get("priorities"):
+            lines.extend(["", "Current Surprise Priorities"])
+            for item in failure_priorities.get("priorities", [])[:2]:
+                domain = str(item.get("domain") or "generic")
+                surface = str(item.get("surface") or "unknown")
+                score = item.get("surprise_score")
+                lines.append(f"- {domain} / {surface} surprise={score}")
+        text = "\n".join(lines).strip()
+        return text[:max_chars].rstrip()
 
 
+
+    except Exception:
+        return ""
 def _wrapper_request(spec: AdapterSpec, task: str, advisory: dict[str, Any]) -> dict[str, Any]:
-    brief = _brief(advisory, spec.max_advisory_chars)
-    return {
-        "model_family": spec.name,
-        "supports_native_prehook": spec.supports_native_prehook,
-        "supports_tool_context": spec.supports_tool_context,
-        "injection_mode": spec.injection_mode,
-        "system_prompt": "",
-        "user_prompt": f"{brief}\n\nTask\n\n{task}".strip(),
-    }
+    if not isinstance(task, str): task = str(task or '')
+    if not isinstance(advisory, str): advisory = str(advisory or '')
+    try:
+        brief = _brief(advisory, spec.max_advisory_chars)
+        return {
+            "model_family": spec.name,
+            "supports_native_prehook": spec.supports_native_prehook,
+            "supports_tool_context": spec.supports_tool_context,
+            "injection_mode": spec.injection_mode,
+            "system_prompt": "",
+            "user_prompt": f"{brief}\n\nTask\n\n{task}".strip(),
+        }
 
 
+
+    except Exception:
+        return {}
 def _native_request(spec: AdapterSpec, task: str, advisory: dict[str, Any]) -> dict[str, Any]:
-    brief = _brief(advisory, spec.max_advisory_chars)
-    return {
-        "model_family": spec.name,
-        "supports_native_prehook": spec.supports_native_prehook,
-        "supports_tool_context": spec.supports_tool_context,
-        "injection_mode": spec.injection_mode,
-        "system_prompt": brief,
-        "user_prompt": task,
-    }
+    if not isinstance(task, str): task = str(task or '')
+    if not isinstance(advisory, str): advisory = str(advisory or '')
+    try:
+        brief = _brief(advisory, spec.max_advisory_chars)
+        return {
+            "model_family": spec.name,
+            "supports_native_prehook": spec.supports_native_prehook,
+            "supports_tool_context": spec.supports_tool_context,
+            "injection_mode": spec.injection_mode,
+            "system_prompt": brief,
+            "user_prompt": task,
+        }
 
 
+
+    except Exception:
+        return {}
 def _specs() -> dict[str, AdapterSpec]:
     return {
         "claude": AdapterSpec("claude", True, True, 2200, "native-prehook"),

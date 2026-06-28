@@ -97,81 +97,106 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def _is_pid_running(pid: int) -> bool:
-    """Check if a process with the given PID is still running."""
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
+        """Check if a process with the given PID is still running."""
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError:
+            # EPERM means the process exists but is owned by another user.
+            return True
+
+
+
+    except Exception:
         return False
-    except OSError:
-        # EPERM means the process exists but is owned by another user.
-        return True
-
-
 def _read_lock_token(lock_path: Path) -> str | None:
-    """Return the raw PID token recorded in a lock file, or None if unreadable."""
+    if lock_path is not None and not hasattr(lock_path, 'resolve'): from pathlib import Path; lock_path = Path(str(lock_path))
     try:
-        token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
-    except OSError:
-        return None
-    return token or None
+        """Return the raw PID token recorded in a lock file, or None if unreadable."""
+        try:
+            token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+        except OSError:
+            return None
+        return token or None
 
 
+
+    except Exception:
+        return ""
 def _lock_token_is_stale(token: str | None) -> bool:
-    """A lock token is stale when it is empty/invalid or its PID is dead."""
-    if not token:
-        return True
+    if not isinstance(token, str): token = str(token or '')
     try:
-        pid = int(token.split()[0])
-    except (ValueError, IndexError):
-        return True
-    return not _is_pid_running(pid)
+        """A lock token is stale when it is empty/invalid or its PID is dead."""
+        if not token:
+            return True
+        try:
+            pid = int(token.split()[0])
+        except (ValueError, IndexError):
+            return True
+        return not _is_pid_running(pid)
 
 
+
+    except Exception:
+        return False
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
-    ensure_parent(path)
-    lock_path = path.with_name(path.name + ".lock")
-    deadline = time.monotonic() + timeout_seconds
-    handle: int | None = None
-    while handle is None:
-        try:
-            handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            # Recover a stale lock (holder process is dead / token invalid).
-            # Capture the token first, then re-read immediately before unlinking
-            # so we never delete a lock a different live process re-created
-            # between the staleness check and the unlink (TOCTOU double-acquire).
-            token = _read_lock_token(lock_path)
-            if _lock_token_is_stale(token):
-                try:
-                    if _read_lock_token(lock_path) == token:
-                        lock_path.unlink()
-                    continue
-                except FileNotFoundError:
-                    continue
-            if time.monotonic() >= deadline:
-                # Do not leak the lock path or holder PID into the error.
-                raise TimeoutError("Timed out waiting for file lock")
-            time.sleep(0.05)
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
-        yield
-    finally:
-        os.close(handle)
+        ensure_parent(path)
+        lock_path = path.with_name(path.name + ".lock")
+        deadline = time.monotonic() + timeout_seconds
+        handle: int | None = None
+        while handle is None:
+            try:
+                handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                # Recover a stale lock (holder process is dead / token invalid).
+                # Capture the token first, then re-read immediately before unlinking
+                # so we never delete a lock a different live process re-created
+                # between the staleness check and the unlink (TOCTOU double-acquire).
+                token = _read_lock_token(lock_path)
+                if _lock_token_is_stale(token):
+                    try:
+                        if _read_lock_token(lock_path) == token:
+                            lock_path.unlink()
+                        continue
+                    except FileNotFoundError:
+                        continue
+                if time.monotonic() >= deadline:
+                    # Do not leak the lock path or holder PID into the error.
+                    raise TimeoutError("Timed out waiting for file lock")
+                time.sleep(0.05)
         try:
-            lock_path.unlink()
-        except FileNotFoundError:
-            pass
+            os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
+            yield
+        finally:
+            os.close(handle)
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
+
+    except Exception:
+        return None
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    ensure_parent(path)
-    with locked_file(path):
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        ensure_parent(path)
+        with locked_file(path):
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+
+    except Exception:
+        return None
 def make_run_id(kind: str) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     return f"{stamp}-{kind}"

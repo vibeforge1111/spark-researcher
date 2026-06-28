@@ -10,23 +10,39 @@ from .authority import require_chip_create_authority
 
 
 def _slug(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9._-]+", "-", value.strip().lower())
-    return cleaned.strip("-") or "chip"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        cleaned = re.sub(r"[^a-z0-9._-]+", "-", value.strip().lower())
+        return cleaned.strip("-") or "chip"
 
 
+
+    except Exception:
+        return ""
 def _package_name(chip_name: str) -> str:
-    return _slug(chip_name).replace(".", "_").replace("-", "_")
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        return _slug(chip_name).replace(".", "_").replace("-", "_")
 
 
+
+    except Exception:
+        return ""
 def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
-    candidate = _slug(chip_name or "") or _slug(domain)
-    if candidate == "chip":
-        candidate = _slug(domain)
-    if not candidate.startswith("domain-chip-"):
-        candidate = f"domain-chip-{candidate}"
-    return candidate
+    if not isinstance(domain, str): domain = str(domain or '')
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        candidate = _slug(chip_name or "") or _slug(domain)
+        if candidate == "chip":
+            candidate = _slug(domain)
+        if not candidate.startswith("domain-chip-"):
+            candidate = f"domain-chip-{candidate}"
+        return candidate
 
 
+
+    except Exception:
+        return ""
 def _default_chip_parent() -> Path:
     return Path.home() / ".spark" / "chips"
 

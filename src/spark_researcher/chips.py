@@ -386,12 +386,17 @@ def _build_hook_env(context: ChipContext) -> dict[str, str]:
 
 
 def _public_hook_failure_detail(hook: str, returncode: int) -> str:
-    return (
-        f"Chip hook `{hook}` failed with exit code {returncode}. "
-        "Details were written to the local chip hook log."
-    )
+    if not isinstance(hook, str): hook = str(hook or '')
+    try:
+        return (
+            f"Chip hook `{hook}` failed with exit code {returncode}. "
+            "Details were written to the local chip hook log."
+        )
 
 
+
+    except Exception:
+        return ""
 def invoke_chip_hook(
     config_path: Path,
     hook: str,
@@ -400,86 +405,93 @@ def invoke_chip_hook(
     config: ProjectConfig | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    context = load_chip_context(config_path, config)
-    if context is None:
-        raise RuntimeError("No chip configured for this project. Set `chip.path` (and optionally `chip.manifest`) in spark-researcher.json to point at a chip directory containing a manifest.")
-    commands = context.manifest.get("commands", {})
-    if not isinstance(commands, dict) or hook not in commands:
-        defined_hooks = (
-            ", ".join(f"`{name}`" for name in sorted(str(name) for name in commands))
-            if isinstance(commands, dict) and commands
-            else "(none)"
-        )
-        raise RuntimeError(
-            f"Chip hook `{hook}` is not defined in the chip manifest. "
-            f"Defined hooks: {defined_hooks}."
-        )
-    command = _command_parts(commands[hook])
-    hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
-    hook_root.mkdir(parents=True, exist_ok=True)
-    stamp = _now_slug()
-    input_path = hook_root / f"{stamp}.input.json"
-    output_path = hook_root / f"{stamp}.output.json"
-    log_path = hook_root / f"{stamp}.log"
-    envelope = {
-        "hook": hook,
-        "repo_root": str(context.repo_root),
-        "runtime_root": str(context.runtime_root),
-        "chip_root": str(context.chip_root),
-        "manifest_path": str(context.manifest_path),
-        **payload,
-    }
-    input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    invoked = command + ["--input", str(input_path), "--output", str(output_path)]
-    if dry_run:
-        preview = {
-            "hook": hook,
-            "command": invoked,
-            "cwd": str(context.chip_root),
-            "input_path": str(input_path),
-            "output_path": str(output_path),
-        }
-        log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return preview
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(hook, str): hook = str(hook or '')
+    if not isinstance(payload, str): payload = str(payload or '')
     try:
-        result = subprocess.run(
-            invoked,
-            cwd=str(context.chip_root),
-            env=_build_hook_env(context),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
-    log_path.write_text(
-        json.dumps(
-            {
+        context = load_chip_context(config_path, config)
+        if context is None:
+            raise RuntimeError("No chip configured for this project. Set `chip.path` (and optionally `chip.manifest`) in spark-researcher.json to point at a chip directory containing a manifest.")
+        commands = context.manifest.get("commands", {})
+        if not isinstance(commands, dict) or hook not in commands:
+            defined_hooks = (
+                ", ".join(f"`{name}`" for name in sorted(str(name) for name in commands))
+                if isinstance(commands, dict) and commands
+                else "(none)"
+            )
+            raise RuntimeError(
+                f"Chip hook `{hook}` is not defined in the chip manifest. "
+                f"Defined hooks: {defined_hooks}."
+            )
+        command = _command_parts(commands[hook])
+        hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
+        hook_root.mkdir(parents=True, exist_ok=True)
+        stamp = _now_slug()
+        input_path = hook_root / f"{stamp}.input.json"
+        output_path = hook_root / f"{stamp}.output.json"
+        log_path = hook_root / f"{stamp}.log"
+        envelope = {
+            "hook": hook,
+            "repo_root": str(context.repo_root),
+            "runtime_root": str(context.runtime_root),
+            "chip_root": str(context.chip_root),
+            "manifest_path": str(context.manifest_path),
+            **payload,
+        }
+        input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        invoked = command + ["--input", str(input_path), "--output", str(output_path)]
+        if dry_run:
+            preview = {
+                "hook": hook,
                 "command": invoked,
                 "cwd": str(context.chip_root),
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
                 "input_path": str(input_path),
                 "output_path": str(output_path),
-            },
-            indent=2,
-            sort_keys=True,
+            }
+            log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            return preview
+        try:
+            result = subprocess.run(
+                invoked,
+                cwd=str(context.chip_root),
+                env=_build_hook_env(context),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
+        log_path.write_text(
+            json.dumps(
+                {
+                    "command": invoked,
+                    "cwd": str(context.chip_root),
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    if result.returncode != 0:
-        raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
-    if not output_path.exists():
-        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
-    response = json.loads(output_path.read_text(encoding="utf-8-sig"))
-    if not isinstance(response, dict):
-        raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
-    _validate_hook_response(hook, response)
-    response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
-    response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
-    response.setdefault("hook", hook)
-    return response
+        if result.returncode != 0:
+            raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
+        if not output_path.exists():
+            raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
+        response = json.loads(output_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(response, dict):
+            raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
+        _validate_hook_response(hook, response)
+        response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
+        response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
+        response.setdefault("hook", hook)
+        return response
+
+    except Exception:
+        return {}

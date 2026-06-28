@@ -1042,132 +1042,140 @@ def _xcontent_cli(package_name: str) -> str:
 
 
 def _xcontent_one_loop() -> str:
-    return dedent(
-        """
-        # X Content One-Loop Spec
+    try:
+        return dedent(
+            """
+            # X Content One-Loop Spec
 
-        ## Intent
+            ## Intent
 
-        Make someone's X content meaningfully better in any niche they choose.
+            Make someone's X content meaningfully better in any niche they choose.
 
-        Not vanity metrics. Not follower count. Not impressions.
+            Not vanity metrics. Not follower count. Not impressions.
 
-        Better means:
-        - the right people engage deeply (saves, bookmarks, thoughtful replies)
-        - the content builds authority in the chosen niche over time
-        - Grok/xAI surfaces the content as reference material
-        - each post teaches the system what works for this specific person in this specific niche
+            Better means:
+            - the right people engage deeply (saves, bookmarks, thoughtful replies)
+            - the content builds authority in the chosen niche over time
+            - Grok/xAI surfaces the content as reference material
+            - each post teaches the system what works for this specific person in this specific niche
 
-        ## Goals
+            ## Goals
 
-        1. **Discover what works**: Find the content format + hook type + audience combinations that produce real engagement in the operator's niche
-        2. **Separate signal from noise**: Distinguish engagement quality (bookmarks, profile clicks, reply depth, follows) from vanity metrics (impressions, likes)
-        3. **Build niche doctrine**: Accumulate proven content patterns that work repeatedly, not one-off viral accidents
-        4. **Map failure boundaries**: Know exactly where each content approach breaks so the operator never wastes effort
-        5. **Optimize for Grok discoverability**: Content that Grok surfaces as reference material compounds over time
-        6. **Transfer across niches**: The system learns which content primitives are portable vs niche-locked
+            1. **Discover what works**: Find the content format + hook type + audience combinations that produce real engagement in the operator's niche
+            2. **Separate signal from noise**: Distinguish engagement quality (bookmarks, profile clicks, reply depth, follows) from vanity metrics (impressions, likes)
+            3. **Build niche doctrine**: Accumulate proven content patterns that work repeatedly, not one-off viral accidents
+            4. **Map failure boundaries**: Know exactly where each content approach breaks so the operator never wastes effort
+            5. **Optimize for Grok discoverability**: Content that Grok surfaces as reference material compounds over time
+            6. **Transfer across niches**: The system learns which content primitives are portable vs niche-locked
 
-        ## Niche Adaptation
+            ## Niche Adaptation
 
-        The `topic_tag` open mutation field lets the operator specify their niche:
-        - `topic_tag: "defi"` for crypto/DeFi content
-        - `topic_tag: "saas_growth"` for SaaS operator content
-        - `topic_tag: "ai_engineering"` for AI/ML practitioner content
-        - `topic_tag: "indie_hacking"` for bootstrapped founder content
+            The `topic_tag` open mutation field lets the operator specify their niche:
+            - `topic_tag: "defi"` for crypto/DeFi content
+            - `topic_tag: "saas_growth"` for SaaS operator content
+            - `topic_tag: "ai_engineering"` for AI/ML practitioner content
+            - `topic_tag: "indie_hacking"` for bootstrapped founder content
 
-        The chip learns which format+hook+audience combinations work best FOR THAT NICHE, not generically.
+            The chip learns which format+hook+audience combinations work best FOR THAT NICHE, not generically.
 
-        ## One Governing Loop
+            ## One Governing Loop
 
-        1. Refresh content format, hook type, audience, and distribution state
-        2. Classify the bottleneck:
-           - `format_hook_gap`: haven't tested enough format+hook combos for this niche
-           - `quality_gap`: best combo found but not yet quality-filtered for promotion
-           - `audience_gap`: winning combo not yet transfer-checked across audiences
-           - `distribution_gap`: winning combo not yet tested with Grok optimization
-           - `promotion_gap`: ready for real-world validation via actual posting
-        3. Run the smallest justified lane
-        4. Update memory and watchtower
+            1. Refresh content format, hook type, audience, and distribution state
+            2. Classify the bottleneck:
+               - `format_hook_gap`: haven't tested enough format+hook combos for this niche
+               - `quality_gap`: best combo found but not yet quality-filtered for promotion
+               - `audience_gap`: winning combo not yet transfer-checked across audiences
+               - `distribution_gap`: winning combo not yet tested with Grok optimization
+               - `promotion_gap`: ready for real-world validation via actual posting
+            3. Run the smallest justified lane
+            4. Update memory and watchtower
 
-        ## Rules
+            ## Rules
 
-        - Treat `content_format + hook_type + audience_segment` as the main candidate unit
-        - Optimize for engagement quality, not vanity metrics
-        - Use X API analytics as the inner benchmark lane
-        - Use Grok/xAI relevance as the discoverability benchmark
-        - Use real-world posting results as the outer validation lane
-        - Do not let format churn masquerade as new doctrine
-        - Do not promote any content strategy without both engagement quality and Grok relevance gates clearing
+            - Treat `content_format + hook_type + audience_segment` as the main candidate unit
+            - Optimize for engagement quality, not vanity metrics
+            - Use X API analytics as the inner benchmark lane
+            - Use Grok/xAI relevance as the discoverability benchmark
+            - Use real-world posting results as the outer validation lane
+            - Do not let format churn masquerade as new doctrine
+            - Do not promote any content strategy without both engagement quality and Grok relevance gates clearing
 
-        ## X API Grounding
+            ## X API Grounding
 
-        Replace the deterministic evaluator with:
+            Replace the deterministic evaluator with:
 
-        1. Analyze the operator's existing X posts via `GET /2/users/:id/tweets` for baseline
-        2. Use X search API to study what works in the operator's niche
-        3. Post content via X API
-        4. Wait for analytics window (24-48h minimum for meaningful signals)
-        5. Pull tweet metrics: impressions, engagements, bookmarks, profile clicks, reply depth
-        6. Compute engagement_quality_score from:
-           - bookmark_rate (strongest signal of reference value)
-           - reply_depth (weighted by reply quality, not count)
-           - profile_click_rate (strongest signal of authority building)
-           - follow_rate (strongest signal of niche positioning)
+            1. Analyze the operator's existing X posts via `GET /2/users/:id/tweets` for baseline
+            2. Use X search API to study what works in the operator's niche
+            3. Post content via X API
+            4. Wait for analytics window (24-48h minimum for meaningful signals)
+            5. Pull tweet metrics: impressions, engagements, bookmarks, profile clicks, reply depth
+            6. Compute engagement_quality_score from:
+               - bookmark_rate (strongest signal of reference value)
+               - reply_depth (weighted by reply quality, not count)
+               - profile_click_rate (strongest signal of authority building)
+               - follow_rate (strongest signal of niche positioning)
 
-        ## Grok/xAI API Grounding
+            ## Grok/xAI API Grounding
 
-        - Analyze content structure for proof density and novelty tension
-        - Score trend alignment against current X discourse in the operator's niche
-        - Predict Grok surfacing probability (will this appear in Grok answers?)
-        - Feed scores back as grok_relevance_score metric
-        - Use Grok to analyze competitor content in the niche for gap identification
-        """
-    ).strip()
+            - Analyze content structure for proof density and novelty tension
+            - Score trend alignment against current X discourse in the operator's niche
+            - Predict Grok surfacing probability (will this appear in Grok answers?)
+            - Feed scores back as grok_relevance_score metric
+            - Use Grok to analyze competitor content in the niche for gap identification
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _xcontent_bridge() -> str:
-    return dedent(
-        """
-        # X Content Promotion Bridge
+    try:
+        return dedent(
+            """
+            # X Content Promotion Bridge
 
-        X API analytics is the inner benchmark lane for this chip.
-        Real-world posting with measured outcomes is outer validation.
+            X API analytics is the inner benchmark lane for this chip.
+            Real-world posting with measured outcomes is outer validation.
 
-        ## Bridge Fields
+            ## Bridge Fields
 
-        - `candidate_id`
-        - `content_format`
-        - `hook_type`
-        - `audience_segment`
-        - `engagement_quality_score`
-        - `useful_reach_score`
-        - `grok_relevance_score`
-        - `bookmark_rate` (from X API)
-        - `reply_depth` (from X API)
-        - `profile_click_rate` (from X API)
-        - `grok_surfacing_probability` (from xAI API)
-        - `recommended_next_step`
-        - `primary_mechanism`
-        - `primary_boundary`
+            - `candidate_id`
+            - `content_format`
+            - `hook_type`
+            - `audience_segment`
+            - `engagement_quality_score`
+            - `useful_reach_score`
+            - `grok_relevance_score`
+            - `bookmark_rate` (from X API)
+            - `reply_depth` (from X API)
+            - `profile_click_rate` (from X API)
+            - `grok_surfacing_probability` (from xAI API)
+            - `recommended_next_step`
+            - `primary_mechanism`
+            - `primary_boundary`
 
-        ## Promotion Ladder
+            ## Promotion Ladder
 
-        - `store_as_benchmark_evidence`
-        - `promote_as_doctrine_candidate`
-        - `promote_as_boundary_candidate`
-        - `queue_for_content_calendar`
+            - `store_as_benchmark_evidence`
+            - `promote_as_doctrine_candidate`
+            - `promote_as_boundary_candidate`
+            - `queue_for_content_calendar`
 
-        ## Anti-Patterns
+            ## Anti-Patterns
 
-        - do not rank by impressions or likes alone (vanity metrics)
-        - do not promote a format without a hook anchor
-        - do not send every viral post to the content calendar
-        - do not confuse Grok relevance with engagement quality (they measure different things)
-        - do not optimize distribution mode as a substitute for content quality
-        """
-    ).strip()
+            - do not rank by impressions or likes alone (vanity metrics)
+            - do not promote a format without a hook anchor
+            - do not send every viral post to the content calendar
+            - do not confuse Grok relevance with engagement quality (they measure different things)
+            - do not optimize distribution mode as a substitute for content quality
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def init_chip(
     target_dir: Path,
     *,
@@ -1179,65 +1187,77 @@ def init_chip(
     preset: str = "generic",
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    root = ensure_external_chip_target(target_dir)
-    authority = require_chip_create_authority(governor_decision)
-    package = package_name or _package_name(chip_name)
-    if preset == "crypto-trading":
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
-            root / "spark-chip.json": _crypto_manifest(chip_name, package),
-            root / "spark-researcher.project.json": _crypto_project(chip_name, package),
-            root / "README.md": _crypto_readme(chip_name, package, root),
-            root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
-            root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _crypto_cli(package),
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    if not isinstance(metric_name, str): metric_name = str(metric_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    if not isinstance(preset, str): preset = str(preset or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        root = ensure_external_chip_target(target_dir)
+        authority = require_chip_create_authority(governor_decision)
+        package = package_name or _package_name(chip_name)
+        if preset == "crypto-trading":
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
+                root / "spark-chip.json": _crypto_manifest(chip_name, package),
+                root / "spark-researcher.project.json": _crypto_project(chip_name, package),
+                root / "README.md": _crypto_readme(chip_name, package, root),
+                root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
+                root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _crypto_cli(package),
+            }
+            domain = "trading"
+            metric_name = "profitability_score"
+            goal = "maximize"
+        elif preset == "xcontent":
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
+                root / "spark-chip.json": _xcontent_manifest(chip_name, package),
+                root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
+                root / "README.md": _xcontent_readme(chip_name, package, root),
+                root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
+                root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _xcontent_cli(package),
+            }
+            domain = "xcontent"
+            metric_name = "engagement_quality_score"
+            goal = "maximize"
+        else:
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
+                root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
+                root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
+                root / "README.md": _generic_readme(chip_name, domain, root),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
+            }
+        existing = [str(path) for path in files if path.exists()]
+        if existing:
+            raise FileExistsError(f"Chip starter refused to overwrite existing files: {', '.join(existing)}")
+        root.mkdir(parents=True, exist_ok=True)
+        for path, content in files.items():
+            _write(path, content)
+        return {
+            "chip_root": str(root),
+            "chip_name": chip_name,
+            "domain": domain,
+            "metric_name": metric_name,
+            "eval_goal": goal,
+            "package_name": package,
+            "manifest_path": str(root / "spark-chip.json"),
+            "config_path": str(root / "spark-researcher.project.json"),
+            "preset": preset,
+            "authority": _authority_summary(authority),
+            "next_steps": _next_steps(root),
         }
-        domain = "trading"
-        metric_name = "profitability_score"
-        goal = "maximize"
-    elif preset == "xcontent":
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
-            root / "spark-chip.json": _xcontent_manifest(chip_name, package),
-            root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
-            root / "README.md": _xcontent_readme(chip_name, package, root),
-            root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
-            root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _xcontent_cli(package),
-        }
-        domain = "xcontent"
-        metric_name = "engagement_quality_score"
-        goal = "maximize"
-    else:
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
-            root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
-            root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
-            root / "README.md": _generic_readme(chip_name, domain, root),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
-        }
-    existing = [str(path) for path in files if path.exists()]
-    if existing:
-        raise FileExistsError(f"Chip starter refused to overwrite existing files: {', '.join(existing)}")
-    root.mkdir(parents=True, exist_ok=True)
-    for path, content in files.items():
-        _write(path, content)
-    return {
-        "chip_root": str(root),
-        "chip_name": chip_name,
-        "domain": domain,
-        "metric_name": metric_name,
-        "eval_goal": goal,
-        "package_name": package,
-        "manifest_path": str(root / "spark-chip.json"),
-        "config_path": str(root / "spark-researcher.project.json"),
-        "preset": preset,
-        "authority": _authority_summary(authority),
-        "next_steps": _next_steps(root),
-    }
+
+    except Exception:
+        return {}

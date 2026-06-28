@@ -20,13 +20,22 @@ from .trial_queue import append_queue_trials, merged_candidate_trials
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
+    try:
+        return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+
+    except Exception:
+        return ""
 def _continuous_status_path(runtime_root: Path) -> Path:
-    return runtime_root / "artifacts" / "loop" / "continuous_status.json"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return runtime_root / "artifacts" / "loop" / "continuous_status.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _continuous_stop_path(runtime_root: Path) -> Path:
     return runtime_root / "artifacts" / "loop" / "STOP"
 

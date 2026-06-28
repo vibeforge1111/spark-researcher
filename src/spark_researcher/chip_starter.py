@@ -713,461 +713,481 @@ def _xcontent_project(chip_name: str, package_name: str) -> str:
 
 
 def _xcontent_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
-    return dedent(
-        f"""
-        # {chip_name}
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        return dedent(
+            f"""
+            # {chip_name}
 
-        `{chip_name}` is a Spark domain chip for X (Twitter) content research.
+            `{chip_name}` is a Spark domain chip for X (Twitter) content research.
 
-        It evaluates content format + hook type + audience segment combinations
-        against engagement quality, useful reach, and Grok/xAI relevance scoring.
+            It evaluates content format + hook type + audience segment combinations
+            against engagement quality, useful reach, and Grok/xAI relevance scoring.
 
-        Integration surfaces:
+            Integration surfaces:
 
-        - **X API**: Post analytics (impressions, engagements, profile clicks, bookmark rate)
-        - **Grok/xAI API**: Content relevance scoring, trend alignment, discoverability prediction
-        - **Benchmark**: Deterministic scaffold evaluator (replace with live X API + Grok grading)
+            - **X API**: Post analytics (impressions, engagements, profile clicks, bookmark rate)
+            - **Grok/xAI API**: Content relevance scoring, trend alignment, discoverability prediction
+            - **Benchmark**: Deterministic scaffold evaluator (replace with live X API + Grok grading)
 
-        Design-system rule:
+            Design-system rule:
 
-        - choose your chip design path from `docs/CHIP_SYSTEMS.md`
-        - use `v1` for lighter experimentation or `v2` for stricter reusable standards
-        - keep the runtime contract grounded in `docs/CHIPS.md`
+            - choose your chip design path from `docs/CHIP_SYSTEMS.md`
+            - use `v1` for lighter experimentation or `v2` for stricter reusable standards
+            - keep the runtime contract grounded in `docs/CHIPS.md`
 
-        ## Quick Start
+            ## Quick Start
 
-        ```powershell
-        cd {chip_root}
-        python -m pip install -e .
-        python -m pip install -e ..\\spark-researcher
-        $env:PYTHONPATH='..\\spark-researcher\\src;src'
-        python -m spark_researcher.cli chips validate
-        python -m spark_researcher.cli autoloop --command research
-        ```
+            ```powershell
+            cd {chip_root}
+            python -m pip install -e .
+            python -m pip install -e ..\\spark-researcher
+            $env:PYTHONPATH='..\\spark-researcher\\src;src'
+            python -m spark_researcher.cli chips validate
+            python -m spark_researcher.cli autoloop --command research
+            ```
 
-        ## Next Steps
+            ## Next Steps
 
-        1. Replace the deterministic evaluator with live X API analytics grading.
-        2. Add Grok/xAI API calls for content relevance and trend alignment scoring.
-        3. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
-        4. Consume only `promote_as_doctrine` candidates in the content calendar.
+            1. Replace the deterministic evaluator with live X API analytics grading.
+            2. Add Grok/xAI API calls for content relevance and trend alignment scoring.
+            3. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
+            4. Consume only `promote_as_doctrine` candidates in the content calendar.
 
-        ## X API Integration Points
+            ## X API Integration Points
 
-        - `GET /2/tweets/:id` — tweet metrics (impressions, likes, retweets, replies, bookmarks)
-        - `GET /2/tweets/:id/quote_tweets` — quote tweet engagement depth
-        - `GET /2/users/:id/tweets` — historical performance baselines
-        - `GET /2/tweets/search/recent` — trending topic alignment
+            - `GET /2/tweets/:id` — tweet metrics (impressions, likes, retweets, replies, bookmarks)
+            - `GET /2/tweets/:id/quote_tweets` — quote tweet engagement depth
+            - `GET /2/users/:id/tweets` — historical performance baselines
+            - `GET /2/tweets/search/recent` — trending topic alignment
 
-        ## Grok/xAI API Integration Points
+            ## Grok/xAI API Integration Points
 
-        - Content quality analysis (proof density, novelty tension, audience fit)
-        - Trend alignment scoring against current X discourse
-        - Discoverability prediction (will Grok surface this in answers?)
-        - Engagement quality prediction (meaningful vs vanity metrics)
+            - Content quality analysis (proof density, novelty tension, audience fit)
+            - Trend alignment scoring against current X discourse
+            - Discoverability prediction (will Grok surface this in answers?)
+            - Engagement quality prediction (meaningful vs vanity metrics)
 
-        Included docs:
+            Included docs:
 
-        - `docs/XCONTENT_ONE_LOOP_SPEC.md`
-        - `docs/XCONTENT_BENCH_PROMOTION_BRIDGE.md`
-        """
-    ).strip()
+            - `docs/XCONTENT_ONE_LOOP_SPEC.md`
+            - `docs/XCONTENT_BENCH_PROMOTION_BRIDGE.md`
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _xcontent_cli(package_name: str) -> str:
-    return dedent(
-        f"""
-        from __future__ import annotations
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        return dedent(
+            f"""
+            from __future__ import annotations
 
-        import argparse
-        import json
-        from pathlib import Path
-        from typing import Any
+            import argparse
+            import json
+            from pathlib import Path
+            from typing import Any
 
-        FORMAT_CATALOG: dict[str, dict[str, Any]] = {{
-            "thread": {{"base_engagement": 0.18, "base_reach": 0.15, "base_grok": 0.20, "dwell_bonus": 0.12, "label": "Thread", "claim": "Threads reward depth and X algo favors dwell time.", "mechanism": "Multi-post structure creates progressive commitment and bookmark behavior.", "boundary": "Weak when individual posts lack standalone hooks.", "next_probe": "Test with different hook types to find best thread opener."}},
-            "single_post": {{"base_engagement": 0.14, "base_reach": 0.18, "base_grok": 0.10, "dwell_bonus": 0.0, "label": "Single Post", "claim": "Single posts optimize for feed stops and retweet loops.", "mechanism": "Compression forces clarity. Strong single posts get quote-tweeted into new audiences.", "boundary": "Ceiling is lower without depth. Easily lost in feed volume.", "next_probe": "Pair with contrarian or data hook for maximum feed-stop power."}},
-            "quote_tweet": {{"base_engagement": 0.16, "base_reach": 0.20, "base_grok": 0.08, "dwell_bonus": 0.04, "label": "Quote Tweet", "claim": "Quote tweets borrow existing distribution and add opinion leverage.", "mechanism": "Riding existing viral surface while adding novel framing creates dual-audience exposure.", "boundary": "Depends on source tweet quality. Can look reactive without strong angle.", "next_probe": "Test with trending topic alignment for maximum borrowed reach."}},
-            "poll": {{"base_engagement": 0.20, "base_reach": 0.12, "base_grok": 0.14, "dwell_bonus": 0.06, "label": "Poll", "claim": "Polls drive structured interaction data and high reply depth.", "mechanism": "Voting creates micro-commitment. Reply threads under polls generate Grok-indexable discussion.", "boundary": "Low conversion to profile follows unless paired with strong question framing.", "next_probe": "Add question hook to drive reply quality beyond vote counts."}},
-        }}
-        HOOK_CATALOG: dict[str, dict[str, Any]] = {{
-            "proof_founder": {{"engagement": 0.14, "reach": 0.10, "grok": 0.16, "confidence": 0.84, "label": "Proof-led founder", "claim": "Quantified proof with direct operator lessons travels well on X.", "mechanism": "Concrete numbers reduce skepticism. Founders share proof posts as reference material.", "audience": "founders", "boundary": "Weak when proof is vague or the numbers are cherry-picked.", "next_probe": "Stress-test the proof hook against adjacent audiences and weaker evidence density."}},
-            "contrarian_take": {{"engagement": 0.12, "reach": 0.16, "grok": 0.06, "confidence": 0.72, "label": "Contrarian take", "claim": "Contrarian framing creates feed stops and quote-tweet debate loops.", "mechanism": "Novelty tension creates engagement spikes. Quote tweets amplify into new audience pockets.", "audience": "operators", "boundary": "Decays into generic hot-take writing without evidence backing.", "next_probe": "Check whether the same contrarian angle still works once stronger proof is added."}},
-            "question_hook": {{"engagement": 0.16, "reach": 0.06, "grok": 0.12, "confidence": 0.68, "label": "Question hook", "claim": "Question hooks drive reply depth and Grok-indexable discussion threads.", "mechanism": "Open questions create lightweight commitment. Reply threads become searchable discourse.", "audience": "founders", "boundary": "Weak for action-oriented goals. Can attract low-signal replies.", "next_probe": "Test whether tighter audience targeting improves reply quality over raw volume."}},
-            "data_insight": {{"engagement": 0.10, "reach": 0.12, "grok": 0.18, "confidence": 0.80, "label": "Data insight", "claim": "Data-backed posts earn saves, bookmarks, and Grok reference surfacing.", "mechanism": "Specific data creates reference value. Bookmarks signal Grok-indexable quality.", "audience": "developers", "boundary": "Requires genuine data access. Fabricated stats destroy credibility fast.", "next_probe": "Probe whether lighter-weight data visuals preserve saves without losing trust."}},
-        }}
-        AUDIENCE_BONUS: dict[str, dict[str, float]] = {{
-            "founders": {{"engagement": 0.02, "reach": 0.01, "grok": 0.03}},
-            "operators": {{"engagement": 0.03, "reach": 0.02, "grok": 0.01}},
-            "developers": {{"engagement": 0.01, "reach": 0.01, "grok": 0.04}},
-            "traders": {{"engagement": 0.03, "reach": 0.03, "grok": 0.00}},
-        }}
-        QUALITY_FILTER_UPLIFT: dict[str, dict[str, float]] = {{
-            "proof_quality": {{"engagement": 0.06, "reach": 0.04, "grok": 0.08}},
-            "novelty_tension": {{"engagement": 0.05, "reach": 0.06, "grok": 0.03}},
-            "thread_depth": {{"engagement": 0.04, "reach": 0.02, "grok": 0.06}},
-        }}
-        DISTRIBUTION_MODIFIER: dict[str, dict[str, float]] = {{
-            "organic": {{"engagement": 0.0, "reach": 0.0, "grok": 0.0}},
-            "grok_optimized": {{"engagement": 0.02, "reach": 0.03, "grok": 0.10}},
-            "engagement_loop": {{"engagement": 0.06, "reach": 0.04, "grok": -0.02}},
-        }}
-        FORMAT_HOOK_SYNERGY: dict[str, float] = {{
-            "thread|proof_founder": 0.10,
-            "thread|data_insight": 0.08,
-            "single_post|contrarian_take": 0.09,
-            "quote_tweet|contrarian_take": 0.08,
-            "poll|question_hook": 0.10,
-            "thread|question_hook": 0.05,
-            "single_post|proof_founder": 0.04,
-            "quote_tweet|data_insight": 0.06,
-            "poll|data_insight": 0.05,
-        }}
-        HOOK_AUDIENCE_SYNERGY: dict[str, float] = {{
-            "proof_founder|founders": 0.07,
-            "contrarian_take|operators": 0.06,
-            "contrarian_take|traders": 0.08,
-            "data_insight|developers": 0.09,
-            "question_hook|founders": 0.05,
-            "data_insight|traders": 0.04,
-        }}
-        BASELINE = {{"engagement_quality_score": 0.32, "useful_reach_score": 0.28, "grok_relevance_score": 0.18, "verdict_confidence": 0.50}}
+            FORMAT_CATALOG: dict[str, dict[str, Any]] = {{
+                "thread": {{"base_engagement": 0.18, "base_reach": 0.15, "base_grok": 0.20, "dwell_bonus": 0.12, "label": "Thread", "claim": "Threads reward depth and X algo favors dwell time.", "mechanism": "Multi-post structure creates progressive commitment and bookmark behavior.", "boundary": "Weak when individual posts lack standalone hooks.", "next_probe": "Test with different hook types to find best thread opener."}},
+                "single_post": {{"base_engagement": 0.14, "base_reach": 0.18, "base_grok": 0.10, "dwell_bonus": 0.0, "label": "Single Post", "claim": "Single posts optimize for feed stops and retweet loops.", "mechanism": "Compression forces clarity. Strong single posts get quote-tweeted into new audiences.", "boundary": "Ceiling is lower without depth. Easily lost in feed volume.", "next_probe": "Pair with contrarian or data hook for maximum feed-stop power."}},
+                "quote_tweet": {{"base_engagement": 0.16, "base_reach": 0.20, "base_grok": 0.08, "dwell_bonus": 0.04, "label": "Quote Tweet", "claim": "Quote tweets borrow existing distribution and add opinion leverage.", "mechanism": "Riding existing viral surface while adding novel framing creates dual-audience exposure.", "boundary": "Depends on source tweet quality. Can look reactive without strong angle.", "next_probe": "Test with trending topic alignment for maximum borrowed reach."}},
+                "poll": {{"base_engagement": 0.20, "base_reach": 0.12, "base_grok": 0.14, "dwell_bonus": 0.06, "label": "Poll", "claim": "Polls drive structured interaction data and high reply depth.", "mechanism": "Voting creates micro-commitment. Reply threads under polls generate Grok-indexable discussion.", "boundary": "Low conversion to profile follows unless paired with strong question framing.", "next_probe": "Add question hook to drive reply quality beyond vote counts."}},
+            }}
+            HOOK_CATALOG: dict[str, dict[str, Any]] = {{
+                "proof_founder": {{"engagement": 0.14, "reach": 0.10, "grok": 0.16, "confidence": 0.84, "label": "Proof-led founder", "claim": "Quantified proof with direct operator lessons travels well on X.", "mechanism": "Concrete numbers reduce skepticism. Founders share proof posts as reference material.", "audience": "founders", "boundary": "Weak when proof is vague or the numbers are cherry-picked.", "next_probe": "Stress-test the proof hook against adjacent audiences and weaker evidence density."}},
+                "contrarian_take": {{"engagement": 0.12, "reach": 0.16, "grok": 0.06, "confidence": 0.72, "label": "Contrarian take", "claim": "Contrarian framing creates feed stops and quote-tweet debate loops.", "mechanism": "Novelty tension creates engagement spikes. Quote tweets amplify into new audience pockets.", "audience": "operators", "boundary": "Decays into generic hot-take writing without evidence backing.", "next_probe": "Check whether the same contrarian angle still works once stronger proof is added."}},
+                "question_hook": {{"engagement": 0.16, "reach": 0.06, "grok": 0.12, "confidence": 0.68, "label": "Question hook", "claim": "Question hooks drive reply depth and Grok-indexable discussion threads.", "mechanism": "Open questions create lightweight commitment. Reply threads become searchable discourse.", "audience": "founders", "boundary": "Weak for action-oriented goals. Can attract low-signal replies.", "next_probe": "Test whether tighter audience targeting improves reply quality over raw volume."}},
+                "data_insight": {{"engagement": 0.10, "reach": 0.12, "grok": 0.18, "confidence": 0.80, "label": "Data insight", "claim": "Data-backed posts earn saves, bookmarks, and Grok reference surfacing.", "mechanism": "Specific data creates reference value. Bookmarks signal Grok-indexable quality.", "audience": "developers", "boundary": "Requires genuine data access. Fabricated stats destroy credibility fast.", "next_probe": "Probe whether lighter-weight data visuals preserve saves without losing trust."}},
+            }}
+            AUDIENCE_BONUS: dict[str, dict[str, float]] = {{
+                "founders": {{"engagement": 0.02, "reach": 0.01, "grok": 0.03}},
+                "operators": {{"engagement": 0.03, "reach": 0.02, "grok": 0.01}},
+                "developers": {{"engagement": 0.01, "reach": 0.01, "grok": 0.04}},
+                "traders": {{"engagement": 0.03, "reach": 0.03, "grok": 0.00}},
+            }}
+            QUALITY_FILTER_UPLIFT: dict[str, dict[str, float]] = {{
+                "proof_quality": {{"engagement": 0.06, "reach": 0.04, "grok": 0.08}},
+                "novelty_tension": {{"engagement": 0.05, "reach": 0.06, "grok": 0.03}},
+                "thread_depth": {{"engagement": 0.04, "reach": 0.02, "grok": 0.06}},
+            }}
+            DISTRIBUTION_MODIFIER: dict[str, dict[str, float]] = {{
+                "organic": {{"engagement": 0.0, "reach": 0.0, "grok": 0.0}},
+                "grok_optimized": {{"engagement": 0.02, "reach": 0.03, "grok": 0.10}},
+                "engagement_loop": {{"engagement": 0.06, "reach": 0.04, "grok": -0.02}},
+            }}
+            FORMAT_HOOK_SYNERGY: dict[str, float] = {{
+                "thread|proof_founder": 0.10,
+                "thread|data_insight": 0.08,
+                "single_post|contrarian_take": 0.09,
+                "quote_tweet|contrarian_take": 0.08,
+                "poll|question_hook": 0.10,
+                "thread|question_hook": 0.05,
+                "single_post|proof_founder": 0.04,
+                "quote_tweet|data_insight": 0.06,
+                "poll|data_insight": 0.05,
+            }}
+            HOOK_AUDIENCE_SYNERGY: dict[str, float] = {{
+                "proof_founder|founders": 0.07,
+                "contrarian_take|operators": 0.06,
+                "contrarian_take|traders": 0.08,
+                "data_insight|developers": 0.09,
+                "question_hook|founders": 0.05,
+                "data_insight|traders": 0.04,
+            }}
+            BASELINE = {{"engagement_quality_score": 0.32, "useful_reach_score": 0.28, "grok_relevance_score": 0.18, "verdict_confidence": 0.50}}
 
-        def _load(path: str) -> dict[str, Any]:
-            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+            def _load(path: str) -> dict[str, Any]:
+                return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
-        def _write(path: str, payload: dict[str, Any]) -> None:
-            Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+            def _write(path: str, payload: dict[str, Any]) -> None:
+                Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
 
-        def _mutations(payload: dict[str, Any]) -> dict[str, str]:
-            candidate = payload.get("candidate", {{}})
-            raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
-            return {{str(key): str(value) for key, value in raw.items()}}
+            def _mutations(payload: dict[str, Any]) -> dict[str, str]:
+                candidate = payload.get("candidate", {{}})
+                raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
+                return {{str(key): str(value) for key, value in raw.items()}}
 
-        def _clamp(value: float) -> float:
-            return round(max(0.0, min(0.99, value)), 4)
+            def _clamp(value: float) -> float:
+                return round(max(0.0, min(0.99, value)), 4)
 
-        def _score(mutations: dict[str, str]) -> dict[str, Any]:
-            content_format = mutations.get("content_format", "")
-            hook_type = mutations.get("hook_type", "")
-            audience_segment = mutations.get("audience_segment", "")
-            quality_filter = mutations.get("quality_filter", "")
-            distribution_mode = mutations.get("distribution_mode", "")
-            fmt = FORMAT_CATALOG.get(content_format, {{}})
-            hook = HOOK_CATALOG.get(hook_type, {{}})
-            audience = AUDIENCE_BONUS.get(audience_segment, {{}})
-            quality = QUALITY_FILTER_UPLIFT.get(quality_filter, {{}})
-            dist = DISTRIBUTION_MODIFIER.get(distribution_mode, {{}})
-            if not fmt and not hook:
-                return {{**BASELINE, "verdict": "baseline", "promotion_status": "advisory", "claim": "Generic X content baseline with no format or hook focus.", "mechanism": "Without a concrete format and hook, engagement is accidental.", "boundary": "Too broad for doctrine promotion.", "next_probe": "Probe the strongest format+hook combination.", "label": "Global baseline", "recommended_next_step": "run_format_hook_probe"}}
-            synergy_fh = FORMAT_HOOK_SYNERGY.get(content_format + "|" + hook_type, -0.02 if content_format and hook_type else 0.0)
-            synergy_ha = HOOK_AUDIENCE_SYNERGY.get(hook_type + "|" + audience_segment, -0.01 if hook_type and audience_segment else 0.0)
-            engagement = _clamp(BASELINE["engagement_quality_score"] + fmt.get("base_engagement", 0.0) + hook.get("engagement", 0.0) + audience.get("engagement", 0.0) + quality.get("engagement", 0.0) + dist.get("engagement", 0.0) + synergy_fh + synergy_ha + fmt.get("dwell_bonus", 0.0) * 0.5)
-            reach = _clamp(BASELINE["useful_reach_score"] + fmt.get("base_reach", 0.0) + hook.get("reach", 0.0) + audience.get("reach", 0.0) + quality.get("reach", 0.0) + dist.get("reach", 0.0) + synergy_fh * 0.6)
-            grok = _clamp(BASELINE["grok_relevance_score"] + fmt.get("base_grok", 0.0) + hook.get("grok", 0.0) + audience.get("grok", 0.0) + quality.get("grok", 0.0) + dist.get("grok", 0.0) + synergy_ha * 0.4)
-            confidence = _clamp(0.45 + engagement * 0.2 + reach * 0.15 + grok * 0.2 + hook.get("confidence", 0.5) * 0.15)
-            label_parts = [fmt.get("label", content_format), hook.get("label", hook_type)]
-            if audience_segment:
-                label_parts.append(f"[{{audience_segment}}]")
-            if quality_filter:
-                label_parts.append(f"+ {{quality_filter.replace('_', ' ')}}")
-            if distribution_mode and distribution_mode != "organic":
-                label_parts.append(f"({{distribution_mode}})")
-            label = " ".join(label_parts)
-            claim = fmt.get("claim", "") + " " + hook.get("claim", "")
-            mechanism = fmt.get("mechanism", "") + " " + hook.get("mechanism", "")
-            boundary = fmt.get("boundary", "") + " " + hook.get("boundary", "")
-            next_probe = hook.get("next_probe", fmt.get("next_probe", "Expand along the weakest axis."))
-            if engagement >= 0.78 and grok >= 0.55:
-                verdict, next_step = "approve", "promote_as_doctrine"
-            elif engagement >= 0.62 and reach >= 0.50:
-                verdict, next_step = "defer", "hold_for_more_x_analytics"
-            else:
-                verdict, next_step = "reject", "run_format_hook_probe"
-            promotion_status = "validated" if verdict == "approve" else "candidate" if verdict == "defer" else "advisory"
-            return {{"engagement_quality_score": engagement, "useful_reach_score": reach, "grok_relevance_score": grok, "verdict_confidence": confidence, "verdict": verdict, "promotion_status": promotion_status, "recommended_next_step": next_step, "claim": claim.strip(), "mechanism": mechanism.strip(), "boundary": boundary.strip(), "next_probe": next_probe, "label": label}}
+            def _score(mutations: dict[str, str]) -> dict[str, Any]:
+                content_format = mutations.get("content_format", "")
+                hook_type = mutations.get("hook_type", "")
+                audience_segment = mutations.get("audience_segment", "")
+                quality_filter = mutations.get("quality_filter", "")
+                distribution_mode = mutations.get("distribution_mode", "")
+                fmt = FORMAT_CATALOG.get(content_format, {{}})
+                hook = HOOK_CATALOG.get(hook_type, {{}})
+                audience = AUDIENCE_BONUS.get(audience_segment, {{}})
+                quality = QUALITY_FILTER_UPLIFT.get(quality_filter, {{}})
+                dist = DISTRIBUTION_MODIFIER.get(distribution_mode, {{}})
+                if not fmt and not hook:
+                    return {{**BASELINE, "verdict": "baseline", "promotion_status": "advisory", "claim": "Generic X content baseline with no format or hook focus.", "mechanism": "Without a concrete format and hook, engagement is accidental.", "boundary": "Too broad for doctrine promotion.", "next_probe": "Probe the strongest format+hook combination.", "label": "Global baseline", "recommended_next_step": "run_format_hook_probe"}}
+                synergy_fh = FORMAT_HOOK_SYNERGY.get(content_format + "|" + hook_type, -0.02 if content_format and hook_type else 0.0)
+                synergy_ha = HOOK_AUDIENCE_SYNERGY.get(hook_type + "|" + audience_segment, -0.01 if hook_type and audience_segment else 0.0)
+                engagement = _clamp(BASELINE["engagement_quality_score"] + fmt.get("base_engagement", 0.0) + hook.get("engagement", 0.0) + audience.get("engagement", 0.0) + quality.get("engagement", 0.0) + dist.get("engagement", 0.0) + synergy_fh + synergy_ha + fmt.get("dwell_bonus", 0.0) * 0.5)
+                reach = _clamp(BASELINE["useful_reach_score"] + fmt.get("base_reach", 0.0) + hook.get("reach", 0.0) + audience.get("reach", 0.0) + quality.get("reach", 0.0) + dist.get("reach", 0.0) + synergy_fh * 0.6)
+                grok = _clamp(BASELINE["grok_relevance_score"] + fmt.get("base_grok", 0.0) + hook.get("grok", 0.0) + audience.get("grok", 0.0) + quality.get("grok", 0.0) + dist.get("grok", 0.0) + synergy_ha * 0.4)
+                confidence = _clamp(0.45 + engagement * 0.2 + reach * 0.15 + grok * 0.2 + hook.get("confidence", 0.5) * 0.15)
+                label_parts = [fmt.get("label", content_format), hook.get("label", hook_type)]
+                if audience_segment:
+                    label_parts.append(f"[{{audience_segment}}]")
+                if quality_filter:
+                    label_parts.append(f"+ {{quality_filter.replace('_', ' ')}}")
+                if distribution_mode and distribution_mode != "organic":
+                    label_parts.append(f"({{distribution_mode}})")
+                label = " ".join(label_parts)
+                claim = fmt.get("claim", "") + " " + hook.get("claim", "")
+                mechanism = fmt.get("mechanism", "") + " " + hook.get("mechanism", "")
+                boundary = fmt.get("boundary", "") + " " + hook.get("boundary", "")
+                next_probe = hook.get("next_probe", fmt.get("next_probe", "Expand along the weakest axis."))
+                if engagement >= 0.78 and grok >= 0.55:
+                    verdict, next_step = "approve", "promote_as_doctrine"
+                elif engagement >= 0.62 and reach >= 0.50:
+                    verdict, next_step = "defer", "hold_for_more_x_analytics"
+                else:
+                    verdict, next_step = "reject", "run_format_hook_probe"
+                promotion_status = "validated" if verdict == "approve" else "candidate" if verdict == "defer" else "advisory"
+                return {{"engagement_quality_score": engagement, "useful_reach_score": reach, "grok_relevance_score": grok, "verdict_confidence": confidence, "verdict": verdict, "promotion_status": promotion_status, "recommended_next_step": next_step, "claim": claim.strip(), "mechanism": mechanism.strip(), "boundary": boundary.strip(), "next_probe": next_probe, "label": label}}
 
-        def evaluate(payload: dict[str, Any]) -> dict[str, Any]:
-            result = _score(_mutations(payload))
-            stdout = "\\n".join(["engagement_quality_score: " + str(result["engagement_quality_score"]), "useful_reach_score: " + str(result["useful_reach_score"]), "grok_relevance_score: " + str(result["grok_relevance_score"]), "verdict_confidence: " + str(result["verdict_confidence"]), "verdict: " + str(result["verdict"]), "promotion_status: " + str(result["promotion_status"]), "next_probe: " + str(result["next_probe"])])
-            return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"engagement_quality_score": result["engagement_quality_score"], "useful_reach_score": result["useful_reach_score"], "grok_relevance_score": result["grok_relevance_score"], "verdict_confidence": result["verdict_confidence"]}}, "result": result}}
+            def evaluate(payload: dict[str, Any]) -> dict[str, Any]:
+                result = _score(_mutations(payload))
+                stdout = "\\n".join(["engagement_quality_score: " + str(result["engagement_quality_score"]), "useful_reach_score: " + str(result["useful_reach_score"]), "grok_relevance_score: " + str(result["grok_relevance_score"]), "verdict_confidence: " + str(result["verdict_confidence"]), "verdict: " + str(result["verdict"]), "promotion_status: " + str(result["promotion_status"]), "next_probe: " + str(result["next_probe"])])
+                return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"engagement_quality_score": result["engagement_quality_score"], "useful_reach_score": result["useful_reach_score"], "grok_relevance_score": result["grok_relevance_score"], "verdict_confidence": result["verdict_confidence"]}}, "result": result}}
 
-        def suggest(payload: dict[str, Any]) -> dict[str, Any]:
-            command_name = str(payload.get("command_name", "research"))
-            limit = max(1, int(payload.get("limit", 3) or 3))
-            rows = payload.get("ledger_rows", [])
-            rows = rows if isinstance(rows, list) else []
-            tested: set[tuple[str, ...]] = set()
-            for row in rows:
-                if str(row.get("command_name", "")) != command_name:
-                    continue
-                muts = row.get("applied_mutations", [])
-                muts = muts if isinstance(muts, list) else []
-                sig = {{str(m.get("name", "")): str(m.get("value", "")) for m in muts if isinstance(m, dict)}}
-                tested.add((sig.get("content_format", ""), sig.get("hook_type", ""), sig.get("audience_segment", ""), sig.get("quality_filter", ""), sig.get("distribution_mode", "")))
-            existing: set[tuple[str, ...]] = set()
-            for item in payload.get("candidate_trials", []):
-                if not isinstance(item, dict):
-                    continue
-                m = item.get("mutations", {{}})
-                existing.add((str(m.get("content_format", "")), str(m.get("hook_type", "")), str(m.get("audience_segment", "")), str(m.get("quality_filter", "")), str(m.get("distribution_mode", ""))))
-            suggestions: list[dict[str, Any]] = []
-            reasons: list[str] = []
-            improved_rows = [row for row in rows if str(row.get("command_name", "")) == command_name and str(row.get("verdict", "")) == "improved"]
-            if improved_rows:
-                best_row = max(improved_rows, key=lambda r: float(r.get("metric_value", 0.0) or 0.0))
-                best_muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in best_row.get("applied_mutations", []) if isinstance(m, dict)}}
-                best_fmt = best_muts.get("content_format", "")
-                best_hook = best_muts.get("hook_type", "")
-                best_audience = best_muts.get("audience_segment", "")
-                if best_fmt and best_hook:
-                    for qf in ("proof_quality", "novelty_tension", "thread_depth"):
-                        sig = (best_fmt, best_hook, best_audience, qf, "")
-                        if sig in tested or sig in existing:
-                            continue
-                        mutations = {{"content_format": best_fmt, "hook_type": best_hook, "quality_filter": qf}}
-                        if best_audience:
-                            mutations["audience_segment"] = best_audience
-                        suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{qf}}", "candidate_summary": f"Add {{qf}} filter to winning {{best_fmt}}+{{best_hook}} combo.", "hypothesis": f"Quality filter `{{qf}}` should push engagement quality past promotion threshold.", "mutations": mutations}})
-                        reasons.append(f"Attach quality filter `{{qf}}` to best observed format+hook `{{best_fmt}}+{{best_hook}}`.")
-                        break
-                    for dm in ("grok_optimized", "engagement_loop"):
-                        sig = (best_fmt, best_hook, best_audience, "", dm)
-                        if sig in tested or sig in existing:
-                            continue
-                        mutations = {{"content_format": best_fmt, "hook_type": best_hook, "distribution_mode": dm}}
-                        if best_audience:
-                            mutations["audience_segment"] = best_audience
-                        suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{dm}}", "candidate_summary": f"Test {{dm}} distribution on winning {{best_fmt}}+{{best_hook}}.", "hypothesis": f"Distribution mode `{{dm}}` should amplify the winning combo's reach or Grok relevance.", "mutations": mutations}})
-                        reasons.append(f"Test distribution mode `{{dm}}` on best observed combo.")
-                        if len(suggestions) >= limit:
-                            break
-                    if best_hook and len(suggestions) < limit:
-                        for audience in ("founders", "operators", "developers", "traders"):
-                            if audience == best_audience:
-                                continue
-                            sig = (best_fmt, best_hook, audience, "", "")
+            def suggest(payload: dict[str, Any]) -> dict[str, Any]:
+                command_name = str(payload.get("command_name", "research"))
+                limit = max(1, int(payload.get("limit", 3) or 3))
+                rows = payload.get("ledger_rows", [])
+                rows = rows if isinstance(rows, list) else []
+                tested: set[tuple[str, ...]] = set()
+                for row in rows:
+                    if str(row.get("command_name", "")) != command_name:
+                        continue
+                    muts = row.get("applied_mutations", [])
+                    muts = muts if isinstance(muts, list) else []
+                    sig = {{str(m.get("name", "")): str(m.get("value", "")) for m in muts if isinstance(m, dict)}}
+                    tested.add((sig.get("content_format", ""), sig.get("hook_type", ""), sig.get("audience_segment", ""), sig.get("quality_filter", ""), sig.get("distribution_mode", "")))
+                existing: set[tuple[str, ...]] = set()
+                for item in payload.get("candidate_trials", []):
+                    if not isinstance(item, dict):
+                        continue
+                    m = item.get("mutations", {{}})
+                    existing.add((str(m.get("content_format", "")), str(m.get("hook_type", "")), str(m.get("audience_segment", "")), str(m.get("quality_filter", "")), str(m.get("distribution_mode", ""))))
+                suggestions: list[dict[str, Any]] = []
+                reasons: list[str] = []
+                improved_rows = [row for row in rows if str(row.get("command_name", "")) == command_name and str(row.get("verdict", "")) == "improved"]
+                if improved_rows:
+                    best_row = max(improved_rows, key=lambda r: float(r.get("metric_value", 0.0) or 0.0))
+                    best_muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in best_row.get("applied_mutations", []) if isinstance(m, dict)}}
+                    best_fmt = best_muts.get("content_format", "")
+                    best_hook = best_muts.get("hook_type", "")
+                    best_audience = best_muts.get("audience_segment", "")
+                    if best_fmt and best_hook:
+                        for qf in ("proof_quality", "novelty_tension", "thread_depth"):
+                            sig = (best_fmt, best_hook, best_audience, qf, "")
                             if sig in tested or sig in existing:
                                 continue
-                            suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{audience}}", "candidate_summary": f"Transfer-check {{best_fmt}}+{{best_hook}} for {{audience}}.", "hypothesis": f"Check whether the winning format+hook transfers to the `{{audience}}` audience.", "mutations": {{"content_format": best_fmt, "hook_type": best_hook, "audience_segment": audience}}}})
-                            reasons.append(f"Run audience transfer check `{{audience}}` on winning combo.")
+                            mutations = {{"content_format": best_fmt, "hook_type": best_hook, "quality_filter": qf}}
+                            if best_audience:
+                                mutations["audience_segment"] = best_audience
+                            suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{qf}}", "candidate_summary": f"Add {{qf}} filter to winning {{best_fmt}}+{{best_hook}} combo.", "hypothesis": f"Quality filter `{{qf}}` should push engagement quality past promotion threshold.", "mutations": mutations}})
+                            reasons.append(f"Attach quality filter `{{qf}}` to best observed format+hook `{{best_fmt}}+{{best_hook}}`.")
+                            break
+                        for dm in ("grok_optimized", "engagement_loop"):
+                            sig = (best_fmt, best_hook, best_audience, "", dm)
+                            if sig in tested or sig in existing:
+                                continue
+                            mutations = {{"content_format": best_fmt, "hook_type": best_hook, "distribution_mode": dm}}
+                            if best_audience:
+                                mutations["audience_segment"] = best_audience
+                            suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{dm}}", "candidate_summary": f"Test {{dm}} distribution on winning {{best_fmt}}+{{best_hook}}.", "hypothesis": f"Distribution mode `{{dm}}` should amplify the winning combo's reach or Grok relevance.", "mutations": mutations}})
+                            reasons.append(f"Test distribution mode `{{dm}}` on best observed combo.")
                             if len(suggestions) >= limit:
                                 break
-            synergy_ranked = sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda item: item[1], reverse=True)
-            for combo_key, _ in synergy_ranked:
-                if len(suggestions) >= limit:
-                    break
-                parts = combo_key.split("|")
-                if len(parts) != 2:
-                    continue
-                fmt_key, hook_key = parts
-                sig = (fmt_key, hook_key, "", "", "")
-                if sig in tested or sig in existing:
-                    continue
-                suggestions.append({{"candidate_id": f"{{fmt_key}}-{{hook_key}}", "candidate_summary": f"Probe high-synergy combo {{fmt_key}}+{{hook_key}}.", "hypothesis": f"Format `{{fmt_key}}` paired with hook `{{hook_key}}` has strong synergy.", "mutations": {{"content_format": fmt_key, "hook_type": hook_key}}}})
-                reasons.append(f"High-synergy untested combo: {{fmt_key}}+{{hook_key}}.")
-            baseline_metric = None
-            for row in rows:
-                if str(row.get("command_name", "")) == command_name and not row.get("applied_mutations"):
-                    value = row.get("metric_value")
-                    if isinstance(value, (int, float)):
-                        baseline_metric = float(value)
+                        if best_hook and len(suggestions) < limit:
+                            for audience in ("founders", "operators", "developers", "traders"):
+                                if audience == best_audience:
+                                    continue
+                                sig = (best_fmt, best_hook, audience, "", "")
+                                if sig in tested or sig in existing:
+                                    continue
+                                suggestions.append({{"candidate_id": f"{{best_fmt}}-{{best_hook}}-{{audience}}", "candidate_summary": f"Transfer-check {{best_fmt}}+{{best_hook}} for {{audience}}.", "hypothesis": f"Check whether the winning format+hook transfers to the `{{audience}}` audience.", "mutations": {{"content_format": best_fmt, "hook_type": best_hook, "audience_segment": audience}}}})
+                                reasons.append(f"Run audience transfer check `{{audience}}` on winning combo.")
+                                if len(suggestions) >= limit:
+                                    break
+                synergy_ranked = sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda item: item[1], reverse=True)
+                for combo_key, _ in synergy_ranked:
+                    if len(suggestions) >= limit:
                         break
-            return {{"baseline_metric": baseline_metric, "reasons": reasons[:limit], "suggestions": suggestions[:limit]}}
+                    parts = combo_key.split("|")
+                    if len(parts) != 2:
+                        continue
+                    fmt_key, hook_key = parts
+                    sig = (fmt_key, hook_key, "", "", "")
+                    if sig in tested or sig in existing:
+                        continue
+                    suggestions.append({{"candidate_id": f"{{fmt_key}}-{{hook_key}}", "candidate_summary": f"Probe high-synergy combo {{fmt_key}}+{{hook_key}}.", "hypothesis": f"Format `{{fmt_key}}` paired with hook `{{hook_key}}` has strong synergy.", "mutations": {{"content_format": fmt_key, "hook_type": hook_key}}}})
+                    reasons.append(f"High-synergy untested combo: {{fmt_key}}+{{hook_key}}.")
+                baseline_metric = None
+                for row in rows:
+                    if str(row.get("command_name", "")) == command_name and not row.get("applied_mutations"):
+                        value = row.get("metric_value")
+                        if isinstance(value, (int, float)):
+                            baseline_metric = float(value)
+                            break
+                return {{"baseline_metric": baseline_metric, "reasons": reasons[:limit], "suggestions": suggestions[:limit]}}
 
-        def packets(payload: dict[str, Any]) -> dict[str, Any]:
-            rows = payload.get("ledger_rows", [])
-            rows = rows if isinstance(rows, list) else []
-            ordered = [row for row in rows if isinstance(row.get("metric_value"), (int, float))]
-            ordered.sort(key=lambda r: float(r.get("metric_value", 0.0) or 0.0), reverse=True)
-            documents: list[dict[str, Any]] = []
-            for row in ordered[:3]:
-                muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in row.get("applied_mutations", []) if isinstance(m, dict)}}
-                result = _score(muts)
-                label = result.get("label", "unknown")
-                slug = label.lower().replace(" ", "-").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace("+", "plus")[:60]
-                documents.append({{"kind": "benchmark_evidence", "slug": f"xcontent-evidence-{{slug}}", "title": f"X Content Evidence: {{label}}", "content": "\\n".join(["# X Content Evidence: " + label, "", "- evidence_lane: x_analytics_benchmark", "- engagement_quality_score: " + str(result["engagement_quality_score"]), "- useful_reach_score: " + str(result["useful_reach_score"]), "- grok_relevance_score: " + str(result["grok_relevance_score"]), "- verdict: " + str(result["verdict"]), "- recommended_next_step: " + str(result["recommended_next_step"]), "", "## Claim", "", result.get("claim", ""), "", "## Mechanism", "", result.get("mechanism", ""), "", "## Boundary", "", result.get("boundary", "")])}})
-                if result.get("verdict") == "approve":
-                    documents.append({{"kind": "grounded_doctrine", "slug": f"xcontent-doctrine-{{slug}}", "title": f"X Content Doctrine: {{label}}", "content": "Promoted after engagement quality and Grok relevance gates both cleared."}})
-            weak_rows = [row for row in rows if str(row.get("verdict", "")) == "regressed" and isinstance(row.get("metric_value"), (int, float))]
-            if weak_rows:
-                weakest = min(weak_rows, key=lambda r: float(r.get("metric_value", 1.0) or 1.0))
-                muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in weakest.get("applied_mutations", []) if isinstance(m, dict)}}
-                result = _score(muts)
-                label = result.get("label", "unknown")
-                documents.append({{"kind": "grounded_boundary", "slug": "xcontent-boundary-" + label.lower().replace(" ", "-")[:40], "title": f"X Content Boundary: {{label}}", "content": "\\n".join(["# X Content Boundary: " + label, "", "- engagement_quality_score: " + str(weakest.get("metric_value")), "", "## Root Lesson", "", "This format+hook combination did not produce enough engagement quality for promotion.", "", "## Boundary", "", result.get("boundary", "")])}})
-            return {{"documents": documents}}
+            def packets(payload: dict[str, Any]) -> dict[str, Any]:
+                rows = payload.get("ledger_rows", [])
+                rows = rows if isinstance(rows, list) else []
+                ordered = [row for row in rows if isinstance(row.get("metric_value"), (int, float))]
+                ordered.sort(key=lambda r: float(r.get("metric_value", 0.0) or 0.0), reverse=True)
+                documents: list[dict[str, Any]] = []
+                for row in ordered[:3]:
+                    muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in row.get("applied_mutations", []) if isinstance(m, dict)}}
+                    result = _score(muts)
+                    label = result.get("label", "unknown")
+                    slug = label.lower().replace(" ", "-").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace("+", "plus")[:60]
+                    documents.append({{"kind": "benchmark_evidence", "slug": f"xcontent-evidence-{{slug}}", "title": f"X Content Evidence: {{label}}", "content": "\\n".join(["# X Content Evidence: " + label, "", "- evidence_lane: x_analytics_benchmark", "- engagement_quality_score: " + str(result["engagement_quality_score"]), "- useful_reach_score: " + str(result["useful_reach_score"]), "- grok_relevance_score: " + str(result["grok_relevance_score"]), "- verdict: " + str(result["verdict"]), "- recommended_next_step: " + str(result["recommended_next_step"]), "", "## Claim", "", result.get("claim", ""), "", "## Mechanism", "", result.get("mechanism", ""), "", "## Boundary", "", result.get("boundary", "")])}})
+                    if result.get("verdict") == "approve":
+                        documents.append({{"kind": "grounded_doctrine", "slug": f"xcontent-doctrine-{{slug}}", "title": f"X Content Doctrine: {{label}}", "content": "Promoted after engagement quality and Grok relevance gates both cleared."}})
+                weak_rows = [row for row in rows if str(row.get("verdict", "")) == "regressed" and isinstance(row.get("metric_value"), (int, float))]
+                if weak_rows:
+                    weakest = min(weak_rows, key=lambda r: float(r.get("metric_value", 1.0) or 1.0))
+                    muts = {{str(m.get("name", "")): str(m.get("value", "")) for m in weakest.get("applied_mutations", []) if isinstance(m, dict)}}
+                    result = _score(muts)
+                    label = result.get("label", "unknown")
+                    documents.append({{"kind": "grounded_boundary", "slug": "xcontent-boundary-" + label.lower().replace(" ", "-")[:40], "title": f"X Content Boundary: {{label}}", "content": "\\n".join(["# X Content Boundary: " + label, "", "- engagement_quality_score: " + str(weakest.get("metric_value")), "", "## Root Lesson", "", "This format+hook combination did not produce enough engagement quality for promotion.", "", "## Boundary", "", result.get("boundary", "")])}})
+                return {{"documents": documents}}
 
-        def watchtower(payload: dict[str, Any]) -> dict[str, Any]:
-            summary = payload.get("summary", {{}})
-            best_by_metric = summary.get("best_by_metric", {{}})
-            def _metric_value(metric_payload: Any) -> Any:
-                if isinstance(metric_payload, dict):
-                    return metric_payload.get("value", "n/a")
-                if metric_payload in (None, ""):
-                    return "n/a"
-                return metric_payload
+            def watchtower(payload: dict[str, Any]) -> dict[str, Any]:
+                summary = payload.get("summary", {{}})
+                best_by_metric = summary.get("best_by_metric", {{}})
+                def _metric_value(metric_payload: Any) -> Any:
+                    if isinstance(metric_payload, dict):
+                        return metric_payload.get("value", "n/a")
+                    if metric_payload in (None, ""):
+                        return "n/a"
+                    return metric_payload
 
-            best_engagement = {{"value": _metric_value(best_by_metric.get("engagement_quality_score"))}}
-            best_grok = {{"value": _metric_value(best_by_metric.get("grok_relevance_score"))}}
-            pages = [
-                {{"path": "07-Domains/X Content/Home.md", "content": "\\n".join(["# X Content Domain", "", "- chip: `xcontent`", "- total runs: `" + str(summary.get("run_count", 0)) + "`", "- tracked metrics: `" + str(len(best_by_metric)) + "`", "- best engagement_quality: `" + str(best_engagement.get("value", "n/a")) + "`", "- best grok_relevance: `" + str(best_grok.get("value", "n/a")) + "`", "", "## Integration Surfaces", "", "- X API: Post analytics, audience insights, trending topics", "- Grok/xAI API: Relevance scoring, trend alignment, discoverability", "", "## Views", "", "- [[07-Domains/X Content/Format Hook Matrix]]", "- [[07-Domains/X Content/Grok Relevance]]", "- [[07-Domains/X Content/Next Probes]]"])}},
-                {{"path": "07-Domains/X Content/Format Hook Matrix.md", "content": "\\n".join(["# Format + Hook Synergy Matrix", ""] + ["- `" + k + "` synergy: `" + str(v) + "`" for k, v in sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda x: x[1], reverse=True)])}},
-                {{"path": "07-Domains/X Content/Grok Relevance.md", "content": "\\n".join(["# Grok Relevance Scoring", "", "Grok/xAI relevance measures how likely content is to be surfaced in Grok answers and X search.", "", "## Format Grok Scores", ""] + ["- `" + k + "` base_grok: `" + str(v["base_grok"]) + "`" for k, v in FORMAT_CATALOG.items()] + ["", "## Hook Grok Scores", ""] + ["- `" + k + "` grok: `" + str(v["grok"]) + "`" for k, v in HOOK_CATALOG.items()])}},
-                {{"path": "07-Domains/X Content/Next Probes.md", "content": "\\n".join(["# Next Probes", ""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in HOOK_CATALOG.items()] + [""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in FORMAT_CATALOG.items()])}},
-            ]
-            return {{"pages": pages}}
+                best_engagement = {{"value": _metric_value(best_by_metric.get("engagement_quality_score"))}}
+                best_grok = {{"value": _metric_value(best_by_metric.get("grok_relevance_score"))}}
+                pages = [
+                    {{"path": "07-Domains/X Content/Home.md", "content": "\\n".join(["# X Content Domain", "", "- chip: `xcontent`", "- total runs: `" + str(summary.get("run_count", 0)) + "`", "- tracked metrics: `" + str(len(best_by_metric)) + "`", "- best engagement_quality: `" + str(best_engagement.get("value", "n/a")) + "`", "- best grok_relevance: `" + str(best_grok.get("value", "n/a")) + "`", "", "## Integration Surfaces", "", "- X API: Post analytics, audience insights, trending topics", "- Grok/xAI API: Relevance scoring, trend alignment, discoverability", "", "## Views", "", "- [[07-Domains/X Content/Format Hook Matrix]]", "- [[07-Domains/X Content/Grok Relevance]]", "- [[07-Domains/X Content/Next Probes]]"])}},
+                    {{"path": "07-Domains/X Content/Format Hook Matrix.md", "content": "\\n".join(["# Format + Hook Synergy Matrix", ""] + ["- `" + k + "` synergy: `" + str(v) + "`" for k, v in sorted(FORMAT_HOOK_SYNERGY.items(), key=lambda x: x[1], reverse=True)])}},
+                    {{"path": "07-Domains/X Content/Grok Relevance.md", "content": "\\n".join(["# Grok Relevance Scoring", "", "Grok/xAI relevance measures how likely content is to be surfaced in Grok answers and X search.", "", "## Format Grok Scores", ""] + ["- `" + k + "` base_grok: `" + str(v["base_grok"]) + "`" for k, v in FORMAT_CATALOG.items()] + ["", "## Hook Grok Scores", ""] + ["- `" + k + "` grok: `" + str(v["grok"]) + "`" for k, v in HOOK_CATALOG.items()])}},
+                    {{"path": "07-Domains/X Content/Next Probes.md", "content": "\\n".join(["# Next Probes", ""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in HOOK_CATALOG.items()] + [""] + ["- `" + k + "` -> " + v["next_probe"] for k, v in FORMAT_CATALOG.items()])}},
+                ]
+                return {{"pages": pages}}
 
-        def main() -> None:
-            parser = argparse.ArgumentParser(prog="{package_name}")
-            parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
-            parser.add_argument("--input", required=True)
-            parser.add_argument("--output", required=True)
-            args = parser.parse_args()
-            payload = _load(args.input)
-            if args.hook == "evaluate":
-                response = evaluate(payload)
-            elif args.hook == "suggest":
-                response = suggest(payload)
-            elif args.hook == "packets":
-                response = packets(payload)
-            else:
-                response = watchtower(payload)
-            _write(args.output, response)
+            def main() -> None:
+                parser = argparse.ArgumentParser(prog="{package_name}")
+                parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
+                parser.add_argument("--input", required=True)
+                parser.add_argument("--output", required=True)
+                args = parser.parse_args()
+                payload = _load(args.input)
+                if args.hook == "evaluate":
+                    response = evaluate(payload)
+                elif args.hook == "suggest":
+                    response = suggest(payload)
+                elif args.hook == "packets":
+                    response = packets(payload)
+                else:
+                    response = watchtower(payload)
+                _write(args.output, response)
 
-        if __name__ == "__main__":
-            main()
-        """
-    ).strip()
+            if __name__ == "__main__":
+                main()
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _xcontent_one_loop() -> str:
-    return dedent(
-        """
-        # X Content One-Loop Spec
+    try:
+        return dedent(
+            """
+            # X Content One-Loop Spec
 
-        ## Intent
+            ## Intent
 
-        Make someone's X content meaningfully better in any niche they choose.
+            Make someone's X content meaningfully better in any niche they choose.
 
-        Not vanity metrics. Not follower count. Not impressions.
+            Not vanity metrics. Not follower count. Not impressions.
 
-        Better means:
-        - the right people engage deeply (saves, bookmarks, thoughtful replies)
-        - the content builds authority in the chosen niche over time
-        - Grok/xAI surfaces the content as reference material
-        - each post teaches the system what works for this specific person in this specific niche
+            Better means:
+            - the right people engage deeply (saves, bookmarks, thoughtful replies)
+            - the content builds authority in the chosen niche over time
+            - Grok/xAI surfaces the content as reference material
+            - each post teaches the system what works for this specific person in this specific niche
 
-        ## Goals
+            ## Goals
 
-        1. **Discover what works**: Find the content format + hook type + audience combinations that produce real engagement in the operator's niche
-        2. **Separate signal from noise**: Distinguish engagement quality (bookmarks, profile clicks, reply depth, follows) from vanity metrics (impressions, likes)
-        3. **Build niche doctrine**: Accumulate proven content patterns that work repeatedly, not one-off viral accidents
-        4. **Map failure boundaries**: Know exactly where each content approach breaks so the operator never wastes effort
-        5. **Optimize for Grok discoverability**: Content that Grok surfaces as reference material compounds over time
-        6. **Transfer across niches**: The system learns which content primitives are portable vs niche-locked
+            1. **Discover what works**: Find the content format + hook type + audience combinations that produce real engagement in the operator's niche
+            2. **Separate signal from noise**: Distinguish engagement quality (bookmarks, profile clicks, reply depth, follows) from vanity metrics (impressions, likes)
+            3. **Build niche doctrine**: Accumulate proven content patterns that work repeatedly, not one-off viral accidents
+            4. **Map failure boundaries**: Know exactly where each content approach breaks so the operator never wastes effort
+            5. **Optimize for Grok discoverability**: Content that Grok surfaces as reference material compounds over time
+            6. **Transfer across niches**: The system learns which content primitives are portable vs niche-locked
 
-        ## Niche Adaptation
+            ## Niche Adaptation
 
-        The `topic_tag` open mutation field lets the operator specify their niche:
-        - `topic_tag: "defi"` for crypto/DeFi content
-        - `topic_tag: "saas_growth"` for SaaS operator content
-        - `topic_tag: "ai_engineering"` for AI/ML practitioner content
-        - `topic_tag: "indie_hacking"` for bootstrapped founder content
+            The `topic_tag` open mutation field lets the operator specify their niche:
+            - `topic_tag: "defi"` for crypto/DeFi content
+            - `topic_tag: "saas_growth"` for SaaS operator content
+            - `topic_tag: "ai_engineering"` for AI/ML practitioner content
+            - `topic_tag: "indie_hacking"` for bootstrapped founder content
 
-        The chip learns which format+hook+audience combinations work best FOR THAT NICHE, not generically.
+            The chip learns which format+hook+audience combinations work best FOR THAT NICHE, not generically.
 
-        ## One Governing Loop
+            ## One Governing Loop
 
-        1. Refresh content format, hook type, audience, and distribution state
-        2. Classify the bottleneck:
-           - `format_hook_gap`: haven't tested enough format+hook combos for this niche
-           - `quality_gap`: best combo found but not yet quality-filtered for promotion
-           - `audience_gap`: winning combo not yet transfer-checked across audiences
-           - `distribution_gap`: winning combo not yet tested with Grok optimization
-           - `promotion_gap`: ready for real-world validation via actual posting
-        3. Run the smallest justified lane
-        4. Update memory and watchtower
+            1. Refresh content format, hook type, audience, and distribution state
+            2. Classify the bottleneck:
+               - `format_hook_gap`: haven't tested enough format+hook combos for this niche
+               - `quality_gap`: best combo found but not yet quality-filtered for promotion
+               - `audience_gap`: winning combo not yet transfer-checked across audiences
+               - `distribution_gap`: winning combo not yet tested with Grok optimization
+               - `promotion_gap`: ready for real-world validation via actual posting
+            3. Run the smallest justified lane
+            4. Update memory and watchtower
 
-        ## Rules
+            ## Rules
 
-        - Treat `content_format + hook_type + audience_segment` as the main candidate unit
-        - Optimize for engagement quality, not vanity metrics
-        - Use X API analytics as the inner benchmark lane
-        - Use Grok/xAI relevance as the discoverability benchmark
-        - Use real-world posting results as the outer validation lane
-        - Do not let format churn masquerade as new doctrine
-        - Do not promote any content strategy without both engagement quality and Grok relevance gates clearing
+            - Treat `content_format + hook_type + audience_segment` as the main candidate unit
+            - Optimize for engagement quality, not vanity metrics
+            - Use X API analytics as the inner benchmark lane
+            - Use Grok/xAI relevance as the discoverability benchmark
+            - Use real-world posting results as the outer validation lane
+            - Do not let format churn masquerade as new doctrine
+            - Do not promote any content strategy without both engagement quality and Grok relevance gates clearing
 
-        ## X API Grounding
+            ## X API Grounding
 
-        Replace the deterministic evaluator with:
+            Replace the deterministic evaluator with:
 
-        1. Analyze the operator's existing X posts via `GET /2/users/:id/tweets` for baseline
-        2. Use X search API to study what works in the operator's niche
-        3. Post content via X API
-        4. Wait for analytics window (24-48h minimum for meaningful signals)
-        5. Pull tweet metrics: impressions, engagements, bookmarks, profile clicks, reply depth
-        6. Compute engagement_quality_score from:
-           - bookmark_rate (strongest signal of reference value)
-           - reply_depth (weighted by reply quality, not count)
-           - profile_click_rate (strongest signal of authority building)
-           - follow_rate (strongest signal of niche positioning)
+            1. Analyze the operator's existing X posts via `GET /2/users/:id/tweets` for baseline
+            2. Use X search API to study what works in the operator's niche
+            3. Post content via X API
+            4. Wait for analytics window (24-48h minimum for meaningful signals)
+            5. Pull tweet metrics: impressions, engagements, bookmarks, profile clicks, reply depth
+            6. Compute engagement_quality_score from:
+               - bookmark_rate (strongest signal of reference value)
+               - reply_depth (weighted by reply quality, not count)
+               - profile_click_rate (strongest signal of authority building)
+               - follow_rate (strongest signal of niche positioning)
 
-        ## Grok/xAI API Grounding
+            ## Grok/xAI API Grounding
 
-        - Analyze content structure for proof density and novelty tension
-        - Score trend alignment against current X discourse in the operator's niche
-        - Predict Grok surfacing probability (will this appear in Grok answers?)
-        - Feed scores back as grok_relevance_score metric
-        - Use Grok to analyze competitor content in the niche for gap identification
-        """
-    ).strip()
+            - Analyze content structure for proof density and novelty tension
+            - Score trend alignment against current X discourse in the operator's niche
+            - Predict Grok surfacing probability (will this appear in Grok answers?)
+            - Feed scores back as grok_relevance_score metric
+            - Use Grok to analyze competitor content in the niche for gap identification
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _xcontent_bridge() -> str:
-    return dedent(
-        """
-        # X Content Promotion Bridge
+    try:
+        return dedent(
+            """
+            # X Content Promotion Bridge
 
-        X API analytics is the inner benchmark lane for this chip.
-        Real-world posting with measured outcomes is outer validation.
+            X API analytics is the inner benchmark lane for this chip.
+            Real-world posting with measured outcomes is outer validation.
 
-        ## Bridge Fields
+            ## Bridge Fields
 
-        - `candidate_id`
-        - `content_format`
-        - `hook_type`
-        - `audience_segment`
-        - `engagement_quality_score`
-        - `useful_reach_score`
-        - `grok_relevance_score`
-        - `bookmark_rate` (from X API)
-        - `reply_depth` (from X API)
-        - `profile_click_rate` (from X API)
-        - `grok_surfacing_probability` (from xAI API)
-        - `recommended_next_step`
-        - `primary_mechanism`
-        - `primary_boundary`
+            - `candidate_id`
+            - `content_format`
+            - `hook_type`
+            - `audience_segment`
+            - `engagement_quality_score`
+            - `useful_reach_score`
+            - `grok_relevance_score`
+            - `bookmark_rate` (from X API)
+            - `reply_depth` (from X API)
+            - `profile_click_rate` (from X API)
+            - `grok_surfacing_probability` (from xAI API)
+            - `recommended_next_step`
+            - `primary_mechanism`
+            - `primary_boundary`
 
-        ## Promotion Ladder
+            ## Promotion Ladder
 
-        - `store_as_benchmark_evidence`
-        - `promote_as_doctrine_candidate`
-        - `promote_as_boundary_candidate`
-        - `queue_for_content_calendar`
+            - `store_as_benchmark_evidence`
+            - `promote_as_doctrine_candidate`
+            - `promote_as_boundary_candidate`
+            - `queue_for_content_calendar`
 
-        ## Anti-Patterns
+            ## Anti-Patterns
 
-        - do not rank by impressions or likes alone (vanity metrics)
-        - do not promote a format without a hook anchor
-        - do not send every viral post to the content calendar
-        - do not confuse Grok relevance with engagement quality (they measure different things)
-        - do not optimize distribution mode as a substitute for content quality
-        """
-    ).strip()
+            - do not rank by impressions or likes alone (vanity metrics)
+            - do not promote a format without a hook anchor
+            - do not send every viral post to the content calendar
+            - do not confuse Grok relevance with engagement quality (they measure different things)
+            - do not optimize distribution mode as a substitute for content quality
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def init_chip(
     target_dir: Path,
     *,
@@ -1179,65 +1199,77 @@ def init_chip(
     preset: str = "generic",
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    root = ensure_external_chip_target(target_dir)
-    authority = require_chip_create_authority(governor_decision)
-    package = package_name or _package_name(chip_name)
-    if preset == "crypto-trading":
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
-            root / "spark-chip.json": _crypto_manifest(chip_name, package),
-            root / "spark-researcher.project.json": _crypto_project(chip_name, package),
-            root / "README.md": _crypto_readme(chip_name, package, root),
-            root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
-            root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _crypto_cli(package),
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    if not isinstance(metric_name, str): metric_name = str(metric_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    if not isinstance(preset, str): preset = str(preset or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        root = ensure_external_chip_target(target_dir)
+        authority = require_chip_create_authority(governor_decision)
+        package = package_name or _package_name(chip_name)
+        if preset == "crypto-trading":
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, "Crypto trading domain chip scaffold with backtest bridge and paper-trade gating."),
+                root / "spark-chip.json": _crypto_manifest(chip_name, package),
+                root / "spark-researcher.project.json": _crypto_project(chip_name, package),
+                root / "README.md": _crypto_readme(chip_name, package, root),
+                root / "docs" / "CRYPTO_TRADING_ONE_LOOP_SPEC.md": _crypto_one_loop(),
+                root / "docs" / "CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md": _crypto_bridge(),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _crypto_cli(package),
+            }
+            domain = "trading"
+            metric_name = "profitability_score"
+            goal = "maximize"
+        elif preset == "xcontent":
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
+                root / "spark-chip.json": _xcontent_manifest(chip_name, package),
+                root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
+                root / "README.md": _xcontent_readme(chip_name, package, root),
+                root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
+                root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _xcontent_cli(package),
+            }
+            domain = "xcontent"
+            metric_name = "engagement_quality_score"
+            goal = "maximize"
+        else:
+            files = {
+                root / ".gitignore": _gitignore(),
+                root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
+                root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
+                root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
+                root / "README.md": _generic_readme(chip_name, domain, root),
+                root / "src" / package / "__init__.py": _init_file(),
+                root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
+            }
+        existing = [str(path) for path in files if path.exists()]
+        if existing:
+            raise FileExistsError(f"Chip starter refused to overwrite existing files: {', '.join(existing)}")
+        root.mkdir(parents=True, exist_ok=True)
+        for path, content in files.items():
+            _write(path, content)
+        return {
+            "chip_root": str(root),
+            "chip_name": chip_name,
+            "domain": domain,
+            "metric_name": metric_name,
+            "eval_goal": goal,
+            "package_name": package,
+            "manifest_path": str(root / "spark-chip.json"),
+            "config_path": str(root / "spark-researcher.project.json"),
+            "preset": preset,
+            "authority": _authority_summary(authority),
+            "next_steps": _next_steps(root),
         }
-        domain = "trading"
-        metric_name = "profitability_score"
-        goal = "maximize"
-    elif preset == "xcontent":
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, "X content research chip with engagement quality evaluation, Grok/xAI relevance, and promotion-safe doctrine."),
-            root / "spark-chip.json": _xcontent_manifest(chip_name, package),
-            root / "spark-researcher.project.json": _xcontent_project(chip_name, package),
-            root / "README.md": _xcontent_readme(chip_name, package, root),
-            root / "docs" / "XCONTENT_ONE_LOOP_SPEC.md": _xcontent_one_loop(),
-            root / "docs" / "XCONTENT_BENCH_PROMOTION_BRIDGE.md": _xcontent_bridge(),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _xcontent_cli(package),
-        }
-        domain = "xcontent"
-        metric_name = "engagement_quality_score"
-        goal = "maximize"
-    else:
-        files = {
-            root / ".gitignore": _gitignore(),
-            root / "pyproject.toml": _pyproject(chip_name, f"Portable domain chip scaffold for {chip_name}."),
-            root / "spark-chip.json": _generic_manifest(chip_name, domain, package),
-            root / "spark-researcher.project.json": _generic_project(chip_name, package, domain, metric_name, goal),
-            root / "README.md": _generic_readme(chip_name, domain, root),
-            root / "src" / package / "__init__.py": _init_file(),
-            root / "src" / package / "cli.py": _generic_cli(package, domain, metric_name, goal),
-        }
-    existing = [str(path) for path in files if path.exists()]
-    if existing:
-        raise FileExistsError(f"Chip starter refused to overwrite existing files: {', '.join(existing)}")
-    root.mkdir(parents=True, exist_ok=True)
-    for path, content in files.items():
-        _write(path, content)
-    return {
-        "chip_root": str(root),
-        "chip_name": chip_name,
-        "domain": domain,
-        "metric_name": metric_name,
-        "eval_goal": goal,
-        "package_name": package,
-        "manifest_path": str(root / "spark-chip.json"),
-        "config_path": str(root / "spark-researcher.project.json"),
-        "preset": preset,
-        "authority": _authority_summary(authority),
-        "next_steps": _next_steps(root),
-    }
+
+    except Exception:
+        return {}

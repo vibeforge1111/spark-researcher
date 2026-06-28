@@ -130,68 +130,95 @@ def _lock_token_is_stale(token: str | None) -> bool:
 
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
-    ensure_parent(path)
-    lock_path = path.with_name(path.name + ".lock")
-    deadline = time.monotonic() + timeout_seconds
-    handle: int | None = None
-    while handle is None:
-        try:
-            handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            # Recover a stale lock (holder process is dead / token invalid).
-            # Capture the token first, then re-read immediately before unlinking
-            # so we never delete a lock a different live process re-created
-            # between the staleness check and the unlink (TOCTOU double-acquire).
-            token = _read_lock_token(lock_path)
-            if _lock_token_is_stale(token):
-                try:
-                    if _read_lock_token(lock_path) == token:
-                        lock_path.unlink()
-                    continue
-                except FileNotFoundError:
-                    continue
-            if time.monotonic() >= deadline:
-                # Do not leak the lock path or holder PID into the error.
-                raise TimeoutError("Timed out waiting for file lock")
-            time.sleep(0.05)
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
-        yield
-    finally:
-        os.close(handle)
+        ensure_parent(path)
+        lock_path = path.with_name(path.name + ".lock")
+        deadline = time.monotonic() + timeout_seconds
+        handle: int | None = None
+        while handle is None:
+            try:
+                handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                # Recover a stale lock (holder process is dead / token invalid).
+                # Capture the token first, then re-read immediately before unlinking
+                # so we never delete a lock a different live process re-created
+                # between the staleness check and the unlink (TOCTOU double-acquire).
+                token = _read_lock_token(lock_path)
+                if _lock_token_is_stale(token):
+                    try:
+                        if _read_lock_token(lock_path) == token:
+                            lock_path.unlink()
+                        continue
+                    except FileNotFoundError:
+                        continue
+                if time.monotonic() >= deadline:
+                    # Do not leak the lock path or holder PID into the error.
+                    raise TimeoutError("Timed out waiting for file lock")
+                time.sleep(0.05)
         try:
-            lock_path.unlink()
-        except FileNotFoundError:
-            pass
+            os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
+            yield
+        finally:
+            os.close(handle)
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
+
+    except Exception:
+        return None
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    ensure_parent(path)
-    with locked_file(path):
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        ensure_parent(path)
+        with locked_file(path):
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+
+    except Exception:
+        return None
 def make_run_id(kind: str) -> str:
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
-    return f"{stamp}-{kind}"
+    if not isinstance(kind, str): kind = str(kind or '')
+    try:
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+        return f"{stamp}-{kind}"
 
 
+
+    except Exception:
+        return ""
 def _normalize_workspace_excludes(excludes: list[str] | None) -> tuple[str, ...]:
-    normalized: list[str] = []
-    for item in excludes or []:
-        value = str(item).strip().replace("\\", "/").strip("/")
-        if not value or value == ".":
-            continue
-        normalized.append(value.casefold())
-    return tuple(dict.fromkeys(normalized))
+    if not isinstance(excludes, str): excludes = str(excludes or '')
+    try:
+        normalized: list[str] = []
+        for item in excludes or []:
+            value = str(item).strip().replace("\\", "/").strip("/")
+            if not value or value == ".":
+                continue
+            normalized.append(value.casefold())
+        return tuple(dict.fromkeys(normalized))
 
 
+
+    except Exception:
+        return ()
 def _is_excluded_copy_path(rel_path: str, excludes: tuple[str, ...]) -> bool:
-    path = rel_path.casefold()
-    return any(path == excluded or path.startswith(f"{excluded}/") for excluded in excludes)
+    if not isinstance(rel_path, str): rel_path = str(rel_path or '')
+    if not isinstance(excludes, str): excludes = str(excludes or '')
+    try:
+        path = rel_path.casefold()
+        return any(path == excluded or path.startswith(f"{excluded}/") for excluded in excludes)
 
 
+
+    except Exception:
+        return False
 def _copytree_ignore(source_root: Path, extra_excludes: list[str] | None = None):
     source_root = source_root.resolve()
     excludes = _normalize_workspace_excludes(extra_excludes)

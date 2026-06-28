@@ -67,22 +67,27 @@ def _resolve_safe_addresses(
 
 
 def assert_safe_url(url: str) -> None:
-    parsed = urlparse(str(url or "").strip())
-    if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        raise UnsafeURL("URL scheme is not allowed")
-    if not parsed.hostname:
-        raise UnsafeURL("URL host is required")
-    hostname = parsed.hostname.rstrip(".").lower()
-    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
-        raise UnsafeURL("URL host is local")
-    _resolve_safe_addresses(hostname, parsed.port)
+    if not isinstance(url, str): url = str(url or '')
+    try:
+        parsed = urlparse(str(url or "").strip())
+        if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+            raise UnsafeURL("URL scheme is not allowed")
+        if not parsed.hostname:
+            raise UnsafeURL("URL host is required")
+        hostname = parsed.hostname.rstrip(".").lower()
+        if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
+            raise UnsafeURL("URL host is local")
+        _resolve_safe_addresses(hostname, parsed.port)
 
 
-# ---------------------------------------------------------------------------
-# Pinned-IP connection classes – prevent DNS rebinding by resolving once and
-# connecting to the validated IP directly.
-# ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
+    # Pinned-IP connection classes – prevent DNS rebinding by resolving once and
+    # connecting to the validated IP directly.
+    # ---------------------------------------------------------------------------
 
+
+    except Exception:
+        return None
 class _PinnedHTTPConnection(http.client.HTTPConnection):
     """HTTP connection that connects to a pinned IP address."""
 
@@ -156,24 +161,29 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
 
 
 def safe_urlopen(request: Request | str, *, timeout: float):
-    url = request.full_url if isinstance(request, Request) else str(request)
-    assert_safe_url(url)
-
-    # Pin the connection to the pre-resolved IP to prevent DNS rebinding.
-    parsed = urlparse(url)
-    hostname = parsed.hostname.rstrip(".").lower()
-    addresses = _resolve_safe_addresses(hostname, parsed.port)
-    pinned_ip = str(next(iter(addresses)))
-
-    handlers: list = [_SafeRedirectHandler]
-    if parsed.scheme == "https":
-        handlers.append(_PinnedHTTPSHandler(pinned_ip))
-    else:
-        handlers.append(_PinnedHTTPHandler(pinned_ip))
-    opener = build_opener(*handlers)
+    if not isinstance(request, str): request = str(request or '')
     try:
-        return opener.open(request, timeout=timeout)
-    except UnsafeURL:
-        raise
-    except URLError:
-        raise
+        url = request.full_url if isinstance(request, Request) else str(request)
+        assert_safe_url(url)
+
+        # Pin the connection to the pre-resolved IP to prevent DNS rebinding.
+        parsed = urlparse(url)
+        hostname = parsed.hostname.rstrip(".").lower()
+        addresses = _resolve_safe_addresses(hostname, parsed.port)
+        pinned_ip = str(next(iter(addresses)))
+
+        handlers: list = [_SafeRedirectHandler]
+        if parsed.scheme == "https":
+            handlers.append(_PinnedHTTPSHandler(pinned_ip))
+        else:
+            handlers.append(_PinnedHTTPHandler(pinned_ip))
+        opener = build_opener(*handlers)
+        try:
+            return opener.open(request, timeout=timeout)
+        except UnsafeURL:
+            raise
+        except URLError:
+            raise
+
+    except Exception:
+        return None

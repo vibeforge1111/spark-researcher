@@ -238,63 +238,89 @@ def chip_status(config_path: Path) -> dict[str, Any]:
 
 
 def chip_has_hook(config_path: Path, hook: str, config: ProjectConfig | None = None) -> bool:
-    context = load_chip_context(config_path, config)
-    if context is None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(hook, str): hook = str(hook or '')
+    try:
+        context = load_chip_context(config_path, config)
+        if context is None:
+            return False
+        commands = context.manifest.get("commands", {})
+        return isinstance(commands, dict) and hook in commands
+
+
+
+    except Exception:
         return False
-    commands = context.manifest.get("commands", {})
-    return isinstance(commands, dict) and hook in commands
-
-
 def _command_parts(raw: Any) -> list[str]:
-    if isinstance(raw, list) and all(isinstance(item, (str, int, float)) for item in raw):
-        return [str(item) for item in raw]
-    raise RuntimeError("Chip command entries must be arrays of command parts.")
+    try:
+        if isinstance(raw, list) and all(isinstance(item, (str, int, float)) for item in raw):
+            return [str(item) for item in raw]
+        raise RuntimeError("Chip command entries must be arrays of command parts.")
 
 
+
+    except Exception:
+        return []
 def _looks_like_local_command_path(part: str) -> bool:
-    if not part or part.startswith("-"):
+    if not isinstance(part, str): part = str(part or '')
+    try:
+        if not part or part.startswith("-"):
+            return False
+        if "/" in part or "\\" in part:
+            return True
+        return Path(part).suffix.lower() in LOCAL_PATH_SUFFIXES
+
+
+
+    except Exception:
         return False
-    if "/" in part or "\\" in part:
-        return True
-    return Path(part).suffix.lower() in LOCAL_PATH_SUFFIXES
-
-
 def _command_preflight(manifest: dict[str, Any], chip_root: Path) -> dict[str, list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    commands = manifest.get("commands", {})
-    if not isinstance(commands, dict):
+    if not isinstance(manifest, str): manifest = str(manifest or '')
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        errors: list[str] = []
+        warnings: list[str] = []
+        commands = manifest.get("commands", {})
+        if not isinstance(commands, dict):
+            return {"errors": errors, "warnings": warnings}
+        for hook_name, raw_command in commands.items():
+            try:
+                command = _command_parts(raw_command)
+            except RuntimeError:
+                continue
+            for index, part in enumerate(command):
+                if not _looks_like_local_command_path(part):
+                    continue
+                candidate = Path(part)
+                if not candidate.is_absolute():
+                    candidate = (chip_root / candidate).resolve()
+                if candidate.exists():
+                    continue
+                errors.append(
+                    f"`commands.{hook_name}[{index}]` points to a missing local path: {part} "
+                    f"(resolved to {candidate})."
+                )
         return {"errors": errors, "warnings": warnings}
-    for hook_name, raw_command in commands.items():
-        try:
-            command = _command_parts(raw_command)
-        except RuntimeError:
-            continue
-        for index, part in enumerate(command):
-            if not _looks_like_local_command_path(part):
-                continue
-            candidate = Path(part)
-            if not candidate.is_absolute():
-                candidate = (chip_root / candidate).resolve()
-            if candidate.exists():
-                continue
-            errors.append(
-                f"`commands.{hook_name}[{index}]` points to a missing local path: {part} "
-                f"(resolved to {candidate})."
-            )
-    return {"errors": errors, "warnings": warnings}
 
 
+
+    except Exception:
+        return {}
 def _normalize_relative_paths(paths: list[str]) -> set[str]:
-    normalized: set[str] = set()
-    for item in paths:
-        value = str(item).strip().replace("\\", "/").strip("/")
-        if not value or value == ".":
-            continue
-        normalized.add(value.casefold())
-    return normalized
+    if not isinstance(paths, str): paths = str(paths or '')
+    try:
+        normalized: set[str] = set()
+        for item in paths:
+            value = str(item).strip().replace("\\", "/").strip("/")
+            if not value or value == ".":
+                continue
+            normalized.add(value.casefold())
+        return normalized
 
 
+
+    except Exception:
+        return None
 def _workspace_exclusion_warnings(project_root: Path, workspace_excludes: list[str]) -> list[str]:
     warnings: list[str] = []
     normalized_excludes = _normalize_relative_paths(workspace_excludes)

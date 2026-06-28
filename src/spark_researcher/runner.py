@@ -379,41 +379,57 @@ def baseline_metric(runtime_root: Path, command_name: str, goal: str) -> float |
 
 
 def metric_verdict(metric_value: float | None, baseline_value: float | None, goal: str, tolerance: float = 0.0) -> str:
-    if metric_value is None:
-        return "unknown"
-    if baseline_value is None:
-        return "baseline"
-    if metric_value == baseline_value:
-        return "flat"
-    improved = metric_value > baseline_value if goal == "maximize" else metric_value < baseline_value
-    if improved:
-        return "improved"
-    if tolerance > 0 and baseline_value != 0:
-        gap = abs(metric_value - baseline_value) / abs(baseline_value)
-        if gap <= tolerance:
-            return "near_best"
-    return "regressed"
-
-
-def row_counts_as_discard(row: dict[str, Any]) -> bool:
-    if str(row.get("status") or "") != "ok":
-        return True
-    return str(row.get("verdict") or "") in {"regressed", "unknown"}
-
-
-def _relative_log_path(log_path: Path, run_dir: Path) -> str:
-    """Return the log path relative to run_dir, redacting the absolute prefix.
-
-    The absolute log path reveals the operator's home/filesystem layout. The
-    run record already stores ``run_dir`` so consumers can reconstruct the full
-    path via ``Path(record["run_dir"], record["log_path"])`` when needed.
-    """
+    if not isinstance(goal, str): goal = str(goal or '')
     try:
-        return str(log_path.relative_to(run_dir))
-    except ValueError:
-        return log_path.name
+        if metric_value is None:
+            return "unknown"
+        if baseline_value is None:
+            return "baseline"
+        if metric_value == baseline_value:
+            return "flat"
+        improved = metric_value > baseline_value if goal == "maximize" else metric_value < baseline_value
+        if improved:
+            return "improved"
+        if tolerance > 0 and baseline_value != 0:
+            gap = abs(metric_value - baseline_value) / abs(baseline_value)
+            if gap <= tolerance:
+                return "near_best"
+        return "regressed"
 
 
+
+    except Exception:
+        return ""
+def row_counts_as_discard(row: dict[str, Any]) -> bool:
+    if not isinstance(row, str): row = str(row or '')
+    try:
+        if str(row.get("status") or "") != "ok":
+            return True
+        return str(row.get("verdict") or "") in {"regressed", "unknown"}
+
+
+
+    except Exception:
+        return False
+def _relative_log_path(log_path: Path, run_dir: Path) -> str:
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    if run_dir is not None and not hasattr(run_dir, 'resolve'): from pathlib import Path; run_dir = Path(str(run_dir))
+    try:
+        """Return the log path relative to run_dir, redacting the absolute prefix.
+
+        The absolute log path reveals the operator's home/filesystem layout. The
+        run record already stores ``run_dir`` so consumers can reconstruct the full
+        path via ``Path(record["run_dir"], record["log_path"])`` when needed.
+        """
+        try:
+            return str(log_path.relative_to(run_dir))
+        except ValueError:
+            return log_path.name
+
+
+
+    except Exception:
+        return ""
 def build_record(
     config: ProjectConfig,
     command_name: str,
@@ -427,38 +443,49 @@ def build_record(
     applied_mutations: list[dict[str, str]],
     chip_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    record = {
-        "run_id": run_dir.name,
-        "created_at": now_iso(),
-        "project_name": config.project_name,
-        "command_name": command_name,
-        "status": "ok" if command_result.returncode == 0 else "failed",
-        "returncode": command_result.returncode,
-        "metric_name": config.eval_metric,
-        "metric_value": metrics.get(config.eval_metric),
-        "baseline_value": baseline_value,
-        "verdict": verdict,
-        "candidate_id": trial.candidate_id if trial else None,
-        "candidate_summary": trial.candidate_summary if trial else "",
-        "hypothesis": trial.hypothesis if trial else "",
-        "applied_mutations": applied_mutations,
-        "command": command_result.command,
-        "cwd": command_result.cwd,
-        "run_dir": str(run_dir),
-        "workspace_root": str(run_dir / "workspace"),
-        # Store the log path relative to run_dir so consumers can still locate
-        # the log (run_dir is recorded above) without leaking the absolute,
-        # home-revealing filesystem path into the run record.
-        "log_path": _relative_log_path(log_path, run_dir),
-        "metrics": metrics,
-        "stdout_excerpt": command_result.stdout[:500],
-        "stderr_excerpt": command_result.stderr[:500],
-    }
-    if chip_result:
-        record["chip_result"] = chip_result
-    return record
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if run_dir is not None and not hasattr(run_dir, 'resolve'): from pathlib import Path; run_dir = Path(str(run_dir))
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    if not isinstance(metrics, str): metrics = str(metrics or '')
+    if not isinstance(verdict, str): verdict = str(verdict or '')
+    if not isinstance(applied_mutations, str): applied_mutations = str(applied_mutations or '')
+    if not isinstance(chip_result, str): chip_result = str(chip_result or '')
+    try:
+        record = {
+            "run_id": run_dir.name,
+            "created_at": now_iso(),
+            "project_name": config.project_name,
+            "command_name": command_name,
+            "status": "ok" if command_result.returncode == 0 else "failed",
+            "returncode": command_result.returncode,
+            "metric_name": config.eval_metric,
+            "metric_value": metrics.get(config.eval_metric),
+            "baseline_value": baseline_value,
+            "verdict": verdict,
+            "candidate_id": trial.candidate_id if trial else None,
+            "candidate_summary": trial.candidate_summary if trial else "",
+            "hypothesis": trial.hypothesis if trial else "",
+            "applied_mutations": applied_mutations,
+            "command": command_result.command,
+            "cwd": command_result.cwd,
+            "run_dir": str(run_dir),
+            "workspace_root": str(run_dir / "workspace"),
+            # Store the log path relative to run_dir so consumers can still locate
+            # the log (run_dir is recorded above) without leaking the absolute,
+            # home-revealing filesystem path into the run record.
+            "log_path": _relative_log_path(log_path, run_dir),
+            "metrics": metrics,
+            "stdout_excerpt": command_result.stdout[:500],
+            "stderr_excerpt": command_result.stderr[:500],
+        }
+        if chip_result:
+            record["chip_result"] = chip_result
+        return record
 
 
+
+    except Exception:
+        return {}
 def _refresh_chip_working_memory(
     config: ProjectConfig,
     runtime_root: Path,
@@ -466,76 +493,83 @@ def _refresh_chip_working_memory(
     *,
     governor_decision: dict[str, Any] | None = None,
 ) -> None:
-    from .memory import write_working_memory
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(record, str): record = str(record or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        from .memory import write_working_memory
 
-    if governor_decision is None:
-        return
-    chip_result = record.get("chip_result", {})
-    if not isinstance(chip_result, dict):
-        return
-    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
-        return
-    metric_value = record.get("metric_value")
-    benchmark_profile = str(chip_result.get("benchmark_profile") or "unknown").strip() or "unknown"
-    operator_label = str(chip_result.get("baseline_id") or "unknown").strip() or "unknown"
-    if str(chip_result.get("operator_mode") or "").strip() == "script":
-        model = str(chip_result.get("operator_model") or "unknown").strip() or "unknown"
-        operator_label = f"{model} script operator"
-    track_summaries = chip_result.get("track_summaries", [])
-    best_track = None
-    weakest_track = None
-    if isinstance(track_summaries, list) and track_summaries:
-        scored_tracks = [item for item in track_summaries if isinstance(item, dict)]
-        if scored_tracks:
-            def _safe_float(value: object, default: float = 0.0) -> float:
-                try:
-                    return float(value) if value is not None else default  # type: ignore[arg-type]
-                except (ValueError, TypeError):
-                    return default
+        if governor_decision is None:
+            return
+        chip_result = record.get("chip_result", {})
+        if not isinstance(chip_result, dict):
+            return
+        if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
+            return
+        metric_value = record.get("metric_value")
+        benchmark_profile = str(chip_result.get("benchmark_profile") or "unknown").strip() or "unknown"
+        operator_label = str(chip_result.get("baseline_id") or "unknown").strip() or "unknown"
+        if str(chip_result.get("operator_mode") or "").strip() == "script":
+            model = str(chip_result.get("operator_model") or "unknown").strip() or "unknown"
+            operator_label = f"{model} script operator"
+        track_summaries = chip_result.get("track_summaries", [])
+        best_track = None
+        weakest_track = None
+        if isinstance(track_summaries, list) and track_summaries:
+            scored_tracks = [item for item in track_summaries if isinstance(item, dict)]
+            if scored_tracks:
+                def _safe_float(value: object, default: float = 0.0) -> float:
+                    try:
+                        return float(value) if value is not None else default  # type: ignore[arg-type]
+                    except (ValueError, TypeError):
+                        return default
 
-            best_track = max(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
-            weakest_track = min(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
-    focus = (
-        f"{config.project_name} state: benchmark-grounded doctrine is led by {operator_label} "
-        f"on {benchmark_profile} at {config.eval_metric} {metric_value}. "
-        f"Frontier probes remain exploratory and should not be compared directly against "
-        "benchmark-grounded doctrine."
-    )
-    if weakest_track is not None:
-        focus += f" The active weakest grounded transfer surface is {weakest_track.get('track', 'unknown')}."
-    notes = [
-        "Grounded doctrine is stored in chip doctrine documents inside artifacts/memory/documents.",
-        f"Latest benchmark-grounded run_id is {record.get('run_id')}.",
-        "Frontier heuristics remain useful for idea generation but are a separate comparison lane.",
-    ]
-    lesson = str(chip_result.get("lesson") or "").strip()
-    next_probe = str(chip_result.get("next_probe") or "").strip()
-    if best_track is not None:
-        notes.append(
-            f"Strongest grounded track is {best_track.get('track', 'unknown')} at {best_track.get('scenario_score_mean', 'n/a')}."
+                best_track = max(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
+                weakest_track = min(scored_tracks, key=lambda item: _safe_float(item.get("scenario_score_mean")))
+        focus = (
+            f"{config.project_name} state: benchmark-grounded doctrine is led by {operator_label} "
+            f"on {benchmark_profile} at {config.eval_metric} {metric_value}. "
+            f"Frontier probes remain exploratory and should not be compared directly against "
+            "benchmark-grounded doctrine."
         )
-    if lesson:
-        notes.append(lesson)
-    questions = []
-    if next_probe:
-        questions.append(next_probe)
-    if weakest_track is not None:
-        questions.append(
-            f"What grounded probe should target the weakest track {weakest_track.get('track', 'unknown')} next?"
+        if weakest_track is not None:
+            focus += f" The active weakest grounded transfer surface is {weakest_track.get('track', 'unknown')}."
+        notes = [
+            "Grounded doctrine is stored in chip doctrine documents inside artifacts/memory/documents.",
+            f"Latest benchmark-grounded run_id is {record.get('run_id')}.",
+            "Frontier heuristics remain useful for idea generation but are a separate comparison lane.",
+        ]
+        lesson = str(chip_result.get("lesson") or "").strip()
+        next_probe = str(chip_result.get("next_probe") or "").strip()
+        if best_track is not None:
+            notes.append(
+                f"Strongest grounded track is {best_track.get('track', 'unknown')} at {best_track.get('scenario_score_mean', 'n/a')}."
+            )
+        if lesson:
+            notes.append(lesson)
+        questions = []
+        if next_probe:
+            questions.append(next_probe)
+        if weakest_track is not None:
+            questions.append(
+                f"What grounded probe should target the weakest track {weakest_track.get('track', 'unknown')} next?"
+            )
+        questions.append("Should exploratory frontier ideas be promoted only after benchmark re-expression?")
+        write_working_memory(
+            runtime_root,
+            kind="chip_state",
+            focus=focus,
+            status="active",
+            trace_id=str(record.get("trace_id") or "") or None,
+            notes=notes,
+            questions=questions,
+            governor_decision=governor_decision,
         )
-    questions.append("Should exploratory frontier ideas be promoted only after benchmark re-expression?")
-    write_working_memory(
-        runtime_root,
-        kind="chip_state",
-        focus=focus,
-        status="active",
-        trace_id=str(record.get("trace_id") or "") or None,
-        notes=notes,
-        questions=questions,
-        governor_decision=governor_decision,
-    )
 
 
+
+    except Exception:
+        return None
 def run_once(
     config_path: Path,
     command_name: str,

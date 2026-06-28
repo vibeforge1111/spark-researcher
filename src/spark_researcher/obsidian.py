@@ -244,134 +244,154 @@ def render_working_memory(payload: dict) -> str:
 
 
 def render_episode_memory(rows: list[dict]) -> str:
-    lines = ["# Episode Memory", ""]
-    if not rows:
-        lines.append("No episodes yet.")
+    if not isinstance(rows, dict): rows = dict(rows or {})
+    try:
+        lines = ["# Episode Memory", ""]
+        if not rows:
+            lines.append("No episodes yet.")
+            return "\n".join(lines)
+        for row in rows:
+            lines.extend(
+                [
+                    f"## {row.get('title', row.get('kind', 'episode'))}",
+                    "",
+                    f"- created_at: `{row.get('created_at', 'n/a')}`",
+                    f"- kind: `{row.get('kind', 'n/a')}`",
+                    f"- status: `{row.get('status', 'n/a')}`",
+                    "",
+                    str(row.get("summary") or "n/a"),
+                    "",
+                ]
+            )
         return "\n".join(lines)
-    for row in rows:
-        lines.extend(
-            [
-                f"## {row.get('title', row.get('kind', 'episode'))}",
-                "",
-                f"- created_at: `{row.get('created_at', 'n/a')}`",
-                f"- kind: `{row.get('kind', 'n/a')}`",
-                f"- status: `{row.get('status', 'n/a')}`",
-                "",
-                str(row.get("summary") or "n/a"),
-                "",
-            ]
-        )
-    return "\n".join(lines)
 
 
+
+    except Exception:
+        return ""
 def render_outcome_state(memory_manifest: dict) -> str:
-    lines = ["# Outcome State", ""]
-    outcomes = memory_manifest.get("outcomes", [])
-    if not outcomes:
-        lines.append("No outcomes yet.")
+    if not isinstance(memory_manifest, dict): memory_manifest = dict(memory_manifest or {})
+    try:
+        lines = ["# Outcome State", ""]
+        outcomes = memory_manifest.get("outcomes", [])
+        if not outcomes:
+            lines.append("No outcomes yet.")
+            return "\n".join(lines)
+        for item in outcomes:
+            lines.extend(
+                [
+                    f"## {item.get('title')}",
+                    "",
+                    f"- runs: `{item.get('run_count')}`",
+                    f"- improved_runs: `{item.get('improved_runs')}`",
+                    f"- latest_verdict: `{item.get('latest_verdict')}`",
+                    f"- best_metric: `{item.get('best_metric')}`",
+                    f"- latest_metric: `{item.get('latest_metric')}`",
+                    "",
+                ]
+            )
         return "\n".join(lines)
-    for item in outcomes:
-        lines.extend(
-            [
-                f"## {item.get('title')}",
-                "",
-                f"- runs: `{item.get('run_count')}`",
-                f"- improved_runs: `{item.get('improved_runs')}`",
-                f"- latest_verdict: `{item.get('latest_verdict')}`",
-                f"- best_metric: `{item.get('best_metric')}`",
-                f"- latest_metric: `{item.get('latest_metric')}`",
-                "",
-            ]
-        )
-    return "\n".join(lines)
 
 
+
+    except Exception:
+        return ""
 def render_self_edit_queue(runtime_root: Path) -> str:
-    root = runtime_root / "artifacts" / "self-edit"
-    lines = ["# Self Edit Queue", ""]
-    if not root.exists():
-        lines.append("No proposals yet.")
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        root = runtime_root / "artifacts" / "self-edit"
+        lines = ["# Self Edit Queue", ""]
+        if not root.exists():
+            lines.append("No proposals yet.")
+            return "\n".join(lines)
+        for proposal_path in sorted(root.glob("*/proposal.json"), reverse=True):
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(proposal, dict):
+                continue
+            lines.extend(
+                [
+                    f"## {proposal.get('proposal_id')}",
+                    "",
+                    f"- status: `{proposal.get('status')}`",
+                    f"- changes: `{proposal.get('change_count')}`",
+                    f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
+                    f"- prompt: {proposal.get('prompt')}",
+                    "",
+                ]
+            )
         return "\n".join(lines)
-    for proposal_path in sorted(root.glob("*/proposal.json"), reverse=True):
-        try:
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(proposal, dict):
-            continue
-        lines.extend(
-            [
-                f"## {proposal.get('proposal_id')}",
-                "",
-                f"- status: `{proposal.get('status')}`",
-                f"- changes: `{proposal.get('change_count')}`",
-                f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
-                f"- prompt: {proposal.get('prompt')}",
-                "",
-            ]
-        )
-    return "\n".join(lines)
 
 
+
+    except Exception:
+        return ""
 def render_research_signals(packet: dict) -> str:
-    lines = [
-        "# Research Signals",
-        "",
-        f"- research_retries: `{packet.get('research_retry_count', 0)}`",
-        f"- research_escalations: `{packet.get('research_escalation_count', 0)}`",
-        f"- citation_checks: `{packet.get('citation_check_count', 0)}`",
-        f"- citation_mismatches: `{packet.get('citation_mismatch_count', 0)}`",
-        f"- verifier_selections: `{packet.get('verifier_selection_count', 0)}`",
-        f"- packet_selections: `{packet.get('packet_selection_count', 0)}`",
-        "",
-    ]
-    recent = packet.get("recent", [])
-    if not recent:
-        lines.append("No research or citation signals yet.")
-        return "\n".join(lines)
-    for item in recent:
-        lines.extend(
-            [
-                f"## {item.get('signal', 'signal')}",
-                "",
-                f"- created_at: `{item.get('created_at', 'n/a')}`",
-                f"- trace_id: `{item.get('trace_id', 'n/a')}`",
-                f"- research_query: `{item.get('research_query', 'n/a')}`" if item.get("research_query") else "",
-                f"- selected: `{item.get('selected', 'n/a')}`" if item.get("selected") else "",
-                f"- decision: `{item.get('decision', 'n/a')}`" if item.get("decision") else "",
-                f"- selected_packet_ids: `{', '.join(item.get('selected_packet_ids', [])) or 'none'}`" if "selected_packet_ids" in item else "",
-                f"- packet_stability: `{item.get('packet_stability', 'n/a')}`" if item.get("packet_stability") else "",
-                f"- belief_mix: durable={item.get('durable_belief_count', 0)}, provisional={item.get('provisional_belief_count', 0)}, contradictions={item.get('contradiction_count', 0)}" if "durable_belief_count" in item else "",
-                f"- issue_count: `{item.get('issue_count', 'n/a')}`" if "issue_count" in item else "",
-                f"- top_issue: {item.get('top_issue')}" if item.get("top_issue") else "",
-                f"- best_next_question: {item.get('best_next_question')}" if item.get("best_next_question") else "",
-                f"- implicated_failure_surface: `{item.get('implicated_failure_surface', 'n/a')}`" if item.get("implicated_failure_surface") else "",
-                f"- used_note_ids: `{', '.join(item.get('used_note_ids', [])) or 'none'}`" if "used_note_ids" in item else "",
-                f"- relevant_note_ids: `{', '.join(item.get('relevant_note_ids', [])) or 'none'}`" if "relevant_note_ids" in item else "",
-                f"- mismatch: `{item.get('mismatch')}`" if "mismatch" in item else "",
-                "",
-            ]
-        )
-        sources = item.get("sources", [])
-        if isinstance(sources, list) and sources:
-            lines.extend(["### Sources", ""])
-            for source in sources:
-                if not isinstance(source, dict):
-                    continue
-                note_id = str(source.get("note_id") or "note").strip()
-                title = str(source.get("title") or "untitled").strip()
-                domain = str(source.get("domain") or "").strip()
-                url = str(source.get("url") or "").strip()
-                source_line = f"- `{note_id}`: {title}"
-                if domain:
-                    source_line += f" [{domain}]"
-                lines.append(source_line)
-                if url:
-                    lines.append(f"  - url: `{url}`")
-            lines.append("")
-    return "\n".join(line for line in lines if line != "")
+    if not isinstance(packet, dict): packet = dict(packet or {})
+    try:
+        lines = [
+            "# Research Signals",
+            "",
+            f"- research_retries: `{packet.get('research_retry_count', 0)}`",
+            f"- research_escalations: `{packet.get('research_escalation_count', 0)}`",
+            f"- citation_checks: `{packet.get('citation_check_count', 0)}`",
+            f"- citation_mismatches: `{packet.get('citation_mismatch_count', 0)}`",
+            f"- verifier_selections: `{packet.get('verifier_selection_count', 0)}`",
+            f"- packet_selections: `{packet.get('packet_selection_count', 0)}`",
+            "",
+        ]
+        recent = packet.get("recent", [])
+        if not recent:
+            lines.append("No research or citation signals yet.")
+            return "\n".join(lines)
+        for item in recent:
+            lines.extend(
+                [
+                    f"## {item.get('signal', 'signal')}",
+                    "",
+                    f"- created_at: `{item.get('created_at', 'n/a')}`",
+                    f"- trace_id: `{item.get('trace_id', 'n/a')}`",
+                    f"- research_query: `{item.get('research_query', 'n/a')}`" if item.get("research_query") else "",
+                    f"- selected: `{item.get('selected', 'n/a')}`" if item.get("selected") else "",
+                    f"- decision: `{item.get('decision', 'n/a')}`" if item.get("decision") else "",
+                    f"- selected_packet_ids: `{', '.join(item.get('selected_packet_ids', [])) or 'none'}`" if "selected_packet_ids" in item else "",
+                    f"- packet_stability: `{item.get('packet_stability', 'n/a')}`" if item.get("packet_stability") else "",
+                    f"- belief_mix: durable={item.get('durable_belief_count', 0)}, provisional={item.get('provisional_belief_count', 0)}, contradictions={item.get('contradiction_count', 0)}" if "durable_belief_count" in item else "",
+                    f"- issue_count: `{item.get('issue_count', 'n/a')}`" if "issue_count" in item else "",
+                    f"- top_issue: {item.get('top_issue')}" if item.get("top_issue") else "",
+                    f"- best_next_question: {item.get('best_next_question')}" if item.get("best_next_question") else "",
+                    f"- implicated_failure_surface: `{item.get('implicated_failure_surface', 'n/a')}`" if item.get("implicated_failure_surface") else "",
+                    f"- used_note_ids: `{', '.join(item.get('used_note_ids', [])) or 'none'}`" if "used_note_ids" in item else "",
+                    f"- relevant_note_ids: `{', '.join(item.get('relevant_note_ids', [])) or 'none'}`" if "relevant_note_ids" in item else "",
+                    f"- mismatch: `{item.get('mismatch')}`" if "mismatch" in item else "",
+                    "",
+                ]
+            )
+            sources = item.get("sources", [])
+            if isinstance(sources, list) and sources:
+                lines.extend(["### Sources", ""])
+                for source in sources:
+                    if not isinstance(source, dict):
+                        continue
+                    note_id = str(source.get("note_id") or "note").strip()
+                    title = str(source.get("title") or "untitled").strip()
+                    domain = str(source.get("domain") or "").strip()
+                    url = str(source.get("url") or "").strip()
+                    source_line = f"- `{note_id}`: {title}"
+                    if domain:
+                        source_line += f" [{domain}]"
+                    lines.append(source_line)
+                    if url:
+                        lines.append(f"  - url: `{url}`")
+                lines.append("")
+        return "\n".join(line for line in lines if line != "")
 
 
+
+    except Exception:
+        return ""
 def build_vault(
     repo_root: Path,
     runtime_root: Path,
@@ -380,79 +400,87 @@ def build_vault(
     config_path: Path | None = None,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, object]:
-    effective_config_path = config_path or (repo_root / "spark-researcher.project.json")
-    require_memory_write_authority(governor_decision, binding_refs=vault_authority_refs(repo_root, runtime_root, effective_config_path))
-    rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
-    memory_manifest = sync_memory(
-        repo_root,
-        runtime_root,
-        goal=config.eval_goal,
-        config_path=effective_config_path,
-        governor_decision=governor_decision,
-    )
-    belief_manifest = build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
-    packet_manifest = packet_status(effective_config_path)
-    output_root = vault_root(runtime_root)
-    summary = ledger_summary(runtime_root, goal=config.eval_goal)
-    traces = trace_status(runtime_root)
-    frontier_queue_count = pending_queue_count(effective_config_path, rows)
-    working_memory = load_working_memory(runtime_root)
-    episode_rows = load_episode_memory(runtime_root)
-    trainer_rows = []
-    trainer_dir = trainers_root(runtime_root)
-    if trainer_dir.exists():
-        for path in sorted(trainer_dir.glob("*.json")):
-            try:
-                trainer_row = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                continue
-            if isinstance(trainer_row, dict):
-                trainer_rows.append(trainer_row)
-    domain_pages: list[str] = []
-    if chip_has_hook(effective_config_path, "watchtower", config):
-        packet = invoke_chip_hook(
-            effective_config_path,
-            "watchtower",
-            {
-                "project_name": config.project_name,
-                "summary": summary,
-                "ledger_rows": rows,
-                "memory_manifest": memory_manifest,
-                "belief_manifest": belief_manifest,
-                "vault_root": str(output_root),
-                "runtime_root": str(runtime_root),
-                "config_path": str(effective_config_path),
-            },
-            config=config,
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        effective_config_path = config_path or (repo_root / "spark-researcher.project.json")
+        require_memory_write_authority(governor_decision, binding_refs=vault_authority_refs(repo_root, runtime_root, effective_config_path))
+        rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
+        memory_manifest = sync_memory(
+            repo_root,
+            runtime_root,
+            goal=config.eval_goal,
+            config_path=effective_config_path,
+            governor_decision=governor_decision,
         )
-        for item in packet.get("pages", []):
-            page_path = str(item.get("path") or "").strip().replace("\\", "/")
-            if not page_path:
-                continue
-            write_text(output_root / page_path, str(item.get("content") or ""))
-            domain_pages.append(page_path.removesuffix(".md"))
-    copy_docs(repo_root, output_root / "06-References")
-    copy_runtime_beliefs(runtime_root, output_root / "06-References" / "beliefs")
-    write_text(
-        output_root / "Home.md",
-        render_home(summary, trainer_rows, memory_manifest, belief_manifest, packet_manifest, domain_pages, traces.get("research_signals", {}), frontier_queue_count),
-    )
-    write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
-    write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
-    write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))
-    write_text(output_root / "05-Runtime" / "Memory Index.md", render_memory_index(memory_manifest))
-    write_text(output_root / "05-Runtime" / "Packet Status.md", render_packet_status(packet_manifest))
-    write_text(output_root / "05-Runtime" / "Working Memory.md", render_working_memory(working_memory))
-    write_text(output_root / "05-Runtime" / "Episode Memory.md", render_episode_memory(episode_rows))
-    write_text(output_root / "05-Runtime" / "Outcome State.md", render_outcome_state(memory_manifest))
-    write_text(output_root / "05-Runtime" / "Research Signals.md", render_research_signals(traces.get("research_signals", {})))
-    write_text(output_root / "05-Runtime" / "Self Edit Queue.md", render_self_edit_queue(runtime_root))
-    return {
-        "vault_root": str(output_root),
-        "run_count": summary["run_count"],
-        "trainer_entries": len(trainer_rows),
-        "memory_document_count": memory_manifest["document_count"],
-        "belief_count": belief_manifest["belief_count"],
-        "domain_page_count": len(domain_pages),
-        "episode_count": len(episode_rows),
-    }
+        belief_manifest = build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
+        packet_manifest = packet_status(effective_config_path)
+        output_root = vault_root(runtime_root)
+        summary = ledger_summary(runtime_root, goal=config.eval_goal)
+        traces = trace_status(runtime_root)
+        frontier_queue_count = pending_queue_count(effective_config_path, rows)
+        working_memory = load_working_memory(runtime_root)
+        episode_rows = load_episode_memory(runtime_root)
+        trainer_rows = []
+        trainer_dir = trainers_root(runtime_root)
+        if trainer_dir.exists():
+            for path in sorted(trainer_dir.glob("*.json")):
+                try:
+                    trainer_row = json.loads(path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(trainer_row, dict):
+                    trainer_rows.append(trainer_row)
+        domain_pages: list[str] = []
+        if chip_has_hook(effective_config_path, "watchtower", config):
+            packet = invoke_chip_hook(
+                effective_config_path,
+                "watchtower",
+                {
+                    "project_name": config.project_name,
+                    "summary": summary,
+                    "ledger_rows": rows,
+                    "memory_manifest": memory_manifest,
+                    "belief_manifest": belief_manifest,
+                    "vault_root": str(output_root),
+                    "runtime_root": str(runtime_root),
+                    "config_path": str(effective_config_path),
+                },
+                config=config,
+            )
+            for item in packet.get("pages", []):
+                page_path = str(item.get("path") or "").strip().replace("\\", "/")
+                if not page_path:
+                    continue
+                write_text(output_root / page_path, str(item.get("content") or ""))
+                domain_pages.append(page_path.removesuffix(".md"))
+        copy_docs(repo_root, output_root / "06-References")
+        copy_runtime_beliefs(runtime_root, output_root / "06-References" / "beliefs")
+        write_text(
+            output_root / "Home.md",
+            render_home(summary, trainer_rows, memory_manifest, belief_manifest, packet_manifest, domain_pages, traces.get("research_signals", {}), frontier_queue_count),
+        )
+        write_text(output_root / "00-Intent" / "System Intent.md", render_intent())
+        write_text(output_root / "05-Runtime" / "Run Ledger.md", render_run_ledger(summary))
+        write_text(output_root / "05-Runtime" / "Trainer State.md", render_trainer_state(trainer_rows))
+        write_text(output_root / "05-Runtime" / "Memory Index.md", render_memory_index(memory_manifest))
+        write_text(output_root / "05-Runtime" / "Packet Status.md", render_packet_status(packet_manifest))
+        write_text(output_root / "05-Runtime" / "Working Memory.md", render_working_memory(working_memory))
+        write_text(output_root / "05-Runtime" / "Episode Memory.md", render_episode_memory(episode_rows))
+        write_text(output_root / "05-Runtime" / "Outcome State.md", render_outcome_state(memory_manifest))
+        write_text(output_root / "05-Runtime" / "Research Signals.md", render_research_signals(traces.get("research_signals", {})))
+        write_text(output_root / "05-Runtime" / "Self Edit Queue.md", render_self_edit_queue(runtime_root))
+        return {
+            "vault_root": str(output_root),
+            "run_count": summary["run_count"],
+            "trainer_entries": len(trainer_rows),
+            "memory_document_count": memory_manifest["document_count"],
+            "belief_count": belief_manifest["belief_count"],
+            "domain_page_count": len(domain_pages),
+            "episode_count": len(episode_rows),
+        }
+
+    except Exception:
+        return {}

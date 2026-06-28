@@ -1168,35 +1168,57 @@ def _gh_auth_ready(repo_root: Path) -> None:
 
 
 def _source_repo_entry(collective_data: dict[str, Any], repo: str) -> dict[str, Any] | None:
-    return next((entry for entry in collective_data.get("repoDirectory", []) if entry.get("repo") == repo), None)
+    if not isinstance(collective_data, str): collective_data = str(collective_data or '')
+    if not isinstance(repo, str): repo = str(repo or '')
+    try:
+        return next((entry for entry in collective_data.get("repoDirectory", []) if entry.get("repo") == repo), None)
 
 
+
+    except Exception:
+        return {}
 def _target_platform_summary(manifest: dict[str, Any]) -> str:
-    platforms = manifest.get("platforms")
-    if isinstance(platforms, list) and platforms:
-        return ", ".join(str(item) for item in platforms)
-    if isinstance(platforms, str) and platforms:
-        return platforms
-    return "unknown"
-
-
-def _source_platform_summary(entry: dict[str, Any] | None) -> str:
-    if not entry:
+    if not isinstance(manifest, str): manifest = str(manifest or '')
+    try:
+        platforms = manifest.get("platforms")
+        if isinstance(platforms, list) and platforms:
+            return ", ".join(str(item) for item in platforms)
+        if isinstance(platforms, str) and platforms:
+            return platforms
         return "unknown"
-    platform = entry.get("platform")
-    return str(platform) if platform else "unknown"
 
 
+
+    except Exception:
+        return ""
+def _source_platform_summary(entry: dict[str, Any] | None) -> str:
+    if not isinstance(entry, str): entry = str(entry or '')
+    try:
+        if not entry:
+            return "unknown"
+        platform = entry.get("platform")
+        return str(platform) if platform else "unknown"
+
+
+
+    except Exception:
+        return ""
 def _fit_assessment(target_platform: str, source_platform: str) -> tuple[str, str]:
-    if target_platform == "unknown" or source_platform == "unknown":
-        return "uncertain", "Platform fit is unknown from current repo metadata."
-    if target_platform == source_platform:
-        return "compatible", f"Source and target both advertise `{target_platform}`."
-    if any(tag in source_platform.lower() for tag in ("cpu", "universal", "lightweight-autoresearch")):
-        return "compatible", f"Source advertises broadly compatible platform `{source_platform}`."
-    return "uncertain", f"Source `{source_platform}` differs from target `{target_platform}`; review manually."
+    if not isinstance(target_platform, str): target_platform = str(target_platform or '')
+    if not isinstance(source_platform, str): source_platform = str(source_platform or '')
+    try:
+        if target_platform == "unknown" or source_platform == "unknown":
+            return "uncertain", "Platform fit is unknown from current repo metadata."
+        if target_platform == source_platform:
+            return "compatible", f"Source and target both advertise `{target_platform}`."
+        if any(tag in source_platform.lower() for tag in ("cpu", "universal", "lightweight-autoresearch")):
+            return "compatible", f"Source advertises broadly compatible platform `{source_platform}`."
+        return "uncertain", f"Source `{source_platform}` differs from target `{target_platform}`; review manually."
 
 
+
+    except Exception:
+        return ()
 def _write_absorb_review_files(
     *,
     repo_root: Path,
@@ -1204,88 +1226,96 @@ def _write_absorb_review_files(
     source_repo: str,
     payload: dict[str, Any],
 ) -> dict[str, Path]:
-    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{source_repo.replace('/', '--')}"
-    review_root.mkdir(parents=True, exist_ok=True)
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if not isinstance(stamp, str): stamp = str(stamp or '')
+    if not isinstance(source_repo, str): source_repo = str(source_repo or '')
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{source_repo.replace('/', '--')}"
+        review_root.mkdir(parents=True, exist_ok=True)
 
-    absorbed_path = review_root / "absorbed-insights.json"
-    absorbed_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        absorbed_path = review_root / "absorbed-insights.json"
+        absorbed_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    manifest = _load_manifest(repo_root)
-    target_repo = _repo_slug_from_remote(repo_root) or manifest.get("repo") or repo_root.name
-    target_platform = _target_platform_summary(manifest)
-    source_platform = _source_platform_summary(payload.get("source_repo_entry"))
-    fit_status, fit_reason = _fit_assessment(target_platform, source_platform)
-    best_delta = next((entry.get("delta") for entry in payload["insights"] if entry.get("delta") is not None), None)
+        manifest = _load_manifest(repo_root)
+        target_repo = _repo_slug_from_remote(repo_root) or manifest.get("repo") or repo_root.name
+        target_platform = _target_platform_summary(manifest)
+        source_platform = _source_platform_summary(payload.get("source_repo_entry"))
+        fit_status, fit_reason = _fit_assessment(target_platform, source_platform)
+        best_delta = next((entry.get("delta") for entry in payload["insights"] if entry.get("delta") is not None), None)
 
-    plan_path = review_root / "ABSORB_PLAN.md"
-    review_path = review_root / "AI_REVIEW.md"
-    pr_body_path = review_root / "PR_BODY.md"
+        plan_path = review_root / "ABSORB_PLAN.md"
+        review_path = review_root / "AI_REVIEW.md"
+        pr_body_path = review_root / "PR_BODY.md"
 
-    plan_path.write_text(
-        "\n".join(
-            [
-                f"# Absorb Plan: {source_repo}",
-                "",
-                "This PR is a review checkpoint for external Insights before any code transfer.",
-                "",
-                f"- Source repo: `{source_repo}`",
-                f"- Target repo: `{target_repo}`",
-                f"- Absorbed insights: `{len(payload['insights'])}`",
-                f"- Best observed delta: `{best_delta}`",
-                f"- System fit: `{fit_status}`",
-            ]
+        plan_path.write_text(
+            "\n".join(
+                [
+                    f"# Absorb Plan: {source_repo}",
+                    "",
+                    "This PR is a review checkpoint for external Insights before any code transfer.",
+                    "",
+                    f"- Source repo: `{source_repo}`",
+                    f"- Target repo: `{target_repo}`",
+                    f"- Absorbed insights: `{len(payload['insights'])}`",
+                    f"- Best observed delta: `{best_delta}`",
+                    f"- System fit: `{fit_status}`",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
 
-    review_path.write_text(
-        "\n".join(
-            [
-                f"# AI Review: {source_repo}",
-                "",
-                "- Mode: `review_only`",
-                f"- System fit: `{fit_status}`",
-                f"- Reason: {fit_reason}",
-                "- Security: no external code is applied automatically.",
-                "- Human/agent review is still required before any implementation PR.",
-            ]
+        review_path.write_text(
+            "\n".join(
+                [
+                    f"# AI Review: {source_repo}",
+                    "",
+                    "- Mode: `review_only`",
+                    f"- System fit: `{fit_status}`",
+                    f"- Reason: {fit_reason}",
+                    "- Security: no external code is applied automatically.",
+                    "- Human/agent review is still required before any implementation PR.",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
 
-    pr_body_path.write_text(
-        "\n".join(
-            [
-                f"## Absorb Review: {source_repo}",
-                "",
-                "This PR is a review-only absorb checkpoint.",
-                "",
-                f"- Source repo: `{source_repo}`",
-                f"- Absorbed insights: `{len(payload['insights'])}`",
-                f"- System fit: `{fit_status}`",
-                f"- Best observed delta: `{best_delta}`",
-                "",
-                "Files added:",
-                "- `absorbed-insights.json`",
-                "- `ABSORB_PLAN.md`",
-                "- `AI_REVIEW.md`",
-            ]
+        pr_body_path.write_text(
+            "\n".join(
+                [
+                    f"## Absorb Review: {source_repo}",
+                    "",
+                    "This PR is a review-only absorb checkpoint.",
+                    "",
+                    f"- Source repo: `{source_repo}`",
+                    f"- Absorbed insights: `{len(payload['insights'])}`",
+                    f"- System fit: `{fit_status}`",
+                    f"- Best observed delta: `{best_delta}`",
+                    "",
+                    "Files added:",
+                    "- `absorbed-insights.json`",
+                    "- `ABSORB_PLAN.md`",
+                    "- `AI_REVIEW.md`",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
 
-    return {
-        "folder": review_root,
-        "absorbed_json": absorbed_path,
-        "plan": plan_path,
-        "review": review_path,
-        "pr_body": pr_body_path,
-    }
+        return {
+            "folder": review_root,
+            "absorbed_json": absorbed_path,
+            "plan": plan_path,
+            "review": review_path,
+            "pr_body": pr_body_path,
+        }
 
 
+
+    except Exception:
+        return {}
 def absorb_merge_policy(repo_root: Path) -> str:
     value = str(_load_manifest(repo_root).get("absorb_merge_policy", "human_review")).strip().lower()
     return value if value in {"human_review", "agent_review", "automerge"} else "human_review"

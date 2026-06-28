@@ -18,30 +18,44 @@ COLLECTIVE_COMMAND_TIMEOUT_SECONDS = 120
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return []
+        rows: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                rows.append(parsed)
+        return rows
+
+
+
+    except Exception:
         return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            rows.append(parsed)
-    return rows
-
-
 def now_stamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+    try:
+        return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+
+    except Exception:
+        return ""
 def _slug(value: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
-    return normalized or "generalist"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+        return normalized or "generalist"
 
 
+
+    except Exception:
+        return ""
 def _repo_key(value: str) -> str:
     repo_name = value.strip().split("/")[-1]
     if repo_name.startswith("domain-chip-"):

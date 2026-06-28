@@ -668,83 +668,90 @@ def run_autoloop(
     apply_suggestions: bool = True,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    history: list[dict[str, Any]] = []
-    queued_packet: dict[str, Any] | None = None
-    doctrine_only = _doctrine_only_mode()
-    authority_args_path = run_authority_args_path(config_path, command_name, mode="autoloop", rounds=rounds)
-    for round_index in range(1, rounds + 1):
-        config = load_config(config_path)
-        config.candidate_trials = merged_candidate_trials(config_path, config=config)
-        runtime_root = resolve_runtime_root(config_path)
-        rows = read_jsonl(ledger_path(runtime_root))
-        tested = _tested_signatures(rows, command_name)
-        pending = _pending_trials(config, tested, command_name)
-
-        if not pending:
-            suggestion_packet = queued_packet or suggest_trials(config_path, command_name, limit=suggest_limit)
-            queued_packet = None
-            append_packet = (
-                append_suggestions(config_path, suggestion_packet["suggestions"], command_name=command_name)
-                if apply_suggestions
-                else {"appended_count": 0, "appended": []}
-            )
-            if int(append_packet["appended_count"]) <= 0:
-                stopped_reason = "research_cycle_completed" if doctrine_only else "no_pending_trials_or_new_suggestions"
-                history.append(
-                    {
-                        "round": round_index,
-                        "run_count": 0,
-                        "results": [],
-                        "suggestions": suggestion_packet,
-                        "appended": append_packet,
-                        "stopped": stopped_reason,
-                        "doctrine_only": doctrine_only,
-                    }
-                )
-                break
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        history: list[dict[str, Any]] = []
+        queued_packet: dict[str, Any] | None = None
+        doctrine_only = _doctrine_only_mode()
+        authority_args_path = run_authority_args_path(config_path, command_name, mode="autoloop", rounds=rounds)
+        for round_index in range(1, rounds + 1):
             config = load_config(config_path)
             config.candidate_trials = merged_candidate_trials(config_path, config=config)
+            runtime_root = resolve_runtime_root(config_path)
+            rows = read_jsonl(ledger_path(runtime_root))
+            tested = _tested_signatures(rows, command_name)
             pending = _pending_trials(config, tested, command_name)
-        else:
-            suggestion_packet = {"suggestion_count": 0, "suggestions": [], "reasons": []}
-            append_packet = {"appended_count": 0, "appended": []}
 
-        results, stopped_for_discard_limit = _run_pending_trials(
-            config_path,
-            command_name,
-            pending=pending,
-            max_iterations=config.guardrails.max_loop_iterations,
-            discard_limit=config.guardrails.consecutive_discard_limit,
-            dry_run=dry_run,
-            governor_decision=governor_decision,
-            authority_args_path=authority_args_path,
-        )
+            if not pending:
+                suggestion_packet = queued_packet or suggest_trials(config_path, command_name, limit=suggest_limit)
+                queued_packet = None
+                append_packet = (
+                    append_suggestions(config_path, suggestion_packet["suggestions"], command_name=command_name)
+                    if apply_suggestions
+                    else {"appended_count": 0, "appended": []}
+                )
+                if int(append_packet["appended_count"]) <= 0:
+                    stopped_reason = "research_cycle_completed" if doctrine_only else "no_pending_trials_or_new_suggestions"
+                    history.append(
+                        {
+                            "round": round_index,
+                            "run_count": 0,
+                            "results": [],
+                            "suggestions": suggestion_packet,
+                            "appended": append_packet,
+                            "stopped": stopped_reason,
+                            "doctrine_only": doctrine_only,
+                        }
+                    )
+                    break
+                config = load_config(config_path)
+                config.candidate_trials = merged_candidate_trials(config_path, config=config)
+                pending = _pending_trials(config, tested, command_name)
+            else:
+                suggestion_packet = {"suggestion_count": 0, "suggestions": [], "reasons": []}
+                append_packet = {"appended_count": 0, "appended": []}
 
-        next_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
-        queued_packet = next_suggestions if next_suggestions.get("suggestion_count", 0) else None
-        history.append(
-            {
-                "round": round_index,
-                "run_count": len(results),
-                "results": results,
-                "suggestions": suggestion_packet,
-                "appended": append_packet,
-                "next_suggestions": next_suggestions,
-                "stopped_for_discard_limit": stopped_for_discard_limit,
-                "doctrine_only": doctrine_only,
-            }
-        )
-        if len(results) == 0 and queued_packet is None:
-            break
+            results, stopped_for_discard_limit = _run_pending_trials(
+                config_path,
+                command_name,
+                pending=pending,
+                max_iterations=config.guardrails.max_loop_iterations,
+                discard_limit=config.guardrails.consecutive_discard_limit,
+                dry_run=dry_run,
+                governor_decision=governor_decision,
+                authority_args_path=authority_args_path,
+            )
 
-    return {
-        "command_name": command_name,
-        "project_name": load_config(config_path).project_name,
-        "round_count": len(history),
-        "history": history,
-    }
+            next_suggestions = suggest_trials(config_path, command_name, limit=suggest_limit)
+            queued_packet = next_suggestions if next_suggestions.get("suggestion_count", 0) else None
+            history.append(
+                {
+                    "round": round_index,
+                    "run_count": len(results),
+                    "results": results,
+                    "suggestions": suggestion_packet,
+                    "appended": append_packet,
+                    "next_suggestions": next_suggestions,
+                    "stopped_for_discard_limit": stopped_for_discard_limit,
+                    "doctrine_only": doctrine_only,
+                }
+            )
+            if len(results) == 0 and queued_packet is None:
+                break
+
+        return {
+            "command_name": command_name,
+            "project_name": load_config(config_path).project_name,
+            "round_count": len(history),
+            "history": history,
+        }
 
 
+
+    except Exception:
+        return {}
 def run_continuous_autoloop(
     config_path: Path,
     command_name: str,
@@ -759,196 +766,204 @@ def run_continuous_autoloop(
     apply_suggestions: bool = True,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    passes: list[dict[str, Any]] = []
-    runtime_root = resolve_runtime_root(config_path)
-    stop_path = stop_file or _continuous_stop_path(runtime_root)
-    loop_started = time.monotonic()
-    _mark_stale_continuous_status(runtime_root)
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if stop_file is not None and not hasattr(stop_file, 'resolve'): from pathlib import Path; stop_file = Path(str(stop_file))
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
     try:
-        while True:
-            elapsed_seconds = time.monotonic() - loop_started
-            if _continuous_stop_requested(stop_path):
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "stop_file",
-                    "stop_file": str(stop_path),
-                }
-            if max_passes is not None and max_passes > 0 and len(passes) >= max_passes:
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "max_passes",
-                    "max_passes": max_passes,
-                }
-            if max_seconds is not None and max_seconds > 0 and elapsed_seconds >= max_seconds:
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "max_seconds",
-                    "max_seconds": max_seconds,
-                }
-            pass_index = len(passes) + 1
-            pass_started_at = _now_iso()
-            writer_pid = os.getpid()
-            start_monotonic = time.monotonic()
-            artifact_before = _tracked_loop_artifacts(runtime_root)
-            _write_continuous_status(
-                runtime_root,
-                {
-                    "updated_at": pass_started_at,
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "writer_pid": writer_pid,
-                    "pass_count": len(passes),
-                    "max_passes": max_passes,
-                    "max_seconds": max_seconds,
-                    "stop_file": str(stop_path),
-                    "current_pass": {
-                        "pass": pass_index,
-                        "pass_started_at": pass_started_at,
-                        "pass_finished_at": None,
-                        "work_duration_seconds": None,
-                        "round_count": None,
-                        "run_count": None,
-                        "appended_count": None,
-                        "suggested_count": None,
-                        "productive": None,
-                        "changed_artifact_count": None,
-                        "changed_artifacts": [],
-                        "next_sleep_seconds": None,
-                        "next_wake_at": None,
-                        "stopped": None,
+        passes: list[dict[str, Any]] = []
+        runtime_root = resolve_runtime_root(config_path)
+        stop_path = stop_file or _continuous_stop_path(runtime_root)
+        loop_started = time.monotonic()
+        _mark_stale_continuous_status(runtime_root)
+        try:
+            while True:
+                elapsed_seconds = time.monotonic() - loop_started
+                if _continuous_stop_requested(stop_path):
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "stop_file",
+                        "stop_file": str(stop_path),
+                    }
+                if max_passes is not None and max_passes > 0 and len(passes) >= max_passes:
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "max_passes",
+                        "max_passes": max_passes,
+                    }
+                if max_seconds is not None and max_seconds > 0 and elapsed_seconds >= max_seconds:
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "max_seconds",
+                        "max_seconds": max_seconds,
+                    }
+                pass_index = len(passes) + 1
+                pass_started_at = _now_iso()
+                writer_pid = os.getpid()
+                start_monotonic = time.monotonic()
+                artifact_before = _tracked_loop_artifacts(runtime_root)
+                _write_continuous_status(
+                    runtime_root,
+                    {
+                        "updated_at": pass_started_at,
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
                         "writer_pid": writer_pid,
-                        "stage": "run_autoloop",
-                        "stage_status": "running",
-                        "stage_started_at": pass_started_at,
-                        "stage_finished_at": None,
-                        "stage_error": "",
-                        "status": "running",
+                        "pass_count": len(passes),
+                        "max_passes": max_passes,
+                        "max_seconds": max_seconds,
+                        "stop_file": str(stop_path),
+                        "current_pass": {
+                            "pass": pass_index,
+                            "pass_started_at": pass_started_at,
+                            "pass_finished_at": None,
+                            "work_duration_seconds": None,
+                            "round_count": None,
+                            "run_count": None,
+                            "appended_count": None,
+                            "suggested_count": None,
+                            "productive": None,
+                            "changed_artifact_count": None,
+                            "changed_artifacts": [],
+                            "next_sleep_seconds": None,
+                            "next_wake_at": None,
+                            "stopped": None,
+                            "writer_pid": writer_pid,
+                            "stage": "run_autoloop",
+                            "stage_status": "running",
+                            "stage_started_at": pass_started_at,
+                            "stage_finished_at": None,
+                            "stage_error": "",
+                            "status": "running",
+                        },
+                        "recent_passes": passes[-5:],
                     },
-                    "recent_passes": passes[-5:],
-                },
-            )
-            packet = run_autoloop(
-                config_path,
-                command_name,
-                rounds=rounds,
-                suggest_limit=suggest_limit,
-                dry_run=dry_run,
-                apply_suggestions=apply_suggestions,
-                governor_decision=governor_decision,
-            )
-            artifact_after = _tracked_loop_artifacts(runtime_root)
-            pass_finished_at = _now_iso()
-            work_duration_seconds = round(time.monotonic() - start_monotonic, 3)
-            run_count = sum(int(item.get("run_count", 0)) for item in packet["history"])
-            appended_count = sum(int(item["appended"]["appended_count"]) for item in packet["history"])
-            suggested_count = sum(
-                int((item.get("suggestions") or {}).get("suggestion_count", 0))
-                + int((item.get("next_suggestions") or {}).get("suggestion_count", 0))
-                for item in packet["history"]
-            )
-            changed_artifacts = [
-                path
-                for path, mtime in artifact_after.items()
-                if artifact_before.get(path) != mtime
-            ]
-            productive = (
-                run_count > 0
-                or appended_count > 0
-                or suggested_count > 0
-                or bool(changed_artifacts)
-            )
-            next_sleep_seconds = 1 if productive else max(pause_seconds, 1)
-            wake_at = datetime.now(UTC).timestamp() + next_sleep_seconds
-            pass_summary = {
-                "pass": pass_index,
-                "pass_started_at": pass_started_at,
-                "pass_finished_at": pass_finished_at,
-                "work_duration_seconds": work_duration_seconds,
-                "round_count": packet["round_count"],
-                "run_count": run_count,
-                "appended_count": appended_count,
-                "suggested_count": suggested_count,
-                "productive": productive,
-                "changed_artifact_count": len(changed_artifacts),
-                "changed_artifacts": changed_artifacts,
-                "next_sleep_seconds": next_sleep_seconds,
-                "next_wake_at": datetime.fromtimestamp(wake_at, UTC).replace(microsecond=0).isoformat(),
-                "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
-                "writer_pid": writer_pid,
-                "stage": "pass_complete",
-                "stage_status": "completed",
-                "stage_started_at": pass_started_at,
-                "stage_finished_at": pass_finished_at,
-                "stage_error": "",
-                "status": "completed",
-            }
-            passes.append(pass_summary)
-            _write_continuous_status(
-                runtime_root,
-                {
-                    "updated_at": pass_finished_at,
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
+                )
+                packet = run_autoloop(
+                    config_path,
+                    command_name,
+                    rounds=rounds,
+                    suggest_limit=suggest_limit,
+                    dry_run=dry_run,
+                    apply_suggestions=apply_suggestions,
+                    governor_decision=governor_decision,
+                )
+                artifact_after = _tracked_loop_artifacts(runtime_root)
+                pass_finished_at = _now_iso()
+                work_duration_seconds = round(time.monotonic() - start_monotonic, 3)
+                run_count = sum(int(item.get("run_count", 0)) for item in packet["history"])
+                appended_count = sum(int(item["appended"]["appended_count"]) for item in packet["history"])
+                suggested_count = sum(
+                    int((item.get("suggestions") or {}).get("suggestion_count", 0))
+                    + int((item.get("next_suggestions") or {}).get("suggestion_count", 0))
+                    for item in packet["history"]
+                )
+                changed_artifacts = [
+                    path
+                    for path, mtime in artifact_after.items()
+                    if artifact_before.get(path) != mtime
+                ]
+                productive = (
+                    run_count > 0
+                    or appended_count > 0
+                    or suggested_count > 0
+                    or bool(changed_artifacts)
+                )
+                next_sleep_seconds = 1 if productive else max(pause_seconds, 1)
+                wake_at = datetime.now(UTC).timestamp() + next_sleep_seconds
+                pass_summary = {
+                    "pass": pass_index,
+                    "pass_started_at": pass_started_at,
+                    "pass_finished_at": pass_finished_at,
+                    "work_duration_seconds": work_duration_seconds,
+                    "round_count": packet["round_count"],
+                    "run_count": run_count,
+                    "appended_count": appended_count,
+                    "suggested_count": suggested_count,
+                    "productive": productive,
+                    "changed_artifact_count": len(changed_artifacts),
+                    "changed_artifacts": changed_artifacts,
+                    "next_sleep_seconds": next_sleep_seconds,
+                    "next_wake_at": datetime.fromtimestamp(wake_at, UTC).replace(microsecond=0).isoformat(),
+                    "stopped": packet["history"][-1].get("stopped") if packet["history"] else None,
                     "writer_pid": writer_pid,
-                    "pass_count": len(passes),
-                    "max_passes": max_passes,
-                    "max_seconds": max_seconds,
-                    "stop_file": str(stop_path),
-                    "current_pass": pass_summary,
-                    "recent_passes": passes[-5:],
-                },
-            )
-            if _continuous_stop_requested(stop_path):
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "stop_file",
-                    "stop_file": str(stop_path),
+                    "stage": "pass_complete",
+                    "stage_status": "completed",
+                    "stage_started_at": pass_started_at,
+                    "stage_finished_at": pass_finished_at,
+                    "stage_error": "",
+                    "status": "completed",
                 }
-            if max_passes is not None and max_passes > 0 and len(passes) >= max_passes:
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "max_passes",
-                    "max_passes": max_passes,
-                }
-            if max_seconds is not None and max_seconds > 0 and (time.monotonic() - loop_started) >= max_seconds:
-                return {
-                    "command_name": command_name,
-                    "project_name": load_config(config_path).project_name,
-                    "continuous": True,
-                    "pass_count": len(passes),
-                    "passes": passes,
-                    "stopped": "max_seconds",
-                    "max_seconds": max_seconds,
-                }
-            time.sleep(next_sleep_seconds)
-    except KeyboardInterrupt:
-        return {
-            "command_name": command_name,
-            "project_name": load_config(config_path).project_name,
-            "continuous": True,
-            "pass_count": len(passes),
-            "passes": passes,
-            "interrupted": True,
-        }
+                passes.append(pass_summary)
+                _write_continuous_status(
+                    runtime_root,
+                    {
+                        "updated_at": pass_finished_at,
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "writer_pid": writer_pid,
+                        "pass_count": len(passes),
+                        "max_passes": max_passes,
+                        "max_seconds": max_seconds,
+                        "stop_file": str(stop_path),
+                        "current_pass": pass_summary,
+                        "recent_passes": passes[-5:],
+                    },
+                )
+                if _continuous_stop_requested(stop_path):
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "stop_file",
+                        "stop_file": str(stop_path),
+                    }
+                if max_passes is not None and max_passes > 0 and len(passes) >= max_passes:
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "max_passes",
+                        "max_passes": max_passes,
+                    }
+                if max_seconds is not None and max_seconds > 0 and (time.monotonic() - loop_started) >= max_seconds:
+                    return {
+                        "command_name": command_name,
+                        "project_name": load_config(config_path).project_name,
+                        "continuous": True,
+                        "pass_count": len(passes),
+                        "passes": passes,
+                        "stopped": "max_seconds",
+                        "max_seconds": max_seconds,
+                    }
+                time.sleep(next_sleep_seconds)
+        except KeyboardInterrupt:
+            return {
+                "command_name": command_name,
+                "project_name": load_config(config_path).project_name,
+                "continuous": True,
+                "pass_count": len(passes),
+                "passes": passes,
+                "interrupted": True,
+            }
+
+    except Exception:
+        return {}

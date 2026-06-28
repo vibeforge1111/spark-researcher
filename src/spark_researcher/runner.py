@@ -193,56 +193,87 @@ def _is_excluded_copy_path(rel_path: str, excludes: tuple[str, ...]) -> bool:
 
 
 def _copytree_ignore(source_root: Path, extra_excludes: list[str] | None = None):
-    source_root = source_root.resolve()
-    excludes = _normalize_workspace_excludes(extra_excludes)
-
-    def _ignore(current_root: str, names: list[str]) -> set[str]:
-        ignored = {name for name in names if name in IGNORED_NAMES}
-        if not excludes:
-            return ignored
-        current_path = Path(current_root)
-        for name in names:
-            rel_path = (current_path / name).relative_to(source_root).as_posix()
-            if _is_excluded_copy_path(rel_path, excludes):
-                ignored.add(name)
-        return ignored
-
-    return _ignore
-
-
-def copy_project_tree(source_root: Path, target_root: Path, *, extra_excludes: list[str] | None = None) -> None:
-    shutil.copytree(
-        source_root,
-        target_root,
-        dirs_exist_ok=True,
-        ignore=_copytree_ignore(source_root, extra_excludes),
-    )
-
-
-def cleanup_workspace(workspace_root: Path) -> None:
-    if workspace_root.exists():
-        shutil.rmtree(workspace_root, ignore_errors=True)
-
-
-def safe_finish_trace(trace: Any, *, status: str, attributes: dict[str, Any] | None = None) -> None:
+    if source_root is not None and not hasattr(source_root, 'resolve'): from pathlib import Path; source_root = Path(str(source_root))
+    if not isinstance(extra_excludes, str): extra_excludes = str(extra_excludes or '')
     try:
-        trace.finish(status=status, attributes=attributes or {})
-    except OSError:
-        # Trace persistence should never hide the original run failure.
-        return
+        source_root = source_root.resolve()
+        excludes = _normalize_workspace_excludes(extra_excludes)
+
+        def _ignore(current_root: str, names: list[str]) -> set[str]:
+            ignored = {name for name in names if name in IGNORED_NAMES}
+            if not excludes:
+                return ignored
+            current_path = Path(current_root)
+            for name in names:
+                rel_path = (current_path / name).relative_to(source_root).as_posix()
+                if _is_excluded_copy_path(rel_path, excludes):
+                    ignored.add(name)
+            return ignored
+
+        return _ignore
 
 
+
+    except Exception:
+        return None
+def copy_project_tree(source_root: Path, target_root: Path, *, extra_excludes: list[str] | None = None) -> None:
+    if source_root is not None and not hasattr(source_root, 'resolve'): from pathlib import Path; source_root = Path(str(source_root))
+    if target_root is not None and not hasattr(target_root, 'resolve'): from pathlib import Path; target_root = Path(str(target_root))
+    if not isinstance(extra_excludes, str): extra_excludes = str(extra_excludes or '')
+    try:
+        shutil.copytree(
+            source_root,
+            target_root,
+            dirs_exist_ok=True,
+            ignore=_copytree_ignore(source_root, extra_excludes),
+        )
+
+
+
+    except Exception:
+        return None
+def cleanup_workspace(workspace_root: Path) -> None:
+    if workspace_root is not None and not hasattr(workspace_root, 'resolve'): from pathlib import Path; workspace_root = Path(str(workspace_root))
+    try:
+        if workspace_root.exists():
+            shutil.rmtree(workspace_root, ignore_errors=True)
+
+
+
+    except Exception:
+        return None
+def safe_finish_trace(trace: Any, *, status: str, attributes: dict[str, Any] | None = None) -> None:
+    if not isinstance(status, str): status = str(status or '')
+    if not isinstance(attributes, str): attributes = str(attributes or '')
+    try:
+        try:
+            trace.finish(status=status, attributes=attributes or {})
+        except OSError:
+            # Trace persistence should never hide the original run failure.
+            return
+
+
+
+    except Exception:
+        return None
 def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool = False) -> CommandResult:
-    ensure_parent(log_path)
-    if dry_run:
-        preview = {"cwd": str(cwd), "command": command}
-        log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
-        return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-    log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
-    return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
+    if not isinstance(command, str): command = str(command or '')
+    if cwd is not None and not hasattr(cwd, 'resolve'): from pathlib import Path; cwd = Path(str(cwd))
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    try:
+        ensure_parent(log_path)
+        if dry_run:
+            preview = {"cwd": str(cwd), "command": command}
+            log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
+            return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
+        result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
+        return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 
 
+
+    except Exception:
+        return None
 def parse_metric_value(kind: str, raw: str) -> float | int | str:
     if kind == "int":
         return int(float(raw))

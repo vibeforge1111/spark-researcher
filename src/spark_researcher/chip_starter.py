@@ -15,35 +15,59 @@ def _slug(value: str) -> str:
 
 
 def _package_name(chip_name: str) -> str:
-    return _slug(chip_name).replace(".", "_").replace("-", "_")
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        return _slug(chip_name).replace(".", "_").replace("-", "_")
 
 
+
+    except Exception:
+        return ""
 def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
-    candidate = _slug(chip_name or "") or _slug(domain)
-    if candidate == "chip":
-        candidate = _slug(domain)
-    if not candidate.startswith("domain-chip-"):
-        candidate = f"domain-chip-{candidate}"
-    return candidate
+    if not isinstance(domain, str): domain = str(domain or '')
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        candidate = _slug(chip_name or "") or _slug(domain)
+        if candidate == "chip":
+            candidate = _slug(domain)
+        if not candidate.startswith("domain-chip-"):
+            candidate = f"domain-chip-{candidate}"
+        return candidate
 
 
+
+    except Exception:
+        return ""
 def _default_chip_parent() -> Path:
-    return Path.home() / ".spark" / "chips"
+    try:
+        return Path.home() / ".spark" / "chips"
 
 
+
+    except Exception:
+        return Path(".")
 def _spark_repo_root() -> Path:
-    cwd = Path.cwd().resolve()
-    for candidate in (cwd, *cwd.parents):
-        if _looks_like_spark_researcher_repo(candidate):
-            return candidate
-    source_root = Path(__file__).resolve().parents[2]
-    return source_root
+    try:
+        cwd = Path.cwd().resolve()
+        for candidate in (cwd, *cwd.parents):
+            if _looks_like_spark_researcher_repo(candidate):
+                return candidate
+        source_root = Path(__file__).resolve().parents[2]
+        return source_root
 
 
+
+    except Exception:
+        return Path(".")
 def _looks_like_spark_researcher_repo(path: Path) -> bool:
-    return (path / "pyproject.toml").exists() and (path / "src" / "spark_researcher").is_dir()
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        return (path / "pyproject.toml").exists() and (path / "src" / "spark_researcher").is_dir()
 
 
+
+    except Exception:
+        return False
 def _next_steps(chip_root: Path) -> list[str]:
     return [
         f"cd {chip_root}",

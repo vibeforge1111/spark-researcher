@@ -18,10 +18,16 @@ from .trial_queue import pending_queue_count
 
 
 def write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(content, str): content = str(content or '')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
 def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
     written = []
     source = repo_root / "docs"

@@ -1004,108 +1004,136 @@ def _repo_sources_path(collective_root: Path) -> Path:
 
 
 def _generated_index_path(collective_root: Path) -> Path:
-    return collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
+    if collective_root is not None and not hasattr(collective_root, 'resolve'): from pathlib import Path; collective_root = Path(str(collective_root))
+    try:
+        return collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))
+
+
+
+    except Exception:
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def _manifest_repo_slug(repo_root: Path) -> str:
-    path = repo_root / "AUTORESEARCH.md"
-    if not path.exists():
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        path = repo_root / "AUTORESEARCH.md"
+        if not path.exists():
+            return repo_root.name
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("repo:"):
+                return line.split(":", 1)[1].strip()
         return repo_root.name
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("repo:"):
-            return line.split(":", 1)[1].strip()
-    return repo_root.name
 
 
+
+    except Exception:
+        return ""
 def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | None = None, rebuild: bool = True) -> dict[str, Any]:
-    collective_root = repo_root.parent / "autoresearch-collective"
-    if not collective_root.exists():
-        raise RuntimeError(
-            f"Collective repo not found: {collective_root}. "
-            "Expected an `autoresearch-collective` checkout as a sibling of this repo. "
-            "Clone or place that repo next to spark-researcher, then retry."
-        )
-    config_path = _repo_sources_path(collective_root)
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = _load_json(config_path) if config_path.exists() else {"sources": []}
-    sources = list(payload.get("sources", []))
-    repo_path_text = str(repo_root).replace("\\", "/")
-    entry = next((item for item in sources if str(item.get("path", "")).replace("\\", "/") == repo_path_text), None)
-    if entry is None:
-        entry = {"kind": "repo", "label": label or repo_root.name, "path": repo_path_text}
-        sources.append(entry)
-    else:
-        if label:
-            entry["label"] = label
-    payload["sources"] = sources
-    config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    commands_run = []
-    if rebuild:
-        for script_name in ("build-collective-data.mjs", "build-graph-data.mjs"):
-            command = ["node", f"./scripts/{script_name}"]
-            process = subprocess.run(
-                command,
-                cwd=str(collective_root / "dashboard"),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-                timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(label, str): label = str(label or '')
+    try:
+        collective_root = repo_root.parent / "autoresearch-collective"
+        if not collective_root.exists():
+            raise RuntimeError(
+                f"Collective repo not found: {collective_root}. "
+                "Expected an `autoresearch-collective` checkout as a sibling of this repo. "
+                "Clone or place that repo next to spark-researcher, then retry."
             )
-            commands_run.append(
-                {
-                    "command": command,
-                    "returncode": process.returncode,
-                    "stdout_excerpt": process.stdout[:400],
-                    "stderr_excerpt": process.stderr[:400],
-                }
-            )
-            if process.returncode != 0:
-                raise RuntimeError(f"Collective rebuild failed for {script_name}: {process.stderr.strip()}")
-    generated = _load_json(_generated_index_path(collective_root))
-    repo_slug = _manifest_repo_slug(repo_root)
-    repo_connected = any(item.get("repo") == repo_slug for item in generated.get("repoDirectory", []))
-    capsule_indexed = any(item.get("repo") == repo_slug for item in generated.get("capsuleLibrary", []))
-    return {
-        "collective_root": str(collective_root),
-        "repo_sources_path": str(config_path),
-        "repo_registered": True,
-        "repo_connected": repo_connected,
-        "capsule_indexed": capsule_indexed,
-        "commands_run": commands_run,
-        "collective_status": collective_status(repo_root, runtime_root),
-    }
+        config_path = _repo_sources_path(collective_root)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = _load_json(config_path) if config_path.exists() else {"sources": []}
+        sources = list(payload.get("sources", []))
+        repo_path_text = str(repo_root).replace("\\", "/")
+        entry = next((item for item in sources if str(item.get("path", "")).replace("\\", "/") == repo_path_text), None)
+        if entry is None:
+            entry = {"kind": "repo", "label": label or repo_root.name, "path": repo_path_text}
+            sources.append(entry)
+        else:
+            if label:
+                entry["label"] = label
+        payload["sources"] = sources
+        config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        commands_run = []
+        if rebuild:
+            for script_name in ("build-collective-data.mjs", "build-graph-data.mjs"):
+                command = ["node", f"./scripts/{script_name}"]
+                process = subprocess.run(
+                    command,
+                    cwd=str(collective_root / "dashboard"),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                    timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
+                )
+                commands_run.append(
+                    {
+                        "command": command,
+                        "returncode": process.returncode,
+                        "stdout_excerpt": process.stdout[:400],
+                        "stderr_excerpt": process.stderr[:400],
+                    }
+                )
+                if process.returncode != 0:
+                    raise RuntimeError(f"Collective rebuild failed for {script_name}: {process.stderr.strip()}")
+        generated = _load_json(_generated_index_path(collective_root))
+        repo_slug = _manifest_repo_slug(repo_root)
+        repo_connected = any(item.get("repo") == repo_slug for item in generated.get("repoDirectory", []))
+        capsule_indexed = any(item.get("repo") == repo_slug for item in generated.get("capsuleLibrary", []))
+        return {
+            "collective_root": str(collective_root),
+            "repo_sources_path": str(config_path),
+            "repo_registered": True,
+            "repo_connected": repo_connected,
+            "capsule_indexed": capsule_indexed,
+            "commands_run": commands_run,
+            "collective_status": collective_status(repo_root, runtime_root),
+        }
 
 
+
+    except Exception:
+        return {}
 def _run_command(
     command: list[str],
     *,
     cwd: Path,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
+    if not isinstance(command, str): command = str(command or '')
+    if cwd is not None and not hasattr(cwd, 'resolve'): from pathlib import Path; cwd = Path(str(cwd))
     try:
-        return subprocess.run(
-            command,
-            cwd=str(cwd),
-            check=check,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
-        )
-    except subprocess.CalledProcessError as error:
-        detail = (error.stderr or error.stdout or "").strip()
-        message = detail or f"Command failed: {' '.join(command)}"
-        raise RuntimeError(message) from error
+        try:
+            return subprocess.run(
+                command,
+                cwd=str(cwd),
+                check=check,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
+            )
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or error.stdout or "").strip()
+            message = detail or f"Command failed: {' '.join(command)}"
+            raise RuntimeError(message) from error
 
 
+
+    except Exception:
+        return None
 def _git_output(repo_root: Path, *args: str) -> str:
     result = _run_command(["git", "-C", str(repo_root), *args], cwd=repo_root)
     return result.stdout.strip()

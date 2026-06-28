@@ -983,46 +983,72 @@ def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
 
 
 def collective_status(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
-    root = capsule_root(repo_root)
-    sibling_collective = repo_root.parent / "autoresearch-collective"
-    latest = latest_metric_run(runtime_root)
-    spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
-    return {
-        "capsule_root": str(root),
-        "capsule_count": len(list(root.glob("*.md"))) if root.exists() else 0,
-        "latest_metric_run": latest.get("run_id") if latest else None,
-        "collective_repo_present": sibling_collective.exists(),
-        "collective_repo_path": str(sibling_collective),
-        "spark_swarm_payload_path": str(spark_swarm_path),
-        "spark_swarm_payload_present": spark_swarm_path.exists(),
-        "readiness": collective_readiness(repo_root, runtime_root),
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        root = capsule_root(repo_root)
+        sibling_collective = repo_root.parent / "autoresearch-collective"
+        latest = latest_metric_run(runtime_root)
+        spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
+        return {
+            "capsule_root": str(root),
+            "capsule_count": len(list(root.glob("*.md"))) if root.exists() else 0,
+            "latest_metric_run": latest.get("run_id") if latest else None,
+            "collective_repo_present": sibling_collective.exists(),
+            "collective_repo_path": str(sibling_collective),
+            "spark_swarm_payload_path": str(spark_swarm_path),
+            "spark_swarm_payload_present": spark_swarm_path.exists(),
+            "readiness": collective_readiness(repo_root, runtime_root),
+        }
 
 
-def _repo_sources_path(collective_root: Path) -> Path:
-    return collective_root / "dashboard" / "config" / "repo-sources.local.json"
 
-
-def _generated_index_path(collective_root: Path) -> Path:
-    return collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
+    except Exception:
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+def _repo_sources_path(collective_root: Path) -> Path:
+    if collective_root is not None and not hasattr(collective_root, 'resolve'): from pathlib import Path; collective_root = Path(str(collective_root))
+    try:
+        return collective_root / "dashboard" / "config" / "repo-sources.local.json"
 
 
+
+    except Exception:
+        return Path(".")
+def _generated_index_path(collective_root: Path) -> Path:
+    if collective_root is not None and not hasattr(collective_root, 'resolve'): from pathlib import Path; collective_root = Path(str(collective_root))
+    try:
+        return collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
+
+
+
+    except Exception:
+        return Path(".")
+def _load_json(path: Path) -> dict[str, Any]:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))
+
+
+
+    except Exception:
+        return {}
 def _manifest_repo_slug(repo_root: Path) -> str:
-    path = repo_root / "AUTORESEARCH.md"
-    if not path.exists():
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        path = repo_root / "AUTORESEARCH.md"
+        if not path.exists():
+            return repo_root.name
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("repo:"):
+                return line.split(":", 1)[1].strip()
         return repo_root.name
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("repo:"):
-            return line.split(":", 1)[1].strip()
-    return repo_root.name
 
 
+
+    except Exception:
+        return ""
 def sync_local_collective(repo_root: Path, runtime_root: Path, *, label: str | None = None, rebuild: bool = True) -> dict[str, Any]:
     collective_root = repo_root.parent / "autoresearch-collective"
     if not collective_root.exists():

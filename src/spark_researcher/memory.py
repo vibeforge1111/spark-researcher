@@ -37,31 +37,58 @@ def _manifest_path(runtime_root: Path) -> Path:
 
 
 def _working_path(runtime_root: Path) -> Path:
-    return memory_root(runtime_root) / "working.json"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_root(runtime_root) / "working.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _episodes_path(runtime_root: Path) -> Path:
-    return memory_root(runtime_root) / "episodes.jsonl"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_root(runtime_root) / "episodes.jsonl"
 
 
+
+    except Exception:
+        return Path(".")
 def working_memory_authority_refs(runtime_root: Path) -> tuple[str, ...]:
-    return memory_authority_refs("working", _working_path(runtime_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_authority_refs("working", _working_path(runtime_root))
 
 
+
+    except Exception:
+        return ()
 def episode_memory_authority_refs(runtime_root: Path) -> tuple[str, ...]:
-    return memory_authority_refs("episode", _episodes_path(runtime_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_authority_refs("episode", _episodes_path(runtime_root))
 
 
+
+    except Exception:
+        return ()
 def sync_memory_authority_refs(repo_root: Path, runtime_root: Path, config_path: Path | None = None) -> tuple[str, ...]:
-    refs = [
-        *memory_authority_refs("sync", _documents_root(runtime_root), _manifest_path(runtime_root), runtime_root / "artifacts" / "ledger" / "runs.jsonl"),
-        *beliefs_authority_refs(repo_root, runtime_root),
-    ]
-    if config_path is not None:
-        refs.extend(memory_authority_refs("sync.config", config_path))
-    return tuple(dict.fromkeys(refs))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        refs = [
+            *memory_authority_refs("sync", _documents_root(runtime_root), _manifest_path(runtime_root), runtime_root / "artifacts" / "ledger" / "runs.jsonl"),
+            *beliefs_authority_refs(repo_root, runtime_root),
+        ]
+        if config_path is not None:
+            refs.extend(memory_authority_refs("sync.config", config_path))
+        return tuple(dict.fromkeys(refs))
 
 
+
+    except Exception:
+        return ()
 def _safe_unlink(path: Path) -> None:
     try:
         path.unlink()

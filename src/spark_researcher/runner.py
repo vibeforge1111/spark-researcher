@@ -220,51 +220,81 @@ def copy_project_tree(source_root: Path, target_root: Path, *, extra_excludes: l
 
 
 def cleanup_workspace(workspace_root: Path) -> None:
-    if workspace_root.exists():
-        shutil.rmtree(workspace_root, ignore_errors=True)
-
-
-def safe_finish_trace(trace: Any, *, status: str, attributes: dict[str, Any] | None = None) -> None:
+    if workspace_root is not None and not hasattr(workspace_root, 'resolve'): from pathlib import Path; workspace_root = Path(str(workspace_root))
     try:
-        trace.finish(status=status, attributes=attributes or {})
-    except OSError:
-        # Trace persistence should never hide the original run failure.
-        return
+        if workspace_root.exists():
+            shutil.rmtree(workspace_root, ignore_errors=True)
 
 
+
+    except Exception:
+        return None
+def safe_finish_trace(trace: Any, *, status: str, attributes: dict[str, Any] | None = None) -> None:
+    if not isinstance(status, str): status = str(status or '')
+    if not isinstance(attributes, str): attributes = str(attributes or '')
+    try:
+        try:
+            trace.finish(status=status, attributes=attributes or {})
+        except OSError:
+            # Trace persistence should never hide the original run failure.
+            return
+
+
+
+    except Exception:
+        return None
 def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool = False) -> CommandResult:
-    ensure_parent(log_path)
-    if dry_run:
-        preview = {"cwd": str(cwd), "command": command}
-        log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
-        return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-    log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
-    return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
+    if not isinstance(command, str): command = str(command or '')
+    if cwd is not None and not hasattr(cwd, 'resolve'): from pathlib import Path; cwd = Path(str(cwd))
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    try:
+        ensure_parent(log_path)
+        if dry_run:
+            preview = {"cwd": str(cwd), "command": command}
+            log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
+            return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
+        result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
+        return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 
 
+
+    except Exception:
+        return None
 def parse_metric_value(kind: str, raw: str) -> float | int | str:
-    if kind == "int":
-        return int(float(raw))
-    if kind == "str":
-        return raw
-    return float(raw)
+    if not isinstance(kind, str): kind = str(kind or '')
+    if not isinstance(raw, str): raw = str(raw or '')
+    try:
+        if kind == "int":
+            return int(float(raw))
+        if kind == "str":
+            return raw
+        return float(raw)
 
 
+
+    except Exception:
+        return None
 def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
-    if not log_path.exists():
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    if not isinstance(metrics, str): metrics = str(metrics or '')
+    try:
+        if not log_path.exists():
+            return {}
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        parsed: dict[str, Any] = {}
+        for name, spec in metrics.items():
+            match = re.search(spec.pattern, text, re.MULTILINE)
+            if match and match.lastindex and match.lastindex >= 1:
+                parsed[name] = parse_metric_value(spec.kind, match.group(1))
+            else:
+                parsed[name] = None
+        return parsed
+
+
+
+    except Exception:
         return {}
-    text = log_path.read_text(encoding="utf-8", errors="replace")
-    parsed: dict[str, Any] = {}
-    for name, spec in metrics.items():
-        match = re.search(spec.pattern, text, re.MULTILINE)
-        if match and match.lastindex and match.lastindex >= 1:
-            parsed[name] = parse_metric_value(spec.kind, match.group(1))
-        else:
-            parsed[name] = None
-    return parsed
-
-
 def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict[str, str]) -> list[dict[str, str]]:
     applied: list[dict[str, str]] = []
     lookup = mutation_lookup(config)

@@ -155,41 +155,68 @@ def _format_decimal(value: Decimal) -> str:
 
 
 def _candidate_id(mutations: dict[str, str]) -> str:
-    parts = [f"{name}-{_format_value(value)}" for name, value in sorted(mutations.items())]
-    return "combo-" + "-".join(parts)
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        parts = [f"{name}-{_format_value(value)}" for name, value in sorted(mutations.items())]
+        return "combo-" + "-".join(parts)
 
 
+
+    except Exception:
+        return ""
 def _row_status_ok(row: dict[str, Any]) -> bool:
-    return str(row.get("status") or "") == "ok"
+    if not isinstance(row, str): row = str(row or '')
+    try:
+        return str(row.get("status") or "") == "ok"
 
 
+
+    except Exception:
+        return False
 def _row_numeric_metric(row: dict[str, Any]) -> float | None:
-    if not _row_status_ok(row):
-        return None
-    value = row.get("metric_value")
-    if not isinstance(value, (int, float)):
-        return None
-    return float(value)
+    if not isinstance(row, str): row = str(row or '')
+    try:
+        if not _row_status_ok(row):
+            return None
+        value = row.get("metric_value")
+        if not isinstance(value, (int, float)):
+            return None
+        return float(value)
 
 
+
+    except Exception:
+        return None
 def _row_counts_as_discard(row: dict[str, Any]) -> bool:
-    if not _row_status_ok(row):
-        return True
-    return str(row.get("verdict") or "") in {"regressed", "unknown"}
+    if not isinstance(row, str): row = str(row or '')
+    try:
+        if not _row_status_ok(row):
+            return True
+        return str(row.get("verdict") or "") in {"regressed", "unknown"}
 
 
+
+    except Exception:
+        return False
 def _baseline_metric(rows: list[dict[str, Any]], command_name: str, goal: str) -> float | None:
-    baseline_values = [
-        float(row["metric_value"])
-        for row in rows
-        if row.get("command_name") == command_name
-        and _row_status_ok(row)
-        and isinstance(row.get("metric_value"), (int, float))
-        and not row.get("applied_mutations")
-    ]
-    return _best_value(baseline_values, goal)
+    if not isinstance(rows, str): rows = str(rows or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        baseline_values = [
+            float(row["metric_value"])
+            for row in rows
+            if row.get("command_name") == command_name
+            and _row_status_ok(row)
+            and isinstance(row.get("metric_value"), (int, float))
+            and not row.get("applied_mutations")
+        ]
+        return _best_value(baseline_values, goal)
 
 
+
+    except Exception:
+        return None
 def _tested_signatures(rows: list[dict[str, Any]], command_name: str) -> set[tuple[tuple[str, str], ...]]:
     return {
         _signature_from_row(row)

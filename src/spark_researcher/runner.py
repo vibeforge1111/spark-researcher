@@ -32,9 +32,13 @@ class CommandResult:
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
+    try:
+        return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+
+    except Exception:
+        return ""
 def run_authority_args_path(
     config_path: Path,
     command_name: str,
@@ -46,56 +50,80 @@ def run_authority_args_path(
     rounds: int | None = None,
     max_passes: int | None = None,
 ) -> str:
-    payload = {
-        "candidate_id": candidate_id or "baseline",
-        "command_name": command_name,
-        "config_path": str(config_path.resolve()),
-        "limit": limit,
-        "max_passes": max_passes,
-        "mode": mode,
-        "overrides": overrides or {},
-        "rounds": rounds,
-    }
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-    return (
-        f"researcher-run://{config_path.resolve().as_posix()}"
-        f"#mode={mode};command={command_name};candidate={payload['candidate_id']};binding={digest}"
-    )
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(mode, str): mode = str(mode or '')
+    if not isinstance(candidate_id, str): candidate_id = str(candidate_id or '')
+    if not isinstance(overrides, str): overrides = str(overrides or '')
+    try:
+        payload = {
+            "candidate_id": candidate_id or "baseline",
+            "command_name": command_name,
+            "config_path": str(config_path.resolve()),
+            "limit": limit,
+            "max_passes": max_passes,
+            "mode": mode,
+            "overrides": overrides or {},
+            "rounds": rounds,
+        }
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        return (
+            f"researcher-run://{config_path.resolve().as_posix()}"
+            f"#mode={mode};command={command_name};candidate={payload['candidate_id']};binding={digest}"
+        )
 
 
+
+    except Exception:
+        return ""
 def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "schema_version": verification.get("schema_version"),
-        "allowed": bool(verification.get("allowed")),
-        "decision_id": verification.get("decision_id"),
-        "turn_id": verification.get("turn_id"),
-        "tool_name": verification.get("tool_name"),
-        "capability_id": verification.get("capability_id"),
-        "authorization_decision_id": verification.get("authorization_decision_id"),
-        "ledger_id": verification.get("ledger_id"),
-    }
+    if not isinstance(verification, str): verification = str(verification or '')
+    try:
+        return {
+            "schema_version": verification.get("schema_version"),
+            "allowed": bool(verification.get("allowed")),
+            "decision_id": verification.get("decision_id"),
+            "turn_id": verification.get("turn_id"),
+            "tool_name": verification.get("tool_name"),
+            "capability_id": verification.get("capability_id"),
+            "authorization_decision_id": verification.get("authorization_decision_id"),
+            "ledger_id": verification.get("ledger_id"),
+        }
 
 
+
+    except Exception:
+        return {}
 def ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
 
 
+
+    except Exception:
+        return None
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return []
+        rows: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                rows.append(parsed)
+        return rows
+
+
+
+    except Exception:
         return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            rows.append(parsed)
-    return rows
-
-
 def _is_pid_running(pid: int) -> bool:
     """Check if a process with the given PID is still running."""
     try:

@@ -55,25 +55,50 @@ def memory_root(runtime_root: Path) -> Path:
 
 
 def beliefs_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "beliefs"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "beliefs"
 
 
+
+    except Exception:
+        return Path(".")
 def self_edit_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "self-edit"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "self-edit"
 
 
+
+    except Exception:
+        return Path(".")
 def advisory_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "advisory"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "advisory"
 
 
+
+    except Exception:
+        return Path(".")
 def failures_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "failures"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "failures"
 
 
+
+    except Exception:
+        return Path(".")
 def traces_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "traces"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "traces"
 
 
+
+    except Exception:
+        return Path(".")
 def optimizer_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "optimizer"
 

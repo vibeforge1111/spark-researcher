@@ -49,350 +49,374 @@ def _positive_int(value: str) -> int:
 
 
 def _action_requires_config(args: argparse.Namespace) -> bool:
-    action = getattr(args, "action", None)
-    if action in {None, "init", "line-budget", "optimizer", "failures"}:
-        return False
-    if action == "advisory":
-        return getattr(args, "advisory_command", None) in {None, "build", "execute"}
-    if action == "chips":
-        return getattr(args, "chips_command", None) != "init"
-    if action == "collective":
-        return getattr(args, "collective_command", None) == "spark-swarm-payload"
-    if action == "self-edit":
-        return getattr(args, "self_edit_command", None) in {"propose", "policy", "apply"}
-    return True
-
-
-def _require_config_file(config_path: Path) -> None:
-    if config_path.exists():
-        return
-    print_json(
-        {
-            "ok": False,
-            "error_code": "config_file_not_found",
-            "error": "Config file not found.",
-            "config_path": public_config_path(config_path),
-            "next_action": (
-                "Run `spark-researcher init --path . --preset toy --project-name <name>` "
-                "or pass --config to an existing spark-researcher.project.json file."
-            ),
-        }
-    )
-    raise SystemExit(1)
-
-
-def _load_governor_decision(path: str | None) -> dict | None:
-    if not path:
-        return None
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, FileNotFoundError) as exc:
-        raise SystemExit(f"Cannot read governor decision file {path}: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid JSON in governor decision file {path}: {exc}") from exc
+        action = getattr(args, "action", None)
+        if action in {None, "init", "line-budget", "optimizer", "failures"}:
+            return False
+        if action == "advisory":
+            return getattr(args, "advisory_command", None) in {None, "build", "execute"}
+        if action == "chips":
+            return getattr(args, "chips_command", None) != "init"
+        if action == "collective":
+            return getattr(args, "collective_command", None) == "spark-swarm-payload"
+        if action == "self-edit":
+            return getattr(args, "self_edit_command", None) in {"propose", "policy", "apply"}
+        return True
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="spark-researcher")
-    sub = parser.add_subparsers(dest="action")
 
-    init_parser = sub.add_parser("init")
-    init_parser.add_argument("--path", required=True)
-    init_parser.add_argument("--preset", choices=preset_names(), required=True)
-    init_parser.add_argument("--project-name", required=True)
-
-    run_parser = sub.add_parser("run")
-    add_config_argument(run_parser)
-    run_parser.add_argument("--command", dest="project_command", required=True)
-    run_parser.add_argument("--candidate-id")
-    run_parser.add_argument("--set", action="append")
-    run_parser.add_argument("--dry-run", action="store_true")
-    run_parser.add_argument("--governor-decision")
-    run_parser.add_argument("--memory-governor-decision")
-
-    loop_parser = sub.add_parser("loop")
-    add_config_argument(loop_parser)
-    loop_parser.add_argument("--command", dest="project_command", required=True)
-    loop_parser.add_argument("--limit", type=int)
-    loop_parser.add_argument("--dry-run", action="store_true")
-    loop_parser.add_argument("--governor-decision")
-
-    autoloop_parser = sub.add_parser("autoloop")
-    add_config_argument(autoloop_parser)
-    autoloop_parser.add_argument("--command", dest="project_command", required=True)
-    autoloop_parser.add_argument("--rounds", type=int, default=3)
-    autoloop_parser.add_argument("--suggest-limit", type=int, default=3)
-    autoloop_parser.add_argument("--dry-run", action="store_true")
-    autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
-    autoloop_parser.add_argument("--continuous", action="store_true")
-    autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
-    autoloop_parser.add_argument("--max-passes", type=_positive_int)
-    autoloop_parser.add_argument("--max-seconds", type=int)
-    autoloop_parser.add_argument("--stop-file")
-    autoloop_parser.add_argument("--governor-decision")
-
-    candidates_parser = sub.add_parser("candidates")
-    candidates_sub = candidates_parser.add_subparsers(dest="candidates_command")
-    candidates_suggest = candidates_sub.add_parser("suggest")
-    add_config_argument(candidates_suggest)
-    candidates_suggest.add_argument("--command", dest="project_command", required=True)
-    candidates_suggest.add_argument("--limit", type=int, default=3)
-    candidates_apply = candidates_sub.add_parser("apply")
-    add_config_argument(candidates_apply)
-    candidates_apply.add_argument("--command", dest="project_command", required=True)
-    candidates_apply.add_argument("--limit", type=int, default=3)
-
-    packets_parser = sub.add_parser("packets")
-    packets_sub = packets_parser.add_subparsers(dest="packets_command")
-    packets_status_parser = packets_sub.add_parser("status")
-    add_config_argument(packets_status_parser)
-    packets_search_parser = packets_sub.add_parser("search")
-    add_config_argument(packets_search_parser)
-    packets_search_parser.add_argument("query")
-    packets_search_parser.add_argument("--limit", type=int, default=5)
-    packets_search_parser.add_argument("--domain")
-
-    advisory_parser = sub.add_parser("advisory")
-    advisory_sub = advisory_parser.add_subparsers(dest="advisory_command")
-    advisory_build_parser = advisory_sub.add_parser("build")
-    add_config_argument(advisory_build_parser)
-    advisory_build_parser.add_argument("--task", required=True)
-    advisory_build_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], default="generic")
-    advisory_build_parser.add_argument("--limit", type=int, default=4)
-    advisory_build_parser.add_argument("--domain")
-    advisory_adapters_parser = advisory_sub.add_parser("adapters")
-    advisory_providers_parser = advisory_sub.add_parser("providers")
-    advisory_execute_parser = advisory_sub.add_parser("execute")
-    add_config_argument(advisory_execute_parser)
-    advisory_execute_parser.add_argument("--task", required=True)
-    advisory_execute_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], required=True)
-    advisory_execute_parser.add_argument("--limit", type=int, default=4)
-    advisory_execute_parser.add_argument("--domain")
-    advisory_execute_parser.add_argument("--command", action="append")
-    advisory_execute_parser.add_argument("--dry-run", action="store_true")
-    advisory_execute_parser.add_argument("--no-verify", action="store_true")
-    advisory_execute_parser.add_argument("--governor-decision")
-    advisory_execute_parser.add_argument("--memory-governor-decision")
-    advisory_log_parser = advisory_sub.add_parser("log")
-    add_config_argument(advisory_log_parser)
-    advisory_log_parser.add_argument("--task", required=True)
-    advisory_log_parser.add_argument("--model", required=True)
-    advisory_log_parser.add_argument("--status", choices=["ok", "mixed", "fail"], required=True)
-    advisory_log_parser.add_argument("--packet-id", action="append", default=[])
-    advisory_log_parser.add_argument("--score", type=float)
-    advisory_log_parser.add_argument("--notes", default="")
-    advisory_log_parser.add_argument("--domain")
-    advisory_review_parser = advisory_sub.add_parser("review")
-    add_config_argument(advisory_review_parser)
-
-    optimizer_parser = sub.add_parser("optimizer")
-    optimizer_sub = optimizer_parser.add_subparsers(dest="optimizer_command")
-    optimizer_sub.add_parser("status")
-    optimizer_sub.add_parser("export-advisory-dataset")
-
-    chips_parser = sub.add_parser("chips")
-    chips_sub = chips_parser.add_subparsers(dest="chips_command")
-    chips_init_parser = chips_sub.add_parser("init")
-    chips_init_parser.add_argument(
-        "--path",
-        help="Optional external chip target. Defaults to ~/.spark/chips/domain-chip-<domain>. Relative paths resolve under ~/.spark/chips; in-repo targets are refused.",
-    )
-    chips_init_parser.add_argument(
-        "--chip-name",
-        help="Optional chip repo name. Defaults to domain-chip-<domain> and auto-adds the domain-chip- prefix when missing.",
-    )
-    chips_init_parser.add_argument("--domain", required=True)
-    chips_init_parser.add_argument("--metric-name", default="quality_score")
-    chips_init_parser.add_argument("--goal", choices=["maximize", "minimize"], default="maximize")
-    chips_init_parser.add_argument("--package-name")
-    chips_init_parser.add_argument("--preset", choices=["generic", "crypto-trading", "xcontent"], default="generic")
-    chips_init_parser.add_argument("--governor-decision")
-    chips_status_parser = chips_sub.add_parser("status")
-    add_config_argument(chips_status_parser)
-    chips_validate_parser = chips_sub.add_parser("validate")
-    add_config_argument(chips_validate_parser)
-
-    intent_parser = sub.add_parser("intent")
-    intent_sub = intent_parser.add_subparsers(dest="intent_command")
-    intent_show = intent_sub.add_parser("show")
-    add_config_argument(intent_show)
-    intent_set = intent_sub.add_parser("set")
-    add_config_argument(intent_set)
-    intent_set.add_argument("--goal")
-    intent_set.add_argument("--outcome")
-    intent_set.add_argument("--success-criterion", action="append", default=None)
-    intent_set.add_argument("--search-query", action="append", default=None)
-    intent_set.add_argument("--frontier-mode", choices=["bounded", "relaxed", "open"])
-    intent_set.add_argument("--resource", action="append", default=None)
-    intent_set.add_argument("--notes")
-    intent_clear = intent_sub.add_parser("clear")
-    add_config_argument(intent_clear)
-
-    trainer_parser = sub.add_parser("trainers")
-    trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
-    trainer_run = trainer_sub.add_parser("run")
-    add_config_argument(trainer_run)
-    trainer_run.add_argument("--dry-run", action="store_true")
-    trainer_status_parser = trainer_sub.add_parser("status")
-    add_config_argument(trainer_status_parser)
-
-    memory_parser = sub.add_parser("memory")
-    memory_sub = memory_parser.add_subparsers(dest="memory_command")
-    memory_sync = memory_sub.add_parser("sync")
-    add_config_argument(memory_sync)
-    memory_sync.add_argument("--governor-decision")
-    memory_search = memory_sub.add_parser("search")
-    add_config_argument(memory_search)
-    memory_search.add_argument("query")
-    memory_search.add_argument("--limit", type=int, default=5)
-    memory_search.add_argument("--backend", choices=["local", "ruvector"])
-    memory_status_parser = memory_sub.add_parser("status")
-    add_config_argument(memory_status_parser)
-    memory_status_parser.add_argument("--backend", choices=["local", "ruvector"])
-    memory_policy_parser = memory_sub.add_parser("backend-policy")
-    add_config_argument(memory_policy_parser)
-    memory_policy_parser.add_argument("--backend", choices=["local", "ruvector"])
-
-    failures_parser = sub.add_parser("failures")
-    add_config_argument(failures_parser)
-    failures_parser.add_argument("--limit", type=int, default=10)
-
-    beliefs_parser = sub.add_parser("beliefs")
-    beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
-    beliefs_build = beliefs_sub.add_parser("build")
-    add_config_argument(beliefs_build)
-    beliefs_build.add_argument("--governor-decision")
-
-    obsidian_parser = sub.add_parser("obsidian")
-    obsidian_sub = obsidian_parser.add_subparsers(dest="obsidian_command")
-    obsidian_build = obsidian_sub.add_parser("build")
-    add_config_argument(obsidian_build)
-    obsidian_build.add_argument("--governor-decision")
-
-    collective_parser = sub.add_parser("collective")
-    collective_sub = collective_parser.add_subparsers(dest="collective_command")
-    collective_publish = collective_sub.add_parser("publish")
-    add_config_argument(collective_publish)
-    collective_status_parser = collective_sub.add_parser("status")
-    add_config_argument(collective_status_parser)
-    collective_ready_parser = collective_sub.add_parser("ready")
-    add_config_argument(collective_ready_parser)
-    collective_spark_swarm_payload = collective_sub.add_parser("spark-swarm-payload")
-    add_config_argument(collective_spark_swarm_payload)
-    collective_sync_parser = collective_sub.add_parser("sync-local")
-    add_config_argument(collective_sync_parser)
-    collective_sync_parser.add_argument("--label")
-    collective_sync_parser.add_argument("--skip-rebuild", action="store_true")
-    collective_absorb_parser = collective_sub.add_parser("absorb")
-    add_config_argument(collective_absorb_parser)
-    collective_absorb_parser.add_argument("--repo", required=True)
-    collective_absorb_parser.add_argument("--limit", type=int, default=5)
-    collective_absorb_parser.add_argument("--dry-run", action="store_true")
-    collective_absorb_parser.add_argument("--bundle-only", action="store_true")
-    collective_absorb_parser.add_argument("--merge-policy", choices=["human_review", "agent_review", "automerge"])
-
-    self_edit_parser = sub.add_parser("self-edit")
-    self_edit_sub = self_edit_parser.add_subparsers(dest="self_edit_command")
-    self_edit_propose = self_edit_sub.add_parser("propose")
-    add_config_argument(self_edit_propose)
-    self_edit_propose.add_argument("--prompt", required=True)
-    self_edit_propose.add_argument("--backend-profile")
-    self_edit_propose.add_argument("--backend-command", action="append")
-    self_edit_propose.add_argument("--dry-run", action="store_true")
-    self_edit_profiles = self_edit_sub.add_parser("profiles")
-    self_edit_policy_parser = self_edit_sub.add_parser("policy")
-    add_config_argument(self_edit_policy_parser)
-    self_edit_policy_parser.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_policy_parser.add_argument("--push", action="store_true")
-    self_edit_policy_parser.add_argument("--no-push", action="store_true")
-    self_edit_policy_parser.add_argument("--branch-prefix")
-    self_edit_policy_parser.add_argument("--main-branch")
-    self_edit_policy_parser.add_argument("--commit-message-template")
-    self_edit_review = self_edit_sub.add_parser("review")
-    add_config_argument(self_edit_review)
-    self_edit_review.add_argument("--proposal-id", required=True)
-    self_edit_review.add_argument("--decision", choices=["approve", "defer", "reject"], required=True)
-    self_edit_review.add_argument("--root-lesson", required=True)
-    self_edit_review.add_argument("--lineage-failure", action="append", default=[])
-    self_edit_review.add_argument("--counterfactual", required=True)
-    self_edit_review.add_argument("--ghost-check", required=True)
-    self_edit_review.add_argument("--rollback-condition", required=True)
-    self_edit_review.add_argument("--notes", default="")
-    self_edit_apply = self_edit_sub.add_parser("apply")
-    add_config_argument(self_edit_apply)
-    self_edit_apply.add_argument("--proposal-id", required=True)
-    self_edit_apply.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_apply.add_argument("--push", action="store_true")
-    self_edit_apply.add_argument("--no-push", action="store_true")
-    self_edit_apply.add_argument("--branch-name")
-    self_edit_apply.add_argument("--commit-message")
-    self_edit_apply.add_argument("--governor-decision", required=True)
-    self_edit_status = self_edit_sub.add_parser("status")
-    add_config_argument(self_edit_status)
-
-    summary_parser = sub.add_parser("summary")
-    add_config_argument(summary_parser)
-
-    budget_parser = sub.add_parser("line-budget")
-    budget_parser.add_argument("--limit", type=int, default=11000)
-    budget_parser.add_argument("--repo-root", default=".")
-
-    return parser
-
-
-def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_root: Path) -> None:
-    if args.advisory_command == "adapters":
-        print_json(adapter_status())
-        return
-    if args.advisory_command == "providers":
-        print_json(execution_status())
-        return
-    if args.advisory_command == "execute":
-        advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
-        executor = execute_advisory if args.no_verify else execute_with_research
-        governor_decision = _load_governor_decision(args.governor_decision)
-        memory_governor_decision = _load_governor_decision(args.memory_governor_decision)
-        if args.no_verify:
-            result = executor(
-                runtime_root,
-                advisory=advisory,
-                model=args.model,
-                command_override=args.command,
-                dry_run=args.dry_run,
-                governor_decision=governor_decision,
-            )
-        else:
-            result = executor(
-                runtime_root,
-                advisory=advisory,
-                model=args.model,
-                command_override=args.command,
-                dry_run=args.dry_run,
-                governor_decision=governor_decision,
-                memory_governor_decision=memory_governor_decision,
-            )
-        print_json(execution_public_summary(result))
-        return
-    if args.advisory_command == "log":
+    except Exception:
+        return False
+def _require_config_file(config_path: Path) -> None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        if config_path.exists():
+            return
         print_json(
-            log_advisory_outcome(
-                runtime_root,
-                task=args.task,
-                model=args.model,
-                status=args.status,
-                packet_ids=args.packet_id,
-                score=args.score,
-                notes=args.notes,
-                domain=args.domain or "generic",
-            )
+            {
+                "ok": False,
+                "error_code": "config_file_not_found",
+                "error": "Config file not found.",
+                "config_path": public_config_path(config_path),
+                "next_action": (
+                    "Run `spark-researcher init --path . --preset toy --project-name <name>` "
+                    "or pass --config to an existing spark-researcher.project.json file."
+                ),
+            }
         )
-        return
-    if args.advisory_command == "review":
-        print_json(review_advisory_outcomes(runtime_root))
-        return
-    print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+        raise SystemExit(1)
 
 
+
+    except Exception:
+        return None
+def _load_governor_decision(path: str | None) -> dict | None:
+    if not isinstance(path, str): path = str(path or '')
+    try:
+        if not path:
+            return None
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, FileNotFoundError) as exc:
+            raise SystemExit(f"Cannot read governor decision file {path}: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid JSON in governor decision file {path}: {exc}") from exc
+
+
+
+    except Exception:
+        return {}
+def build_parser() -> argparse.ArgumentParser:
+    try:
+        parser = argparse.ArgumentParser(prog="spark-researcher")
+        sub = parser.add_subparsers(dest="action")
+
+        init_parser = sub.add_parser("init")
+        init_parser.add_argument("--path", required=True)
+        init_parser.add_argument("--preset", choices=preset_names(), required=True)
+        init_parser.add_argument("--project-name", required=True)
+
+        run_parser = sub.add_parser("run")
+        add_config_argument(run_parser)
+        run_parser.add_argument("--command", dest="project_command", required=True)
+        run_parser.add_argument("--candidate-id")
+        run_parser.add_argument("--set", action="append")
+        run_parser.add_argument("--dry-run", action="store_true")
+        run_parser.add_argument("--governor-decision")
+        run_parser.add_argument("--memory-governor-decision")
+
+        loop_parser = sub.add_parser("loop")
+        add_config_argument(loop_parser)
+        loop_parser.add_argument("--command", dest="project_command", required=True)
+        loop_parser.add_argument("--limit", type=int)
+        loop_parser.add_argument("--dry-run", action="store_true")
+        loop_parser.add_argument("--governor-decision")
+
+        autoloop_parser = sub.add_parser("autoloop")
+        add_config_argument(autoloop_parser)
+        autoloop_parser.add_argument("--command", dest="project_command", required=True)
+        autoloop_parser.add_argument("--rounds", type=int, default=3)
+        autoloop_parser.add_argument("--suggest-limit", type=int, default=3)
+        autoloop_parser.add_argument("--dry-run", action="store_true")
+        autoloop_parser.add_argument("--no-apply-suggestions", action="store_true")
+        autoloop_parser.add_argument("--continuous", action="store_true")
+        autoloop_parser.add_argument("--pause-seconds", type=int, default=60)
+        autoloop_parser.add_argument("--max-passes", type=_positive_int)
+        autoloop_parser.add_argument("--max-seconds", type=int)
+        autoloop_parser.add_argument("--stop-file")
+        autoloop_parser.add_argument("--governor-decision")
+
+        candidates_parser = sub.add_parser("candidates")
+        candidates_sub = candidates_parser.add_subparsers(dest="candidates_command")
+        candidates_suggest = candidates_sub.add_parser("suggest")
+        add_config_argument(candidates_suggest)
+        candidates_suggest.add_argument("--command", dest="project_command", required=True)
+        candidates_suggest.add_argument("--limit", type=int, default=3)
+        candidates_apply = candidates_sub.add_parser("apply")
+        add_config_argument(candidates_apply)
+        candidates_apply.add_argument("--command", dest="project_command", required=True)
+        candidates_apply.add_argument("--limit", type=int, default=3)
+
+        packets_parser = sub.add_parser("packets")
+        packets_sub = packets_parser.add_subparsers(dest="packets_command")
+        packets_status_parser = packets_sub.add_parser("status")
+        add_config_argument(packets_status_parser)
+        packets_search_parser = packets_sub.add_parser("search")
+        add_config_argument(packets_search_parser)
+        packets_search_parser.add_argument("query")
+        packets_search_parser.add_argument("--limit", type=int, default=5)
+        packets_search_parser.add_argument("--domain")
+
+        advisory_parser = sub.add_parser("advisory")
+        advisory_sub = advisory_parser.add_subparsers(dest="advisory_command")
+        advisory_build_parser = advisory_sub.add_parser("build")
+        add_config_argument(advisory_build_parser)
+        advisory_build_parser.add_argument("--task", required=True)
+        advisory_build_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], default="generic")
+        advisory_build_parser.add_argument("--limit", type=int, default=4)
+        advisory_build_parser.add_argument("--domain")
+        advisory_adapters_parser = advisory_sub.add_parser("adapters")
+        advisory_providers_parser = advisory_sub.add_parser("providers")
+        advisory_execute_parser = advisory_sub.add_parser("execute")
+        add_config_argument(advisory_execute_parser)
+        advisory_execute_parser.add_argument("--task", required=True)
+        advisory_execute_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], required=True)
+        advisory_execute_parser.add_argument("--limit", type=int, default=4)
+        advisory_execute_parser.add_argument("--domain")
+        advisory_execute_parser.add_argument("--command", action="append")
+        advisory_execute_parser.add_argument("--dry-run", action="store_true")
+        advisory_execute_parser.add_argument("--no-verify", action="store_true")
+        advisory_execute_parser.add_argument("--governor-decision")
+        advisory_execute_parser.add_argument("--memory-governor-decision")
+        advisory_log_parser = advisory_sub.add_parser("log")
+        add_config_argument(advisory_log_parser)
+        advisory_log_parser.add_argument("--task", required=True)
+        advisory_log_parser.add_argument("--model", required=True)
+        advisory_log_parser.add_argument("--status", choices=["ok", "mixed", "fail"], required=True)
+        advisory_log_parser.add_argument("--packet-id", action="append", default=[])
+        advisory_log_parser.add_argument("--score", type=float)
+        advisory_log_parser.add_argument("--notes", default="")
+        advisory_log_parser.add_argument("--domain")
+        advisory_review_parser = advisory_sub.add_parser("review")
+        add_config_argument(advisory_review_parser)
+
+        optimizer_parser = sub.add_parser("optimizer")
+        optimizer_sub = optimizer_parser.add_subparsers(dest="optimizer_command")
+        optimizer_sub.add_parser("status")
+        optimizer_sub.add_parser("export-advisory-dataset")
+
+        chips_parser = sub.add_parser("chips")
+        chips_sub = chips_parser.add_subparsers(dest="chips_command")
+        chips_init_parser = chips_sub.add_parser("init")
+        chips_init_parser.add_argument(
+            "--path",
+            help="Optional external chip target. Defaults to ~/.spark/chips/domain-chip-<domain>. Relative paths resolve under ~/.spark/chips; in-repo targets are refused.",
+        )
+        chips_init_parser.add_argument(
+            "--chip-name",
+            help="Optional chip repo name. Defaults to domain-chip-<domain> and auto-adds the domain-chip- prefix when missing.",
+        )
+        chips_init_parser.add_argument("--domain", required=True)
+        chips_init_parser.add_argument("--metric-name", default="quality_score")
+        chips_init_parser.add_argument("--goal", choices=["maximize", "minimize"], default="maximize")
+        chips_init_parser.add_argument("--package-name")
+        chips_init_parser.add_argument("--preset", choices=["generic", "crypto-trading", "xcontent"], default="generic")
+        chips_init_parser.add_argument("--governor-decision")
+        chips_status_parser = chips_sub.add_parser("status")
+        add_config_argument(chips_status_parser)
+        chips_validate_parser = chips_sub.add_parser("validate")
+        add_config_argument(chips_validate_parser)
+
+        intent_parser = sub.add_parser("intent")
+        intent_sub = intent_parser.add_subparsers(dest="intent_command")
+        intent_show = intent_sub.add_parser("show")
+        add_config_argument(intent_show)
+        intent_set = intent_sub.add_parser("set")
+        add_config_argument(intent_set)
+        intent_set.add_argument("--goal")
+        intent_set.add_argument("--outcome")
+        intent_set.add_argument("--success-criterion", action="append", default=None)
+        intent_set.add_argument("--search-query", action="append", default=None)
+        intent_set.add_argument("--frontier-mode", choices=["bounded", "relaxed", "open"])
+        intent_set.add_argument("--resource", action="append", default=None)
+        intent_set.add_argument("--notes")
+        intent_clear = intent_sub.add_parser("clear")
+        add_config_argument(intent_clear)
+
+        trainer_parser = sub.add_parser("trainers")
+        trainer_sub = trainer_parser.add_subparsers(dest="trainers_command")
+        trainer_run = trainer_sub.add_parser("run")
+        add_config_argument(trainer_run)
+        trainer_run.add_argument("--dry-run", action="store_true")
+        trainer_status_parser = trainer_sub.add_parser("status")
+        add_config_argument(trainer_status_parser)
+
+        memory_parser = sub.add_parser("memory")
+        memory_sub = memory_parser.add_subparsers(dest="memory_command")
+        memory_sync = memory_sub.add_parser("sync")
+        add_config_argument(memory_sync)
+        memory_sync.add_argument("--governor-decision")
+        memory_search = memory_sub.add_parser("search")
+        add_config_argument(memory_search)
+        memory_search.add_argument("query")
+        memory_search.add_argument("--limit", type=int, default=5)
+        memory_search.add_argument("--backend", choices=["local", "ruvector"])
+        memory_status_parser = memory_sub.add_parser("status")
+        add_config_argument(memory_status_parser)
+        memory_status_parser.add_argument("--backend", choices=["local", "ruvector"])
+        memory_policy_parser = memory_sub.add_parser("backend-policy")
+        add_config_argument(memory_policy_parser)
+        memory_policy_parser.add_argument("--backend", choices=["local", "ruvector"])
+
+        failures_parser = sub.add_parser("failures")
+        add_config_argument(failures_parser)
+        failures_parser.add_argument("--limit", type=int, default=10)
+
+        beliefs_parser = sub.add_parser("beliefs")
+        beliefs_sub = beliefs_parser.add_subparsers(dest="beliefs_command")
+        beliefs_build = beliefs_sub.add_parser("build")
+        add_config_argument(beliefs_build)
+        beliefs_build.add_argument("--governor-decision")
+
+        obsidian_parser = sub.add_parser("obsidian")
+        obsidian_sub = obsidian_parser.add_subparsers(dest="obsidian_command")
+        obsidian_build = obsidian_sub.add_parser("build")
+        add_config_argument(obsidian_build)
+        obsidian_build.add_argument("--governor-decision")
+
+        collective_parser = sub.add_parser("collective")
+        collective_sub = collective_parser.add_subparsers(dest="collective_command")
+        collective_publish = collective_sub.add_parser("publish")
+        add_config_argument(collective_publish)
+        collective_status_parser = collective_sub.add_parser("status")
+        add_config_argument(collective_status_parser)
+        collective_ready_parser = collective_sub.add_parser("ready")
+        add_config_argument(collective_ready_parser)
+        collective_spark_swarm_payload = collective_sub.add_parser("spark-swarm-payload")
+        add_config_argument(collective_spark_swarm_payload)
+        collective_sync_parser = collective_sub.add_parser("sync-local")
+        add_config_argument(collective_sync_parser)
+        collective_sync_parser.add_argument("--label")
+        collective_sync_parser.add_argument("--skip-rebuild", action="store_true")
+        collective_absorb_parser = collective_sub.add_parser("absorb")
+        add_config_argument(collective_absorb_parser)
+        collective_absorb_parser.add_argument("--repo", required=True)
+        collective_absorb_parser.add_argument("--limit", type=int, default=5)
+        collective_absorb_parser.add_argument("--dry-run", action="store_true")
+        collective_absorb_parser.add_argument("--bundle-only", action="store_true")
+        collective_absorb_parser.add_argument("--merge-policy", choices=["human_review", "agent_review", "automerge"])
+
+        self_edit_parser = sub.add_parser("self-edit")
+        self_edit_sub = self_edit_parser.add_subparsers(dest="self_edit_command")
+        self_edit_propose = self_edit_sub.add_parser("propose")
+        add_config_argument(self_edit_propose)
+        self_edit_propose.add_argument("--prompt", required=True)
+        self_edit_propose.add_argument("--backend-profile")
+        self_edit_propose.add_argument("--backend-command", action="append")
+        self_edit_propose.add_argument("--dry-run", action="store_true")
+        self_edit_profiles = self_edit_sub.add_parser("profiles")
+        self_edit_policy_parser = self_edit_sub.add_parser("policy")
+        add_config_argument(self_edit_policy_parser)
+        self_edit_policy_parser.add_argument("--git-mode", choices=["manual", "branch", "main"])
+        self_edit_policy_parser.add_argument("--push", action="store_true")
+        self_edit_policy_parser.add_argument("--no-push", action="store_true")
+        self_edit_policy_parser.add_argument("--branch-prefix")
+        self_edit_policy_parser.add_argument("--main-branch")
+        self_edit_policy_parser.add_argument("--commit-message-template")
+        self_edit_review = self_edit_sub.add_parser("review")
+        add_config_argument(self_edit_review)
+        self_edit_review.add_argument("--proposal-id", required=True)
+        self_edit_review.add_argument("--decision", choices=["approve", "defer", "reject"], required=True)
+        self_edit_review.add_argument("--root-lesson", required=True)
+        self_edit_review.add_argument("--lineage-failure", action="append", default=[])
+        self_edit_review.add_argument("--counterfactual", required=True)
+        self_edit_review.add_argument("--ghost-check", required=True)
+        self_edit_review.add_argument("--rollback-condition", required=True)
+        self_edit_review.add_argument("--notes", default="")
+        self_edit_apply = self_edit_sub.add_parser("apply")
+        add_config_argument(self_edit_apply)
+        self_edit_apply.add_argument("--proposal-id", required=True)
+        self_edit_apply.add_argument("--git-mode", choices=["manual", "branch", "main"])
+        self_edit_apply.add_argument("--push", action="store_true")
+        self_edit_apply.add_argument("--no-push", action="store_true")
+        self_edit_apply.add_argument("--branch-name")
+        self_edit_apply.add_argument("--commit-message")
+        self_edit_apply.add_argument("--governor-decision", required=True)
+        self_edit_status = self_edit_sub.add_parser("status")
+        add_config_argument(self_edit_status)
+
+        summary_parser = sub.add_parser("summary")
+        add_config_argument(summary_parser)
+
+        budget_parser = sub.add_parser("line-budget")
+        budget_parser.add_argument("--limit", type=int, default=11000)
+        budget_parser.add_argument("--repo-root", default=".")
+
+        return parser
+
+
+
+    except Exception:
+        return None
+def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_root: Path) -> None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        if args.advisory_command == "adapters":
+            print_json(adapter_status())
+            return
+        if args.advisory_command == "providers":
+            print_json(execution_status())
+            return
+        if args.advisory_command == "execute":
+            advisory = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
+            executor = execute_advisory if args.no_verify else execute_with_research
+            governor_decision = _load_governor_decision(args.governor_decision)
+            memory_governor_decision = _load_governor_decision(args.memory_governor_decision)
+            if args.no_verify:
+                result = executor(
+                    runtime_root,
+                    advisory=advisory,
+                    model=args.model,
+                    command_override=args.command,
+                    dry_run=args.dry_run,
+                    governor_decision=governor_decision,
+                )
+            else:
+                result = executor(
+                    runtime_root,
+                    advisory=advisory,
+                    model=args.model,
+                    command_override=args.command,
+                    dry_run=args.dry_run,
+                    governor_decision=governor_decision,
+                    memory_governor_decision=memory_governor_decision,
+                )
+            print_json(execution_public_summary(result))
+            return
+        if args.advisory_command == "log":
+            print_json(
+                log_advisory_outcome(
+                    runtime_root,
+                    task=args.task,
+                    model=args.model,
+                    status=args.status,
+                    packet_ids=args.packet_id,
+                    score=args.score,
+                    notes=args.notes,
+                    domain=args.domain or "generic",
+                )
+            )
+            return
+        if args.advisory_command == "review":
+            print_json(review_advisory_outcomes(runtime_root))
+            return
+        print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+
+
+
+    except Exception:
+        return None
 def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
     config = load_config(config_path)
     if args.intent_command == "clear":

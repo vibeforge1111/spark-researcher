@@ -99,8 +99,18 @@ def capsule_root(repo_root: Path) -> Path:
 
 
 def spark_swarm_root(repo_root: Path) -> Path:
-    return repo_root / ".spark-swarm"
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        return repo_root / ".spark-swarm"
 
 
+
+    except Exception:
+        return Path(".")
 def spark_swarm_collective_payload_path(repo_root: Path) -> Path:
-    return spark_swarm_root(repo_root) / "collective-sync.json"
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        return spark_swarm_root(repo_root) / "collective-sync.json"
+
+    except Exception:
+        return Path(".")

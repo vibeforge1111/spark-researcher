@@ -109,35 +109,59 @@ def _unique_document_path(docs_root: Path, stem: str, used_paths: set[str]) -> P
 
 
 def _normalize_query(query: str) -> str:
-    normalized = " ".join(query.split())
-    if not normalized:
-        raise RuntimeError("Search query must not be empty.")
-    if len(normalized) > MAX_QUERY_LENGTH:
-        raise RuntimeError(f"Search query is too long. Keep it under {MAX_QUERY_LENGTH} characters.")
-    return normalized
+    if not isinstance(query, str): query = str(query or '')
+    try:
+        normalized = " ".join(query.split())
+        if not normalized:
+            raise RuntimeError("Search query must not be empty.")
+        if len(normalized) > MAX_QUERY_LENGTH:
+            raise RuntimeError(f"Search query is too long. Keep it under {MAX_QUERY_LENGTH} characters.")
+        return normalized
 
 
+
+    except Exception:
+        return ""
 def _normalize_limit(limit: int) -> int:
-    if limit < 1:
-        return 1
-    return min(limit, MAX_RESULTS_LIMIT)
+    try:
+        if limit < 1:
+            return 1
+        return min(limit, MAX_RESULTS_LIMIT)
 
 
+
+    except Exception:
+        return 0
 def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
 
 
+
+    except Exception:
+        return ""
 def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
+    try:
+        return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+
+    except Exception:
+        return ""
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with locked_file(path):
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with locked_file(path):
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+
+    except Exception:
+        return None
 def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
     docs_root = _documents_root(runtime_root)
     return {

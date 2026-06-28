@@ -1107,48 +1107,73 @@ def _run_command(
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
-    result = _run_command(["git", "-C", str(repo_root), *args], cwd=repo_root)
-    return result.stdout.strip()
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        result = _run_command(["git", "-C", str(repo_root), *args], cwd=repo_root)
+        return result.stdout.strip()
 
 
+
+    except Exception:
+        return ""
 def _repo_slug_from_remote(repo_root: Path) -> str | None:
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
     try:
-        remote = _git_output(repo_root, "remote", "get-url", "origin")
-    except RuntimeError:
-        return None
-    match = re.search(r"github\.com[:/](?P<slug>[^/]+/[^/.]+)(?:\.git)?$", remote)
-    return match.group("slug") if match else None
+        try:
+            remote = _git_output(repo_root, "remote", "get-url", "origin")
+        except RuntimeError:
+            return None
+        match = re.search(r"github\.com[:/](?P<slug>[^/]+/[^/.]+)(?:\.git)?$", remote)
+        return match.group("slug") if match else None
 
 
+
+    except Exception:
+        return ""
 def _default_base_branch(repo_root: Path) -> str:
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
     try:
-        head = _git_output(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD")
-        if "/" in head:
-            return head.rsplit("/", 1)[-1]
-    except RuntimeError:
-        pass
-    try:
-        current = _git_output(repo_root, "branch", "--show-current")
-    except RuntimeError:
-        current = ""
-    if current and not current.startswith("absorb/"):
-        return current
-    return "main"
+        try:
+            head = _git_output(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD")
+            if "/" in head:
+                return head.rsplit("/", 1)[-1]
+        except RuntimeError:
+            pass
+        try:
+            current = _git_output(repo_root, "branch", "--show-current")
+        except RuntimeError:
+            current = ""
+        if current and not current.startswith("absorb/"):
+            return current
+        return "main"
 
 
+
+    except Exception:
+        return ""
 def _load_manifest(repo_root: Path) -> dict[str, Any]:
-    path = repo_root / "AUTORESEARCH.md"
-    return _parse_frontmatter(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        path = repo_root / "AUTORESEARCH.md"
+        return _parse_frontmatter(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+
+    except Exception:
+        return {}
 def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
-    collective_root = repo_root.parent / "autoresearch-collective"
-    path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
-    if not path.exists():
-        return path, {"repoDirectory": [], "capsuleLibrary": []}
-    return path, json.loads(path.read_text(encoding="utf-8"))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        collective_root = repo_root.parent / "autoresearch-collective"
+        path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
+        if not path.exists():
+            return path, {"repoDirectory": [], "capsuleLibrary": []}
+        return path, json.loads(path.read_text(encoding="utf-8"))
 
 
+
+    except Exception:
+        return ()
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
 

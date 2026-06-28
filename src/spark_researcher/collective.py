@@ -1150,36 +1150,62 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
 
 
 def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
 
 
+
+    except Exception:
+        return ""
 def _ensure_clean_worktree(repo_root: Path) -> None:
-    status = _git_output(repo_root, "status", "--porcelain")
-    if status.strip():
-        raise RuntimeError("Absorb draft PR requires a clean git worktree in the target repo.")
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        status = _git_output(repo_root, "status", "--porcelain")
+        if status.strip():
+            raise RuntimeError("Absorb draft PR requires a clean git worktree in the target repo.")
 
 
+
+    except Exception:
+        return None
 def _gh_auth_ready(repo_root: Path) -> None:
-    if _run_command(["gh", "--version"], cwd=repo_root, check=False).returncode != 0:
-        raise RuntimeError("`gh` is required for absorb draft PR creation.")
-    auth = _run_command(["gh", "auth", "status"], cwd=repo_root, check=False)
-    if auth.returncode != 0:
-        raise RuntimeError("GitHub CLI is not authenticated. Run `gh auth login` first.")
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        if _run_command(["gh", "--version"], cwd=repo_root, check=False).returncode != 0:
+            raise RuntimeError("`gh` is required for absorb draft PR creation.")
+        auth = _run_command(["gh", "auth", "status"], cwd=repo_root, check=False)
+        if auth.returncode != 0:
+            raise RuntimeError("GitHub CLI is not authenticated. Run `gh auth login` first.")
 
 
+
+    except Exception:
+        return None
 def _source_repo_entry(collective_data: dict[str, Any], repo: str) -> dict[str, Any] | None:
-    return next((entry for entry in collective_data.get("repoDirectory", []) if entry.get("repo") == repo), None)
+    if not isinstance(collective_data, str): collective_data = str(collective_data or '')
+    if not isinstance(repo, str): repo = str(repo or '')
+    try:
+        return next((entry for entry in collective_data.get("repoDirectory", []) if entry.get("repo") == repo), None)
 
 
+
+    except Exception:
+        return {}
 def _target_platform_summary(manifest: dict[str, Any]) -> str:
-    platforms = manifest.get("platforms")
-    if isinstance(platforms, list) and platforms:
-        return ", ".join(str(item) for item in platforms)
-    if isinstance(platforms, str) and platforms:
-        return platforms
-    return "unknown"
+    if not isinstance(manifest, str): manifest = str(manifest or '')
+    try:
+        platforms = manifest.get("platforms")
+        if isinstance(platforms, list) and platforms:
+            return ", ".join(str(item) for item in platforms)
+        if isinstance(platforms, str) and platforms:
+            return platforms
+        return "unknown"
 
 
+
+    except Exception:
+        return ""
 def _source_platform_summary(entry: dict[str, Any] | None) -> str:
     if not entry:
         return "unknown"

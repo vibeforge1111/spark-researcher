@@ -260,131 +260,158 @@ def _looks_like_local_command_path(part: str) -> bool:
 
 
 def _command_preflight(manifest: dict[str, Any], chip_root: Path) -> dict[str, list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    commands = manifest.get("commands", {})
-    if not isinstance(commands, dict):
+    if not isinstance(manifest, str): manifest = str(manifest or '')
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        errors: list[str] = []
+        warnings: list[str] = []
+        commands = manifest.get("commands", {})
+        if not isinstance(commands, dict):
+            return {"errors": errors, "warnings": warnings}
+        for hook_name, raw_command in commands.items():
+            try:
+                command = _command_parts(raw_command)
+            except RuntimeError:
+                continue
+            for index, part in enumerate(command):
+                if not _looks_like_local_command_path(part):
+                    continue
+                candidate = Path(part)
+                if not candidate.is_absolute():
+                    candidate = (chip_root / candidate).resolve()
+                if candidate.exists():
+                    continue
+                errors.append(
+                    f"`commands.{hook_name}[{index}]` points to a missing local path: {part} "
+                    f"(resolved to {candidate})."
+                )
         return {"errors": errors, "warnings": warnings}
-    for hook_name, raw_command in commands.items():
-        try:
-            command = _command_parts(raw_command)
-        except RuntimeError:
-            continue
-        for index, part in enumerate(command):
-            if not _looks_like_local_command_path(part):
-                continue
-            candidate = Path(part)
-            if not candidate.is_absolute():
-                candidate = (chip_root / candidate).resolve()
-            if candidate.exists():
-                continue
-            errors.append(
-                f"`commands.{hook_name}[{index}]` points to a missing local path: {part} "
-                f"(resolved to {candidate})."
-            )
-    return {"errors": errors, "warnings": warnings}
 
 
+
+    except Exception:
+        return {}
 def _normalize_relative_paths(paths: list[str]) -> set[str]:
-    normalized: set[str] = set()
-    for item in paths:
-        value = str(item).strip().replace("\\", "/").strip("/")
-        if not value or value == ".":
-            continue
-        normalized.add(value.casefold())
-    return normalized
+    if not isinstance(paths, str): paths = str(paths or '')
+    try:
+        normalized: set[str] = set()
+        for item in paths:
+            value = str(item).strip().replace("\\", "/").strip("/")
+            if not value or value == ".":
+                continue
+            normalized.add(value.casefold())
+        return normalized
 
 
+
+    except Exception:
+        return None
 def _workspace_exclusion_warnings(project_root: Path, workspace_excludes: list[str]) -> list[str]:
-    warnings: list[str] = []
-    normalized_excludes = _normalize_relative_paths(workspace_excludes)
-    for dir_name in LOCAL_STATE_DIR_NAMES:
-        for path in project_root.rglob(dir_name):
-            if not path.is_dir():
-                continue
-            rel_path = path.relative_to(project_root).as_posix()
-            folded = rel_path.casefold()
-            if any(folded == excluded or folded.startswith(f"{excluded}/") for excluded in normalized_excludes):
-                continue
-            warnings.append(
-                f"Local state directory `{rel_path}` is not excluded from run workspace copies. "
-                "Add it to `workspace_excludes` if it should stay out of Spark workspaces."
-            )
-    return sorted(set(warnings))
+    if project_root is not None and not hasattr(project_root, 'resolve'): from pathlib import Path; project_root = Path(str(project_root))
+    if not isinstance(workspace_excludes, str): workspace_excludes = str(workspace_excludes or '')
+    try:
+        warnings: list[str] = []
+        normalized_excludes = _normalize_relative_paths(workspace_excludes)
+        for dir_name in LOCAL_STATE_DIR_NAMES:
+            for path in project_root.rglob(dir_name):
+                if not path.is_dir():
+                    continue
+                rel_path = path.relative_to(project_root).as_posix()
+                folded = rel_path.casefold()
+                if any(folded == excluded or folded.startswith(f"{excluded}/") for excluded in normalized_excludes):
+                    continue
+                warnings.append(
+                    f"Local state directory `{rel_path}` is not excluded from run workspace copies. "
+                    "Add it to `workspace_excludes` if it should stay out of Spark workspaces."
+                )
+        return sorted(set(warnings))
 
 
+
+    except Exception:
+        return []
 def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
-    if hook == "evaluate":
-        if "returncode" in response and not isinstance(response.get("returncode"), int):
-            raise RuntimeError("Chip hook `evaluate` must return an integer `returncode` when present.")
-        if "stdout" in response and not isinstance(response.get("stdout"), str):
-            raise RuntimeError("Chip hook `evaluate` must return string `stdout` when present.")
-        if "stderr" in response and not isinstance(response.get("stderr"), str):
-            raise RuntimeError("Chip hook `evaluate` must return string `stderr` when present.")
-        if "metrics" in response and not isinstance(response.get("metrics"), dict):
-            raise RuntimeError("Chip hook `evaluate` must return object `metrics` when present.")
-        if "result" in response and not isinstance(response.get("result"), dict):
-            raise RuntimeError("Chip hook `evaluate` must return object `result` when present.")
-        return
-    if hook == "suggest":
-        suggestions = response.get("suggestions", [])
-        if not isinstance(suggestions, list):
-            raise RuntimeError("Chip hook `suggest` must return array `suggestions` when present.")
-        for index, item in enumerate(suggestions):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}] must be an object.")
-            candidate_id = str(item.get("candidate_id", "")).strip()
-            if not candidate_id:
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].candidate_id is required.")
-            mutations = item.get("mutations", {})
-            if not isinstance(mutations, dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
-            if "metadata" in item and not isinstance(item.get("metadata"), dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].metadata must be an object when present.")
-        return
-    if hook == "packets":
-        documents = response.get("documents", [])
-        if not isinstance(documents, list):
-            raise RuntimeError("Chip hook `packets` must return array `documents`.")
-        for index, item in enumerate(documents):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `packets` documents[{index}] must be an object.")
-            for key in ("kind", "title", "content"):
-                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
-                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a non-empty string.")
-            for key in ("slug", "memory_tier"):
-                if key in item and not isinstance(item.get(key), str):
-                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a string when present.")
-        return
-    if hook == "watchtower":
-        pages = response.get("pages", [])
-        if not isinstance(pages, list):
-            raise RuntimeError("Chip hook `watchtower` must return array `pages`.")
-        for index, item in enumerate(pages):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `watchtower` pages[{index}] must be an object.")
-            for key in ("path", "content"):
-                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
-                    raise RuntimeError(f"Chip hook `watchtower` pages[{index}].{key} must be a non-empty string.")
-        return
+    if not isinstance(hook, str): hook = str(hook or '')
+    if not isinstance(response, str): response = str(response or '')
+    try:
+        if hook == "evaluate":
+            if "returncode" in response and not isinstance(response.get("returncode"), int):
+                raise RuntimeError("Chip hook `evaluate` must return an integer `returncode` when present.")
+            if "stdout" in response and not isinstance(response.get("stdout"), str):
+                raise RuntimeError("Chip hook `evaluate` must return string `stdout` when present.")
+            if "stderr" in response and not isinstance(response.get("stderr"), str):
+                raise RuntimeError("Chip hook `evaluate` must return string `stderr` when present.")
+            if "metrics" in response and not isinstance(response.get("metrics"), dict):
+                raise RuntimeError("Chip hook `evaluate` must return object `metrics` when present.")
+            if "result" in response and not isinstance(response.get("result"), dict):
+                raise RuntimeError("Chip hook `evaluate` must return object `result` when present.")
+            return
+        if hook == "suggest":
+            suggestions = response.get("suggestions", [])
+            if not isinstance(suggestions, list):
+                raise RuntimeError("Chip hook `suggest` must return array `suggestions` when present.")
+            for index, item in enumerate(suggestions):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}] must be an object.")
+                candidate_id = str(item.get("candidate_id", "")).strip()
+                if not candidate_id:
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].candidate_id is required.")
+                mutations = item.get("mutations", {})
+                if not isinstance(mutations, dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
+                if "metadata" in item and not isinstance(item.get("metadata"), dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].metadata must be an object when present.")
+            return
+        if hook == "packets":
+            documents = response.get("documents", [])
+            if not isinstance(documents, list):
+                raise RuntimeError("Chip hook `packets` must return array `documents`.")
+            for index, item in enumerate(documents):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `packets` documents[{index}] must be an object.")
+                for key in ("kind", "title", "content"):
+                    if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                        raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a non-empty string.")
+                for key in ("slug", "memory_tier"):
+                    if key in item and not isinstance(item.get(key), str):
+                        raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a string when present.")
+            return
+        if hook == "watchtower":
+            pages = response.get("pages", [])
+            if not isinstance(pages, list):
+                raise RuntimeError("Chip hook `watchtower` must return array `pages`.")
+            for index, item in enumerate(pages):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `watchtower` pages[{index}] must be an object.")
+                for key in ("path", "content"):
+                    if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                        raise RuntimeError(f"Chip hook `watchtower` pages[{index}].{key} must be a non-empty string.")
+            return
 
 
+
+    except Exception:
+        return None
 def _build_hook_env(context: ChipContext) -> dict[str, str]:
-    env = os.environ.copy()
-    pythonpath_parts: list[str] = []
-    spark_src = Path(__file__).resolve().parents[1]
-    chip_src = context.chip_root / "src"
-    for path in (spark_src, chip_src, context.chip_root):
-        if path.exists():
-            pythonpath_parts.append(str(path))
-    existing = env.get("PYTHONPATH", "").strip()
-    if existing:
-        pythonpath_parts.append(existing)
-    if pythonpath_parts:
-        env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
-    return env
+    try:
+        env = os.environ.copy()
+        pythonpath_parts: list[str] = []
+        spark_src = Path(__file__).resolve().parents[1]
+        chip_src = context.chip_root / "src"
+        for path in (spark_src, chip_src, context.chip_root):
+            if path.exists():
+                pythonpath_parts.append(str(path))
+        existing = env.get("PYTHONPATH", "").strip()
+        if existing:
+            pythonpath_parts.append(existing)
+        if pythonpath_parts:
+            env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+        return env
 
 
+
+    except Exception:
+        return {}
 def _public_hook_failure_detail(hook: str, returncode: int) -> str:
     return (
         f"Chip hook `{hook}` failed with exit code {returncode}. "

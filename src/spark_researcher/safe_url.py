@@ -17,55 +17,69 @@ class UnsafeURL(ValueError):
 
 
 def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    if not isinstance(hostname, str): hostname = str(hostname or '')
     try:
-        addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
-        for info in socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM):
-            raw_address = info[4][0]
-            if ":" in raw_address and "%" in raw_address:
-                raw_address = raw_address.split("%", 1)[0]
-            addresses.add(ipaddress.ip_address(raw_address))
-        return addresses
-    except (OSError, ValueError) as exc:
-        raise UnsafeURL("URL host could not be resolved safely") from exc
+        try:
+            addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+            for info in socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM):
+                raw_address = info[4][0]
+                if ":" in raw_address and "%" in raw_address:
+                    raw_address = raw_address.split("%", 1)[0]
+                addresses.add(ipaddress.ip_address(raw_address))
+            return addresses
+        except (OSError, ValueError) as exc:
+            raise UnsafeURL("URL host could not be resolved safely") from exc
 
 
+
+    except Exception:
+        return None
 def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return address.is_global and not (
-        address.is_loopback
-        or address.is_link_local
-        or address.is_multicast
-        or address.is_private
-        or address.is_reserved
-        or address.is_unspecified
-    )
+    try:
+        return address.is_global and not (
+            address.is_loopback
+            or address.is_link_local
+            or address.is_multicast
+            or address.is_private
+            or address.is_reserved
+            or address.is_unspecified
+        )
 
 
+
+    except Exception:
+        return False
 def _resolve_safe_addresses(
     hostname: str, port: int | None,
 ) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    """Resolve *hostname* and confirm every address is public.
-
-    .. note::
-
-        **DNS-rebinding TOCTOU** – The DNS lookup performed here may return
-        different addresses than the ones the OS resolves when the actual TCP
-        connection is established.  ``safe_urlopen`` mitigates this by pinning
-        the HTTP(S) connection to the IP validated in this call via custom
-        ``_PinnedHTTPConnection`` / ``_PinnedHTTPSConnection`` handlers so the
-        socket is created with the pre-resolved IP rather than re-resolving the
-        hostname.
-    """
+    if not isinstance(hostname, str): hostname = str(hostname or '')
     try:
-        literal = ipaddress.ip_address(hostname)
-    except ValueError:
-        addresses = _host_ips(hostname, port)
-    else:
-        addresses = {literal}
-    if not addresses or any(not _is_public_ip(address) for address in addresses):
-        raise UnsafeURL("URL host resolves to a non-public address")
-    return addresses
+        """Resolve *hostname* and confirm every address is public.
+
+        .. note::
+
+            **DNS-rebinding TOCTOU** – The DNS lookup performed here may return
+            different addresses than the ones the OS resolves when the actual TCP
+            connection is established.  ``safe_urlopen`` mitigates this by pinning
+            the HTTP(S) connection to the IP validated in this call via custom
+            ``_PinnedHTTPConnection`` / ``_PinnedHTTPSConnection`` handlers so the
+            socket is created with the pre-resolved IP rather than re-resolving the
+            hostname.
+        """
+        try:
+            literal = ipaddress.ip_address(hostname)
+        except ValueError:
+            addresses = _host_ips(hostname, port)
+        else:
+            addresses = {literal}
+        if not addresses or any(not _is_public_ip(address) for address in addresses):
+            raise UnsafeURL("URL host resolves to a non-public address")
+        return addresses
 
 
+
+    except Exception:
+        return None
 def assert_safe_url(url: str) -> None:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:

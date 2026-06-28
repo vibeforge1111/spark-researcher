@@ -423,295 +423,320 @@ def _crypto_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
 
 
 def _crypto_cli(package_name: str) -> str:
-    return dedent(
-        f"""
-        from __future__ import annotations
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        return dedent(
+            f"""
+            from __future__ import annotations
 
-        import argparse
-        import json
-        from pathlib import Path
+            import argparse
+            import json
+            from pathlib import Path
 
-        BASE = {{"profitability_score": 0.34, "sharpe_ratio": 0.72, "max_drawdown": 0.24, "win_rate": 0.48, "doctrine_fit": 0.31}}
-        DOCTRINES = {{
-            "trend_regime_following": {{"p": 0.18, "s": 0.52, "d": 0.08, "w": 0.03, "f": 0.12, "lesson": "Trend doctrine works when regime filters are explicit.", "boundary": "Weak in chop without a regime filter."}},
-            "mean_reversion_liquidity_reclaim": {{"p": 0.13, "s": 0.37, "d": 0.05, "w": 0.06, "f": 0.11, "lesson": "Liquidity reclaims monetize rotation if exits stay disciplined.", "boundary": "Fails when expansion is mistaken for reclaim."}},
-            "breakout_volatility_expansion": {{"p": 0.16, "s": 0.31, "d": 0.11, "w": 0.01, "f": 0.10, "lesson": "Breakout doctrine pays in violent expansion with strict false-break filters.", "boundary": "Punishes loose risk during fakeouts."}},
-            "risk_first_asymmetric_capture": {{"p": 0.14, "s": 0.44, "d": 0.04, "w": 0.02, "f": 0.14, "lesson": "Asymmetric capture works when downside truncation is encoded first.", "boundary": "Undertrades if the doctrine becomes too selective."}},
-        }}
-        STRATEGIES = {{
-            "ema_pullback_long": {{"p": 0.17, "s": 0.39, "d": 0.07, "w": 0.04, "f": 0.09}},
-            "range_reclaim_scalp": {{"p": 0.12, "s": 0.34, "d": 0.05, "w": 0.07, "f": 0.08}},
-            "breakout_open_interest_confirmation": {{"p": 0.16, "s": 0.28, "d": 0.10, "w": 0.02, "f": 0.08}},
-            "funding_mean_revert": {{"p": 0.11, "s": 0.30, "d": 0.04, "w": 0.05, "f": 0.07}},
-        }}
-        REGIMES = {{"trend": {{"p": 0.08, "s": 0.12, "d": 0.02, "f": 0.06}}, "range": {{"p": 0.05, "s": 0.07, "d": 0.01, "f": 0.05}}, "high_vol": {{"p": 0.07, "s": 0.02, "d": 0.06, "f": 0.03}}, "event_driven": {{"p": 0.06, "s": 0.04, "d": 0.05, "f": 0.04}}}}
-        TIMEFRAMES = {{"15m": {{"p": 0.03, "s": 0.00, "d": 0.06, "w": 0.02}}, "1h": {{"p": 0.05, "s": 0.05, "d": 0.03, "w": 0.03}}, "4h": {{"p": 0.07, "s": 0.08, "d": 0.02, "w": 0.01}}}}
-        VENUES = {{"binance": {{"p": 0.03, "s": 0.03, "d": 0.01}}, "bybit": {{"p": 0.02, "s": 0.02, "d": 0.02}}, "hyperliquid": {{"p": 0.04, "s": 0.03, "d": 0.04}}}}
-        PAIRS = {{"trend_regime_following|ema_pullback_long": 0.12, "mean_reversion_liquidity_reclaim|range_reclaim_scalp": 0.11, "breakout_volatility_expansion|breakout_open_interest_confirmation": 0.10, "risk_first_asymmetric_capture|funding_mean_revert": 0.08}}
-        REGIME_MATCH = {{"trend_regime_following|trend": 0.08, "mean_reversion_liquidity_reclaim|range": 0.08, "breakout_volatility_expansion|high_vol": 0.09, "risk_first_asymmetric_capture|event_driven": 0.07}}
+            BASE = {{"profitability_score": 0.34, "sharpe_ratio": 0.72, "max_drawdown": 0.24, "win_rate": 0.48, "doctrine_fit": 0.31}}
+            DOCTRINES = {{
+                "trend_regime_following": {{"p": 0.18, "s": 0.52, "d": 0.08, "w": 0.03, "f": 0.12, "lesson": "Trend doctrine works when regime filters are explicit.", "boundary": "Weak in chop without a regime filter."}},
+                "mean_reversion_liquidity_reclaim": {{"p": 0.13, "s": 0.37, "d": 0.05, "w": 0.06, "f": 0.11, "lesson": "Liquidity reclaims monetize rotation if exits stay disciplined.", "boundary": "Fails when expansion is mistaken for reclaim."}},
+                "breakout_volatility_expansion": {{"p": 0.16, "s": 0.31, "d": 0.11, "w": 0.01, "f": 0.10, "lesson": "Breakout doctrine pays in violent expansion with strict false-break filters.", "boundary": "Punishes loose risk during fakeouts."}},
+                "risk_first_asymmetric_capture": {{"p": 0.14, "s": 0.44, "d": 0.04, "w": 0.02, "f": 0.14, "lesson": "Asymmetric capture works when downside truncation is encoded first.", "boundary": "Undertrades if the doctrine becomes too selective."}},
+            }}
+            STRATEGIES = {{
+                "ema_pullback_long": {{"p": 0.17, "s": 0.39, "d": 0.07, "w": 0.04, "f": 0.09}},
+                "range_reclaim_scalp": {{"p": 0.12, "s": 0.34, "d": 0.05, "w": 0.07, "f": 0.08}},
+                "breakout_open_interest_confirmation": {{"p": 0.16, "s": 0.28, "d": 0.10, "w": 0.02, "f": 0.08}},
+                "funding_mean_revert": {{"p": 0.11, "s": 0.30, "d": 0.04, "w": 0.05, "f": 0.07}},
+            }}
+            REGIMES = {{"trend": {{"p": 0.08, "s": 0.12, "d": 0.02, "f": 0.06}}, "range": {{"p": 0.05, "s": 0.07, "d": 0.01, "f": 0.05}}, "high_vol": {{"p": 0.07, "s": 0.02, "d": 0.06, "f": 0.03}}, "event_driven": {{"p": 0.06, "s": 0.04, "d": 0.05, "f": 0.04}}}}
+            TIMEFRAMES = {{"15m": {{"p": 0.03, "s": 0.00, "d": 0.06, "w": 0.02}}, "1h": {{"p": 0.05, "s": 0.05, "d": 0.03, "w": 0.03}}, "4h": {{"p": 0.07, "s": 0.08, "d": 0.02, "w": 0.01}}}}
+            VENUES = {{"binance": {{"p": 0.03, "s": 0.03, "d": 0.01}}, "bybit": {{"p": 0.02, "s": 0.02, "d": 0.02}}, "hyperliquid": {{"p": 0.04, "s": 0.03, "d": 0.04}}}}
+            PAIRS = {{"trend_regime_following|ema_pullback_long": 0.12, "mean_reversion_liquidity_reclaim|range_reclaim_scalp": 0.11, "breakout_volatility_expansion|breakout_open_interest_confirmation": 0.10, "risk_first_asymmetric_capture|funding_mean_revert": 0.08}}
+            REGIME_MATCH = {{"trend_regime_following|trend": 0.08, "mean_reversion_liquidity_reclaim|range": 0.08, "breakout_volatility_expansion|high_vol": 0.09, "risk_first_asymmetric_capture|event_driven": 0.07}}
 
-        def _load(path: str) -> dict:
-            return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+            def _load(path: str) -> dict:
+                return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
-        def _write(path: str, payload: dict) -> None:
-            Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+            def _write(path: str, payload: dict) -> None:
+                Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
 
-        def _mutations(payload: dict) -> dict[str, str]:
-            candidate = payload.get("candidate", {{}})
-            raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
-            return {{str(key): str(value) for key, value in raw.items()}}
+            def _mutations(payload: dict) -> dict[str, str]:
+                candidate = payload.get("candidate", {{}})
+                raw = candidate.get("mutations", {{}}) if isinstance(candidate, dict) else {{}}
+                return {{str(key): str(value) for key, value in raw.items()}}
 
-        def _clamp(value: float) -> float:
-            return round(max(0.0, min(0.99, value)), 4)
+            def _clamp(value: float) -> float:
+                return round(max(0.0, min(0.99, value)), 4)
 
-        def _asset_bonus(raw: str) -> float:
-            assets = [item.strip() for item in raw.split(",") if item.strip()]
-            majors = sum(1 for asset in assets if asset in {{"BTC", "ETH", "SOL"}})
-            return min(0.04, len(assets) * 0.01) + (majors * 0.008)
+            def _asset_bonus(raw: str) -> float:
+                assets = [item.strip() for item in raw.split(",") if item.strip()]
+                majors = sum(1 for asset in assets if asset in {{"BTC", "ETH", "SOL"}})
+                return min(0.04, len(assets) * 0.01) + (majors * 0.008)
 
-        def _score(mutations: dict[str, str]) -> dict[str, float | str]:
-            doctrine_id = mutations.get("doctrine_id", "")
-            strategy_id = mutations.get("strategy_id", "")
-            regime = mutations.get("market_regime", "")
-            timeframe = mutations.get("timeframe", "")
-            venue = mutations.get("venue", "")
-            doctrine = DOCTRINES.get(doctrine_id, {{}})
-            strategy = STRATEGIES.get(strategy_id, {{}})
-            regime_spec = REGIMES.get(regime, {{}})
-            timeframe_spec = TIMEFRAMES.get(timeframe, {{}})
-            venue_spec = VENUES.get(venue, {{}})
-            synergy = PAIRS.get(doctrine_id + "|" + strategy_id, -0.02 if doctrine_id and strategy_id else 0.0)
-            regime_match = REGIME_MATCH.get(doctrine_id + "|" + regime, -0.03 if doctrine_id and regime else 0.0)
-            profit = _clamp(BASE["profitability_score"] + doctrine.get("p", 0.0) + strategy.get("p", 0.0) + regime_spec.get("p", 0.0) + timeframe_spec.get("p", 0.0) + venue_spec.get("p", 0.0) + synergy + regime_match + _asset_bonus(mutations.get("asset_universe", "")))
-            sharpe = _clamp(BASE["sharpe_ratio"] + doctrine.get("s", 0.0) + strategy.get("s", 0.0) + regime_spec.get("s", 0.0) + timeframe_spec.get("s", 0.0) + venue_spec.get("s", 0.0))
-            drawdown = round(max(0.02, min(0.95, BASE["max_drawdown"] + doctrine.get("d", 0.0) + strategy.get("d", 0.0) + regime_spec.get("d", 0.0) + timeframe_spec.get("d", 0.0) + venue_spec.get("d", 0.0) - doctrine.get("f", 0.0) * 0.3)), 4)
-            win_rate = _clamp(BASE["win_rate"] + doctrine.get("w", 0.0) + strategy.get("w", 0.0) + timeframe_spec.get("w", 0.0))
-            doctrine_fit = _clamp(BASE["doctrine_fit"] + doctrine.get("f", 0.0) + strategy.get("f", 0.0) + regime_spec.get("f", 0.0) + max(0.0, synergy * 0.6))
-            readiness = _clamp(profit * 0.4 + sharpe * 0.25 + doctrine_fit * 0.2 + win_rate * 0.15 - drawdown * 0.35)
-            gate = 0.78 if mutations.get("paper_gate", "strict") == "strict" else 0.72
-            if readiness >= gate and drawdown <= 0.22:
-                verdict, next_step = "approve", "queue_for_paper_trade"
-            elif profit >= 0.66 and doctrine_fit >= 0.60:
-                verdict, next_step = "defer", "hold_for_more_backtest_evidence"
-            else:
-                verdict, next_step = "reject", "run_contradiction_probe"
-            return {{"profitability_score": profit, "sharpe_ratio": sharpe, "max_drawdown": drawdown, "win_rate": win_rate, "paper_trade_readiness": readiness, "verdict_confidence": _clamp(0.4 + profit * 0.25 + sharpe * 0.2 + doctrine_fit * 0.15 - drawdown * 0.1), "verdict": verdict, "recommended_next_step": next_step, "lesson": doctrine.get("lesson", "Baseline only. Add a doctrine before promoting any strategy claim."), "boundary": doctrine.get("boundary", "Passive baseline is not doctrine and should not be promoted.")}}
+            def _score(mutations: dict[str, str]) -> dict[str, float | str]:
+                doctrine_id = mutations.get("doctrine_id", "")
+                strategy_id = mutations.get("strategy_id", "")
+                regime = mutations.get("market_regime", "")
+                timeframe = mutations.get("timeframe", "")
+                venue = mutations.get("venue", "")
+                doctrine = DOCTRINES.get(doctrine_id, {{}})
+                strategy = STRATEGIES.get(strategy_id, {{}})
+                regime_spec = REGIMES.get(regime, {{}})
+                timeframe_spec = TIMEFRAMES.get(timeframe, {{}})
+                venue_spec = VENUES.get(venue, {{}})
+                synergy = PAIRS.get(doctrine_id + "|" + strategy_id, -0.02 if doctrine_id and strategy_id else 0.0)
+                regime_match = REGIME_MATCH.get(doctrine_id + "|" + regime, -0.03 if doctrine_id and regime else 0.0)
+                profit = _clamp(BASE["profitability_score"] + doctrine.get("p", 0.0) + strategy.get("p", 0.0) + regime_spec.get("p", 0.0) + timeframe_spec.get("p", 0.0) + venue_spec.get("p", 0.0) + synergy + regime_match + _asset_bonus(mutations.get("asset_universe", "")))
+                sharpe = _clamp(BASE["sharpe_ratio"] + doctrine.get("s", 0.0) + strategy.get("s", 0.0) + regime_spec.get("s", 0.0) + timeframe_spec.get("s", 0.0) + venue_spec.get("s", 0.0))
+                drawdown = round(max(0.02, min(0.95, BASE["max_drawdown"] + doctrine.get("d", 0.0) + strategy.get("d", 0.0) + regime_spec.get("d", 0.0) + timeframe_spec.get("d", 0.0) + venue_spec.get("d", 0.0) - doctrine.get("f", 0.0) * 0.3)), 4)
+                win_rate = _clamp(BASE["win_rate"] + doctrine.get("w", 0.0) + strategy.get("w", 0.0) + timeframe_spec.get("w", 0.0))
+                doctrine_fit = _clamp(BASE["doctrine_fit"] + doctrine.get("f", 0.0) + strategy.get("f", 0.0) + regime_spec.get("f", 0.0) + max(0.0, synergy * 0.6))
+                readiness = _clamp(profit * 0.4 + sharpe * 0.25 + doctrine_fit * 0.2 + win_rate * 0.15 - drawdown * 0.35)
+                gate = 0.78 if mutations.get("paper_gate", "strict") == "strict" else 0.72
+                if readiness >= gate and drawdown <= 0.22:
+                    verdict, next_step = "approve", "queue_for_paper_trade"
+                elif profit >= 0.66 and doctrine_fit >= 0.60:
+                    verdict, next_step = "defer", "hold_for_more_backtest_evidence"
+                else:
+                    verdict, next_step = "reject", "run_contradiction_probe"
+                return {{"profitability_score": profit, "sharpe_ratio": sharpe, "max_drawdown": drawdown, "win_rate": win_rate, "paper_trade_readiness": readiness, "verdict_confidence": _clamp(0.4 + profit * 0.25 + sharpe * 0.2 + doctrine_fit * 0.15 - drawdown * 0.1), "verdict": verdict, "recommended_next_step": next_step, "lesson": doctrine.get("lesson", "Baseline only. Add a doctrine before promoting any strategy claim."), "boundary": doctrine.get("boundary", "Passive baseline is not doctrine and should not be promoted.")}}
 
-        def evaluate(payload: dict) -> dict:
-            metrics = _score(_mutations(payload))
-            stdout = "\\n".join(["profitability_score: " + str(metrics["profitability_score"]), "sharpe_ratio: " + str(metrics["sharpe_ratio"]), "max_drawdown: " + str(metrics["max_drawdown"]), "win_rate: " + str(metrics["win_rate"]), "paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "verdict_confidence: " + str(metrics["verdict_confidence"])])
-            return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"profitability_score": metrics["profitability_score"], "sharpe_ratio": metrics["sharpe_ratio"], "max_drawdown": metrics["max_drawdown"], "win_rate": metrics["win_rate"], "paper_trade_readiness": metrics["paper_trade_readiness"], "verdict_confidence": metrics["verdict_confidence"]}}, "result": {{"claim": "Backtest profitability must be judged with drawdown, regime fit, and paper-trade readiness.", "verdict": metrics["verdict"], "mechanism": metrics["lesson"], "boundary": metrics["boundary"], "recommended_next_step": metrics["recommended_next_step"], "evidence_lane": "backtest_benchmark"}}}}
+            def evaluate(payload: dict) -> dict:
+                metrics = _score(_mutations(payload))
+                stdout = "\\n".join(["profitability_score: " + str(metrics["profitability_score"]), "sharpe_ratio: " + str(metrics["sharpe_ratio"]), "max_drawdown: " + str(metrics["max_drawdown"]), "win_rate: " + str(metrics["win_rate"]), "paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "verdict_confidence: " + str(metrics["verdict_confidence"])])
+                return {{"returncode": 0, "stdout": stdout, "stderr": "", "metrics": {{"profitability_score": metrics["profitability_score"], "sharpe_ratio": metrics["sharpe_ratio"], "max_drawdown": metrics["max_drawdown"], "win_rate": metrics["win_rate"], "paper_trade_readiness": metrics["paper_trade_readiness"], "verdict_confidence": metrics["verdict_confidence"]}}, "result": {{"claim": "Backtest profitability must be judged with drawdown, regime fit, and paper-trade readiness.", "verdict": metrics["verdict"], "mechanism": metrics["lesson"], "boundary": metrics["boundary"], "recommended_next_step": metrics["recommended_next_step"], "evidence_lane": "backtest_benchmark"}}}}
 
-        def suggest(payload: dict) -> dict:
-            frontier = [
-                {{"candidate_id": "trend-breakout-btceth-1h", "candidate_summary": "Pressure-test trend doctrine with a faster breakout expression.", "hypothesis": "If trend doctrine is real, a second strategy expression should keep doctrine fit without collapsing drawdown.", "mutations": {{"doctrine_id": "trend_regime_following", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "trend", "timeframe": "1h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}}}},
-                {{"candidate_id": "range-funding-ethsol-1h", "candidate_summary": "Probe whether funding dislocations work better under a range doctrine.", "hypothesis": "A weaker strategy may improve when doctrine and regime alignment are corrected.", "mutations": {{"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "funding_mean_revert", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "ETH,SOL", "paper_gate": "balanced"}}}},
-                {{"candidate_id": "riskfirst-ema-btc-4h", "candidate_summary": "Transfer the strongest risk doctrine onto a slower continuation expression.", "hypothesis": "Cross-pollination should raise paper-trade readiness if risk doctrine is genuinely portable.", "mutations": {{"doctrine_id": "risk_first_asymmetric_capture", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC", "paper_gate": "strict"}}}},
-            ]
-            limit = max(1, int(payload.get("limit", 3) or 3))
-            return {{"baseline_metric": None, "reasons": ["Expand from doctrine and strategy combinations, not isolated indicator churn."] * min(limit, len(frontier)), "suggestions": frontier[:limit]}}
+            def suggest(payload: dict) -> dict:
+                frontier = [
+                    {{"candidate_id": "trend-breakout-btceth-1h", "candidate_summary": "Pressure-test trend doctrine with a faster breakout expression.", "hypothesis": "If trend doctrine is real, a second strategy expression should keep doctrine fit without collapsing drawdown.", "mutations": {{"doctrine_id": "trend_regime_following", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "trend", "timeframe": "1h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}}}},
+                    {{"candidate_id": "range-funding-ethsol-1h", "candidate_summary": "Probe whether funding dislocations work better under a range doctrine.", "hypothesis": "A weaker strategy may improve when doctrine and regime alignment are corrected.", "mutations": {{"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "funding_mean_revert", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "ETH,SOL", "paper_gate": "balanced"}}}},
+                    {{"candidate_id": "riskfirst-ema-btc-4h", "candidate_summary": "Transfer the strongest risk doctrine onto a slower continuation expression.", "hypothesis": "Cross-pollination should raise paper-trade readiness if risk doctrine is genuinely portable.", "mutations": {{"doctrine_id": "risk_first_asymmetric_capture", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC", "paper_gate": "strict"}}}},
+                ]
+                limit = max(1, int(payload.get("limit", 3) or 3))
+                return {{"baseline_metric": None, "reasons": ["Expand from doctrine and strategy combinations, not isolated indicator churn."] * min(limit, len(frontier)), "suggestions": frontier[:limit]}}
 
-        def packets(payload: dict) -> dict:
-            candidate = payload.get("candidate", {{}}) if isinstance(payload.get("candidate"), dict) else {{}}
-            candidate_id = str(candidate.get("candidate_id", "global-baseline"))
-            metrics = _score(_mutations(payload))
-            docs = [{{"kind": "benchmark_evidence", "slug": "crypto-backtest-" + candidate_id, "title": candidate_id + " Backtest Evidence", "content": "\\n".join(["# " + candidate_id + " Backtest Evidence", "", "- evidence_lane: backtest_benchmark", "- profitability_score: " + str(metrics["profitability_score"]), "- sharpe_ratio: " + str(metrics["sharpe_ratio"]), "- max_drawdown: " + str(metrics["max_drawdown"]), "- paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "- recommended_next_step: " + str(metrics["recommended_next_step"])])}}]
-            if metrics["recommended_next_step"] == "queue_for_paper_trade":
-                docs.append({{"kind": "grounded_doctrine", "slug": "crypto-doctrine-" + candidate_id, "title": candidate_id + " Doctrine Candidate", "content": "Eligible for paper trade after backtest bridge review."}})
-            elif metrics["recommended_next_step"] == "run_contradiction_probe":
-                docs.append({{"kind": "grounded_boundary", "slug": "crypto-boundary-" + candidate_id, "title": candidate_id + " Boundary Candidate", "content": "Treat as a failure surface or contradiction probe, not doctrine."}})
-            return {{"documents": docs}}
+            def packets(payload: dict) -> dict:
+                candidate = payload.get("candidate", {{}}) if isinstance(payload.get("candidate"), dict) else {{}}
+                candidate_id = str(candidate.get("candidate_id", "global-baseline"))
+                metrics = _score(_mutations(payload))
+                docs = [{{"kind": "benchmark_evidence", "slug": "crypto-backtest-" + candidate_id, "title": candidate_id + " Backtest Evidence", "content": "\\n".join(["# " + candidate_id + " Backtest Evidence", "", "- evidence_lane: backtest_benchmark", "- profitability_score: " + str(metrics["profitability_score"]), "- sharpe_ratio: " + str(metrics["sharpe_ratio"]), "- max_drawdown: " + str(metrics["max_drawdown"]), "- paper_trade_readiness: " + str(metrics["paper_trade_readiness"]), "- recommended_next_step: " + str(metrics["recommended_next_step"])])}}]
+                if metrics["recommended_next_step"] == "queue_for_paper_trade":
+                    docs.append({{"kind": "grounded_doctrine", "slug": "crypto-doctrine-" + candidate_id, "title": candidate_id + " Doctrine Candidate", "content": "Eligible for paper trade after backtest bridge review."}})
+                elif metrics["recommended_next_step"] == "run_contradiction_probe":
+                    docs.append({{"kind": "grounded_boundary", "slug": "crypto-boundary-" + candidate_id, "title": candidate_id + " Boundary Candidate", "content": "Treat as a failure surface or contradiction probe, not doctrine."}})
+                return {{"documents": docs}}
 
-        def watchtower(payload: dict) -> dict:
-            return {{"pages": [{{"path": "07-Domains/Crypto Trading/Home.md", "content": "# Crypto Trading Domain\\n\\n- Backtest is the inner benchmark lane.\\n- Paper trade is the slower outer validation lane.\\n- Promote doctrine only when profitability and risk gates both clear."}}]}}
+            def watchtower(payload: dict) -> dict:
+                return {{"pages": [{{"path": "07-Domains/Crypto Trading/Home.md", "content": "# Crypto Trading Domain\\n\\n- Backtest is the inner benchmark lane.\\n- Paper trade is the slower outer validation lane.\\n- Promote doctrine only when profitability and risk gates both clear."}}]}}
 
-        def main() -> None:
-            parser = argparse.ArgumentParser(prog="{package_name}")
-            parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
-            parser.add_argument("--input", required=True)
-            parser.add_argument("--output", required=True)
-            args = parser.parse_args()
-            payload = _load(args.input)
-            response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)
-            _write(args.output, response)
+            def main() -> None:
+                parser = argparse.ArgumentParser(prog="{package_name}")
+                parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])
+                parser.add_argument("--input", required=True)
+                parser.add_argument("--output", required=True)
+                args = parser.parse_args()
+                payload = _load(args.input)
+                response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)
+                _write(args.output, response)
 
-        if __name__ == "__main__":
-            main()
-        """
-    ).strip()
+            if __name__ == "__main__":
+                main()
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _crypto_one_loop() -> str:
-    return dedent(
-        """
-        # Crypto Trading One-Loop Spec
+    try:
+        return dedent(
+            """
+            # Crypto Trading One-Loop Spec
 
-        Keep one governing loop:
+            Keep one governing loop:
 
-        1. refresh doctrine, strategy, and benchmark state
-        2. decide whether the bottleneck is research, backtesting, contradiction testing, or paper-trade escalation
-        3. run the smallest justified lane
-        4. update memory and watchtower
+            1. refresh doctrine, strategy, and benchmark state
+            2. decide whether the bottleneck is research, backtesting, contradiction testing, or paper-trade escalation
+            3. run the smallest justified lane
+            4. update memory and watchtower
 
-        Rules:
+            Rules:
 
-        - treat `doctrine_id + strategy_id + market_regime` as the main candidate unit
-        - optimize for risk-adjusted profitability, not raw PnL
-        - use backtest as the inner benchmark lane
-        - use paper trade as a separate outer validation lane
-        - do not let parameter churn masquerade as new doctrine
-        """
-    ).strip()
+            - treat `doctrine_id + strategy_id + market_regime` as the main candidate unit
+            - optimize for risk-adjusted profitability, not raw PnL
+            - use backtest as the inner benchmark lane
+            - use paper trade as a separate outer validation lane
+            - do not let parameter churn masquerade as new doctrine
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _crypto_bridge() -> str:
-    return dedent(
-        """
-        # Crypto Trading Backtest Promotion Bridge
+    try:
+        return dedent(
+            """
+            # Crypto Trading Backtest Promotion Bridge
 
-        Backtesting is the benchmark lane for this chip.
-        Paper trade is outer validation.
+            Backtesting is the benchmark lane for this chip.
+            Paper trade is outer validation.
 
-        Required bridge fields:
+            Required bridge fields:
 
-        - `candidate_id`
-        - `doctrine_id`
-        - `strategy_id`
-        - `market_regime`
-        - `profitability_score`
-        - `sharpe_ratio`
-        - `max_drawdown`
-        - `win_rate`
-        - `paper_trade_readiness`
-        - `recommended_next_step`
-        - `primary_mechanism`
-        - `primary_boundary`
+            - `candidate_id`
+            - `doctrine_id`
+            - `strategy_id`
+            - `market_regime`
+            - `profitability_score`
+            - `sharpe_ratio`
+            - `max_drawdown`
+            - `win_rate`
+            - `paper_trade_readiness`
+            - `recommended_next_step`
+            - `primary_mechanism`
+            - `primary_boundary`
 
-        Ladder:
+            Ladder:
 
-        - `store_as_benchmark_evidence`
-        - `promote_as_doctrine_candidate`
-        - `promote_as_boundary_candidate`
-        - `queue_for_paper_trade`
+            - `store_as_benchmark_evidence`
+            - `promote_as_doctrine_candidate`
+            - `promote_as_boundary_candidate`
+            - `queue_for_paper_trade`
 
-        Anti-patterns:
+            Anti-patterns:
 
-        - do not rank combinations by PnL alone
-        - do not promote a strategy without a doctrine anchor
-        - do not send every profitable curve to paper trade
-        """
-    ).strip()
+            - do not rank combinations by PnL alone
+            - do not promote a strategy without a doctrine anchor
+            - do not send every profitable curve to paper trade
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _xcontent_manifest(chip_name: str, package_name: str) -> str:
-    payload = {
-        "schema_version": "spark-chip.v1",
-        "io_protocol": "spark-hook-io.v1",
-        "chip_name": chip_name,
-        "domain": "xcontent",
-        "version": "0.1.0",
-        "description": "X content research chip with engagement quality evaluation, Grok/xAI relevance scoring, and promotion-safe content doctrine.",
-        "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
-        "commands": {
-            "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
-            "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
-            "packets": ["python", "-m", f"{package_name}.cli", "packets"],
-            "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
-        },
-        "frontier": {
-            "enabled": True,
-            "model": "claude",
-            "web_search": True,
-            "allowed_mutations": {
-                "content_format": [
-                    "thread",
-                    "single_post",
-                    "quote_tweet",
-                    "poll",
-                ],
-                "hook_type": [
-                    "proof_founder",
-                    "contrarian_take",
-                    "question_hook",
-                    "data_insight",
-                ],
-                "audience_segment": [
-                    "founders",
-                    "operators",
-                    "developers",
-                    "traders",
-                ],
-                "quality_filter": [
-                    "proof_quality",
-                    "novelty_tension",
-                    "thread_depth",
-                ],
-                "distribution_mode": [
-                    "organic",
-                    "grok_optimized",
-                    "engagement_loop",
-                ],
-                "topic_tag": [
-                    "general",
-                ],
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        payload = {
+            "schema_version": "spark-chip.v1",
+            "io_protocol": "spark-hook-io.v1",
+            "chip_name": chip_name,
+            "domain": "xcontent",
+            "version": "0.1.0",
+            "description": "X content research chip with engagement quality evaluation, Grok/xAI relevance scoring, and promotion-safe content doctrine.",
+            "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
+            "commands": {
+                "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
+                "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
+                "packets": ["python", "-m", f"{package_name}.cli", "packets"],
+                "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
             },
-            "required_fields": ["content_format", "hook_type"],
-            "open_mutation_fields": ["topic_tag"],
-            "field_patterns": {"topic_tag": "^[a-z0-9_]{2,30}$"},
-        },
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
+            "frontier": {
+                "enabled": True,
+                "model": "claude",
+                "web_search": True,
+                "allowed_mutations": {
+                    "content_format": [
+                        "thread",
+                        "single_post",
+                        "quote_tweet",
+                        "poll",
+                    ],
+                    "hook_type": [
+                        "proof_founder",
+                        "contrarian_take",
+                        "question_hook",
+                        "data_insight",
+                    ],
+                    "audience_segment": [
+                        "founders",
+                        "operators",
+                        "developers",
+                        "traders",
+                    ],
+                    "quality_filter": [
+                        "proof_quality",
+                        "novelty_tension",
+                        "thread_depth",
+                    ],
+                    "distribution_mode": [
+                        "organic",
+                        "grok_optimized",
+                        "engagement_loop",
+                    ],
+                    "topic_tag": [
+                        "general",
+                    ],
+                },
+                "required_fields": ["content_format", "hook_type"],
+                "open_mutation_fields": ["topic_tag"],
+                "field_patterns": {"topic_tag": "^[a-z0-9_]{2,30}$"},
+            },
+        }
+        return json.dumps(payload, indent=2, sort_keys=True)
 
 
+
+    except Exception:
+        return ""
 def _xcontent_project(chip_name: str, package_name: str) -> str:
-    payload = {
-        "project_name": chip_name,
-        "project_root": ".",
-        "eval_metric": "engagement_quality_score",
-        "eval_goal": "maximize",
-        "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "xcontent-research.log"}},
-        "metrics": {
-            "engagement_quality_score": {"pattern": r"^engagement_quality_score:\s+([0-9.]+)$", "kind": "float"},
-            "useful_reach_score": {"pattern": r"^useful_reach_score:\s+([0-9.]+)$", "kind": "float"},
-            "grok_relevance_score": {"pattern": r"^grok_relevance_score:\s+([0-9.]+)$", "kind": "float"},
-            "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
-        },
-        "mutable_parameters": [],
-        "candidate_trials": [
-            {"candidate_id": "global-baseline", "candidate_summary": "Measure the generic X content baseline with no focused format or hook.", "hypothesis": "The baseline defines the floor before content format and hook refinement.", "mutations": {}},
-            {"candidate_id": "thread-proof-founder", "candidate_summary": "Thread format with proof-led founder hook.", "hypothesis": "Proof threads should outperform single posts on engagement quality because threads reward depth and X algo favors dwell time.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders"}},
-            {"candidate_id": "single-contrarian-operators", "candidate_summary": "Single post contrarian take aimed at operators.", "hypothesis": "Contrarian single posts create feed stops and quote-tweet loops that amplify reach among operators.", "mutations": {"content_format": "single_post", "hook_type": "contrarian_take", "audience_segment": "operators"}},
-            {"candidate_id": "thread-data-developers", "candidate_summary": "Data insight thread aimed at developers.", "hypothesis": "Developers engage deeply with data-backed threads and share them into technical communities.", "mutations": {"content_format": "thread", "hook_type": "data_insight", "audience_segment": "developers"}},
-            {"candidate_id": "quote-contrarian-traders", "candidate_summary": "Quote tweet contrarian take for trader audience.", "hypothesis": "Quote tweets with contrarian framing on trending trader topics should generate high-quality debate engagement.", "mutations": {"content_format": "quote_tweet", "hook_type": "contrarian_take", "audience_segment": "traders"}},
-            {"candidate_id": "poll-question-founders", "candidate_summary": "Poll with question hook for founders.", "hypothesis": "Polls with a strong question hook should drive reply depth and Grok surfacing via structured interaction data.", "mutations": {"content_format": "poll", "hook_type": "question_hook", "audience_segment": "founders"}},
-            {"candidate_id": "thread-proof-grok-optimized", "candidate_summary": "Proof thread with Grok-optimized distribution.", "hypothesis": "Grok-optimized threads with proof structure should score higher on grok_relevance and downstream discoverability.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "distribution_mode": "grok_optimized"}},
-            {"candidate_id": "thread-proof-proof-quality", "candidate_summary": "Proof thread with proof_quality filter applied.", "hypothesis": "Adding proof_quality filter to the strongest format+hook should push engagement quality past promotion threshold.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "quality_filter": "proof_quality"}},
-        ],
-        "trainers": [],
-        "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
-        "chip": {"path": ".", "manifest": "spark-chip.json"},
-        "memory": {"backend": "local"},
-        "self_edit": {
-            "command": [],
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        payload = {
+            "project_name": chip_name,
+            "project_root": ".",
+            "eval_metric": "engagement_quality_score",
+            "eval_goal": "maximize",
+            "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "xcontent-research.log"}},
+            "metrics": {
+                "engagement_quality_score": {"pattern": r"^engagement_quality_score:\s+([0-9.]+)$", "kind": "float"},
+                "useful_reach_score": {"pattern": r"^useful_reach_score:\s+([0-9.]+)$", "kind": "float"},
+                "grok_relevance_score": {"pattern": r"^grok_relevance_score:\s+([0-9.]+)$", "kind": "float"},
+                "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
+            },
+            "mutable_parameters": [],
+            "candidate_trials": [
+                {"candidate_id": "global-baseline", "candidate_summary": "Measure the generic X content baseline with no focused format or hook.", "hypothesis": "The baseline defines the floor before content format and hook refinement.", "mutations": {}},
+                {"candidate_id": "thread-proof-founder", "candidate_summary": "Thread format with proof-led founder hook.", "hypothesis": "Proof threads should outperform single posts on engagement quality because threads reward depth and X algo favors dwell time.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders"}},
+                {"candidate_id": "single-contrarian-operators", "candidate_summary": "Single post contrarian take aimed at operators.", "hypothesis": "Contrarian single posts create feed stops and quote-tweet loops that amplify reach among operators.", "mutations": {"content_format": "single_post", "hook_type": "contrarian_take", "audience_segment": "operators"}},
+                {"candidate_id": "thread-data-developers", "candidate_summary": "Data insight thread aimed at developers.", "hypothesis": "Developers engage deeply with data-backed threads and share them into technical communities.", "mutations": {"content_format": "thread", "hook_type": "data_insight", "audience_segment": "developers"}},
+                {"candidate_id": "quote-contrarian-traders", "candidate_summary": "Quote tweet contrarian take for trader audience.", "hypothesis": "Quote tweets with contrarian framing on trending trader topics should generate high-quality debate engagement.", "mutations": {"content_format": "quote_tweet", "hook_type": "contrarian_take", "audience_segment": "traders"}},
+                {"candidate_id": "poll-question-founders", "candidate_summary": "Poll with question hook for founders.", "hypothesis": "Polls with a strong question hook should drive reply depth and Grok surfacing via structured interaction data.", "mutations": {"content_format": "poll", "hook_type": "question_hook", "audience_segment": "founders"}},
+                {"candidate_id": "thread-proof-grok-optimized", "candidate_summary": "Proof thread with Grok-optimized distribution.", "hypothesis": "Grok-optimized threads with proof structure should score higher on grok_relevance and downstream discoverability.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "distribution_mode": "grok_optimized"}},
+                {"candidate_id": "thread-proof-proof-quality", "candidate_summary": "Proof thread with proof_quality filter applied.", "hypothesis": "Adding proof_quality filter to the strongest format+hook should push engagement quality past promotion threshold.", "mutations": {"content_format": "thread", "hook_type": "proof_founder", "audience_segment": "founders", "quality_filter": "proof_quality"}},
+            ],
+            "trainers": [],
             "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
-            "prompt_preamble": "Keep the chip evidence-first and promotion-safe. Do not let vanity metrics masquerade as engagement quality. Use X API analytics and Grok relevance as grounding surfaces.",
-            "git_mode": "manual",
-            "auto_push": False,
-            "branch_prefix": "self-edit/",
-            "main_branch": "main",
-            "commit_message_template": "Apply self-edit proposal {proposal_id}",
-        },
-        "guardrails": {
-            "max_loop_iterations": 8,
-            "consecutive_discard_limit": 3,
-            "require_clean_git_for_self_edit": True,
-            "require_human_approval_for_self_edit": True,
-            "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
-        },
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
+            "chip": {"path": ".", "manifest": "spark-chip.json"},
+            "memory": {"backend": "local"},
+            "self_edit": {
+                "command": [],
+                "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+                "prompt_preamble": "Keep the chip evidence-first and promotion-safe. Do not let vanity metrics masquerade as engagement quality. Use X API analytics and Grok relevance as grounding surfaces.",
+                "git_mode": "manual",
+                "auto_push": False,
+                "branch_prefix": "self-edit/",
+                "main_branch": "main",
+                "commit_message_template": "Apply self-edit proposal {proposal_id}",
+            },
+            "guardrails": {
+                "max_loop_iterations": 8,
+                "consecutive_discard_limit": 3,
+                "require_clean_git_for_self_edit": True,
+                "require_human_approval_for_self_edit": True,
+                "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
+            },
+        }
+        return json.dumps(payload, indent=2, sort_keys=True)
 
 
+
+    except Exception:
+        return ""
 def _xcontent_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
     return dedent(
         f"""

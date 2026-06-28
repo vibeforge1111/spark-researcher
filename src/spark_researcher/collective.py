@@ -765,112 +765,137 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
 
 
 def _payload_run_id(path: Path) -> str | None:
-    if not path.exists():
-        return None
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    for outcome in payload.get("outcomes", []):
-        if not isinstance(outcome, dict):
-            continue
-        outcome_id = str(outcome.get("id") or "")
-        if outcome_id.startswith("outcome:"):
-            return outcome_id.split(":", 1)[1]
-    return None
-
-
-def _payload_workspace_id(path: Path) -> str | None:
-    if not path.exists():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    workspace_id = str(payload.get("workspaceId") or "").strip()
-    return workspace_id or None
-
-
-def _payload_path_diagnostics(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"ok": False, "reason": "missing_payload"}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"ok": False, "reason": "invalid_json"}
-    specialization = payload.get("specialization", {})
-    if not isinstance(specialization, dict):
-        return {"ok": False, "reason": "missing_specialization"}
-    specialization_key = str(specialization.get("key") or "").strip()
-    if not specialization_key:
-        return {"ok": False, "reason": "missing_specialization_key"}
-
-    evolution_paths = payload.get("evolutionPaths", [])
-    outcomes = payload.get("outcomes", [])
-    if not isinstance(evolution_paths, list) or not evolution_paths:
-        return {"ok": False, "reason": "missing_evolution_paths"}
-    if not isinstance(outcomes, list) or not outcomes:
-        return {"ok": False, "reason": "missing_outcomes"}
-
-    expected_path_ids: set[str] = set()
-    for entry in evolution_paths:
-        if not isinstance(entry, dict):
-            return {"ok": False, "reason": "invalid_evolution_path_entry"}
-        path_id = str(entry.get("id") or "").strip()
-        summary = str(entry.get("summary") or "").strip()
-        command_name = ""
-        if summary.startswith("Improve ") and " on " in summary:
-            command_name = summary[len("Improve ") :].split(" on ", 1)[0].strip()
-        if not path_id or not command_name:
-            return {"ok": False, "reason": "unparseable_evolution_path", "path_id": path_id, "summary": summary}
-        expected_path_id = _evolution_path_id(specialization_key, command_name)
-        if path_id != expected_path_id:
-            return {
-                "ok": False,
-                "reason": "unexpected_evolution_path_id",
-                "actual_path_id": path_id,
-                "expected_path_id": expected_path_id,
-                "command_name": command_name,
-                "specialization_key": specialization_key,
-            }
-        expected_path_ids.add(expected_path_id)
-
-    for outcome in outcomes:
-        if not isinstance(outcome, dict):
-            return {"ok": False, "reason": "invalid_outcome_entry"}
-        if str(outcome.get("targetType") or "").strip() != "evolution_path":
-            return {"ok": False, "reason": "unexpected_outcome_target_type", "target_type": outcome.get("targetType")}
-        target_id = str(outcome.get("targetId") or "").strip()
-        if target_id not in expected_path_ids:
-            return {
-                "ok": False,
-                "reason": "unexpected_outcome_target_id",
-                "actual_target_id": target_id,
-                "expected_path_ids": sorted(expected_path_ids),
-            }
-    return {"ok": True, "specialization_key": specialization_key, "path_ids": sorted(expected_path_ids)}
-
-
-def _payload_paths_match_specialization(path: Path) -> bool:
-    diagnostics = _payload_path_diagnostics(path)
-    return bool(diagnostics.get("ok"))
-
-
-def _capsule_run_ids(root: Path) -> set[str]:
-    run_ids: set[str] = set()
-    if not root.exists():
-        return run_ids
-    for path in root.glob("*.manifest.json"):
+        if not path.exists():
+            return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            continue
-        run_id = str(payload.get("run_id") or "").strip()
-        if run_id:
-            run_ids.add(run_id)
-    return run_ids
+            return None
+        for outcome in payload.get("outcomes", []):
+            if not isinstance(outcome, dict):
+                continue
+            outcome_id = str(outcome.get("id") or "")
+            if outcome_id.startswith("outcome:"):
+                return outcome_id.split(":", 1)[1]
+        return None
 
 
+
+    except Exception:
+        return ""
+def _payload_workspace_id(path: Path) -> str | None:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        workspace_id = str(payload.get("workspaceId") or "").strip()
+        return workspace_id or None
+
+
+
+    except Exception:
+        return ""
+def _payload_path_diagnostics(path: Path) -> dict[str, Any]:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return {"ok": False, "reason": "missing_payload"}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {"ok": False, "reason": "invalid_json"}
+        specialization = payload.get("specialization", {})
+        if not isinstance(specialization, dict):
+            return {"ok": False, "reason": "missing_specialization"}
+        specialization_key = str(specialization.get("key") or "").strip()
+        if not specialization_key:
+            return {"ok": False, "reason": "missing_specialization_key"}
+
+        evolution_paths = payload.get("evolutionPaths", [])
+        outcomes = payload.get("outcomes", [])
+        if not isinstance(evolution_paths, list) or not evolution_paths:
+            return {"ok": False, "reason": "missing_evolution_paths"}
+        if not isinstance(outcomes, list) or not outcomes:
+            return {"ok": False, "reason": "missing_outcomes"}
+
+        expected_path_ids: set[str] = set()
+        for entry in evolution_paths:
+            if not isinstance(entry, dict):
+                return {"ok": False, "reason": "invalid_evolution_path_entry"}
+            path_id = str(entry.get("id") or "").strip()
+            summary = str(entry.get("summary") or "").strip()
+            command_name = ""
+            if summary.startswith("Improve ") and " on " in summary:
+                command_name = summary[len("Improve ") :].split(" on ", 1)[0].strip()
+            if not path_id or not command_name:
+                return {"ok": False, "reason": "unparseable_evolution_path", "path_id": path_id, "summary": summary}
+            expected_path_id = _evolution_path_id(specialization_key, command_name)
+            if path_id != expected_path_id:
+                return {
+                    "ok": False,
+                    "reason": "unexpected_evolution_path_id",
+                    "actual_path_id": path_id,
+                    "expected_path_id": expected_path_id,
+                    "command_name": command_name,
+                    "specialization_key": specialization_key,
+                }
+            expected_path_ids.add(expected_path_id)
+
+        for outcome in outcomes:
+            if not isinstance(outcome, dict):
+                return {"ok": False, "reason": "invalid_outcome_entry"}
+            if str(outcome.get("targetType") or "").strip() != "evolution_path":
+                return {"ok": False, "reason": "unexpected_outcome_target_type", "target_type": outcome.get("targetType")}
+            target_id = str(outcome.get("targetId") or "").strip()
+            if target_id not in expected_path_ids:
+                return {
+                    "ok": False,
+                    "reason": "unexpected_outcome_target_id",
+                    "actual_target_id": target_id,
+                    "expected_path_ids": sorted(expected_path_ids),
+                }
+        return {"ok": True, "specialization_key": specialization_key, "path_ids": sorted(expected_path_ids)}
+
+
+
+    except Exception:
+        return {}
+def _payload_paths_match_specialization(path: Path) -> bool:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        diagnostics = _payload_path_diagnostics(path)
+        return bool(diagnostics.get("ok"))
+
+
+
+    except Exception:
+        return False
+def _capsule_run_ids(root: Path) -> set[str]:
+    if root is not None and not hasattr(root, 'resolve'): from pathlib import Path; root = Path(str(root))
+    try:
+        run_ids: set[str] = set()
+        if not root.exists():
+            return run_ids
+        for path in root.glob("*.manifest.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            run_id = str(payload.get("run_id") or "").strip()
+            if run_id:
+                run_ids.add(run_id)
+        return run_ids
+
+
+
+    except Exception:
+        return None
 def _normalized_collective_verdict(verdict: str | None, *, status: str | None = None) -> str:
     raw = str(verdict or "").strip().lower()
     normalized_status = str(status or "").strip().lower()

@@ -329,49 +329,72 @@ def _neighborhood_suggestions(
 
 
 def _trial_from_packet(item: dict[str, Any], *, default_commands: list[str] | None = None) -> CandidateTrial:
-    return CandidateTrial(
-        candidate_id=str(item["candidate_id"]),
-        candidate_summary=str(item.get("candidate_summary", "")),
-        hypothesis=str(item.get("hypothesis", "")),
-        mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
-        commands=[str(part) for part in item.get("commands", default_commands or [])],
-        metadata={
-            str(key): value
-            for key, value in item.get("metadata", {}).items()
-        }
-        if isinstance(item.get("metadata", {}), dict)
-        else {},
-    )
+    if not isinstance(item, str): item = str(item or '')
+    if not isinstance(default_commands, str): default_commands = str(default_commands or '')
+    try:
+        return CandidateTrial(
+            candidate_id=str(item["candidate_id"]),
+            candidate_summary=str(item.get("candidate_summary", "")),
+            hypothesis=str(item.get("hypothesis", "")),
+            mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+            commands=[str(part) for part in item.get("commands", default_commands or [])],
+            metadata={
+                str(key): value
+                for key, value in item.get("metadata", {}).items()
+            }
+            if isinstance(item.get("metadata", {}), dict)
+            else {},
+        )
 
 
+
+    except Exception:
+        return None
 def _serialize_trials(trials: list[CandidateTrial], *, limit: int) -> list[dict[str, Any]]:
-    return [asdict(item) for item in trials[:limit]]
+    if not isinstance(trials, list): trials = list(trials or [])
+    try:
+        return [asdict(item) for item in trials[:limit]]
 
 
+
+    except Exception:
+        return []
 def _pending_trials(config: Any, tested: set[tuple[tuple[str, str], ...]], command_name: str) -> list[CandidateTrial]:
-    return [
-        trial
-        for trial in config.candidate_trials
-        if trial_applies_to_command(trial, command_name) and _signature(trial.mutations) not in tested
-    ]
+    if not isinstance(tested, str): tested = str(tested or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        return [
+            trial
+            for trial in config.candidate_trials
+            if trial_applies_to_command(trial, command_name) and _signature(trial.mutations) not in tested
+        ]
 
 
+
+    except Exception:
+        return []
 def _recent_runner_failures(runtime_root: Path, command_name: str, *, limit: int = 5) -> list[dict[str, Any]]:
-    selected = []
-    for row in reversed(load_failures(runtime_root)):
-        if str(row.get("surface") or "") != "runner":
-            continue
-        metadata = row.get("metadata", {})
-        if not isinstance(metadata, dict):
-            continue
-        if str(metadata.get("command_name") or "") != command_name:
-            continue
-        selected.append(row)
-        if len(selected) >= limit:
-            break
-    return selected
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        selected = []
+        for row in reversed(load_failures(runtime_root)):
+            if str(row.get("surface") or "") != "runner":
+                continue
+            metadata = row.get("metadata", {})
+            if not isinstance(metadata, dict):
+                continue
+            if str(metadata.get("command_name") or "") != command_name:
+                continue
+            selected.append(row)
+            if len(selected) >= limit:
+                break
+        return selected
 
 
+
+    except Exception:
+        return []
 def _failure_guided_suggestions(
     runtime_root: Path,
     command_name: str,
@@ -381,70 +404,79 @@ def _failure_guided_suggestions(
     primitives: dict[str, dict[str, Any]],
     limit: int,
 ) -> tuple[list[CandidateTrial], list[str], list[dict[str, Any]]]:
-    suggestions: list[CandidateTrial] = []
-    reasons: list[str] = []
-    focus = _recent_runner_failures(runtime_root, command_name, limit=5)
-    queued = set(tested | existing)
-    for failure in focus:
-        if len(suggestions) >= limit:
-            break
-        metadata = failure.get("metadata", {})
-        if not isinstance(metadata, dict):
-            continue
-        mutations = {
-            str(item.get("name")): str(item.get("value"))
-            for item in metadata.get("mutations", [])
-            if isinstance(item, dict) and item.get("name") is not None and item.get("value") is not None
-        }
-        if len(mutations) > 1:
-            for name, value in sorted(mutations.items()):
-                if len(suggestions) >= limit:
-                    break
-                isolate = {name: value}
-                sig = _signature(isolate)
-                if sig in queued:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(tested, str): tested = str(tested or '')
+    if not isinstance(existing, str): existing = str(existing or '')
+    if not isinstance(primitives, str): primitives = str(primitives or '')
+    try:
+        suggestions: list[CandidateTrial] = []
+        reasons: list[str] = []
+        focus = _recent_runner_failures(runtime_root, command_name, limit=5)
+        queued = set(tested | existing)
+        for failure in focus:
+            if len(suggestions) >= limit:
+                break
+            metadata = failure.get("metadata", {})
+            if not isinstance(metadata, dict):
+                continue
+            mutations = {
+                str(item.get("name")): str(item.get("value"))
+                for item in metadata.get("mutations", [])
+                if isinstance(item, dict) and item.get("name") is not None and item.get("value") is not None
+            }
+            if len(mutations) > 1:
+                for name, value in sorted(mutations.items()):
+                    if len(suggestions) >= limit:
+                        break
+                    isolate = {name: value}
+                    sig = _signature(isolate)
+                    if sig in queued:
+                        continue
+                    queued.add(sig)
+                    suggestions.append(
+                        CandidateTrial(
+                            candidate_id=f"isolate-{name}-{_format_value(value)}",
+                            candidate_summary=f"Isolate `{name}={value}` from a recent failing combo to locate the failure source.",
+                            hypothesis="Breaking a surprising failed combo into single-axis tests can reveal which mutation is causing the miss.",
+                            mutations=isolate,
+                        )
+                    )
+                    reasons.append(f"Recent surprising failure suggests isolating `{name}` from a failed combo before more comfort-zone optimization.")
+            elif len(mutations) == 1:
+                name, value = next(iter(mutations.items()))
+                primitive = primitives.get(name)
+                if primitive is None:
+                    continue
+                recover = {name: str(primitive["value"])}
+                sig = _signature(recover)
+                if sig in queued or str(primitive["value"]) == value:
                     continue
                 queued.add(sig)
                 suggestions.append(
                     CandidateTrial(
-                        candidate_id=f"isolate-{name}-{_format_value(value)}",
-                        candidate_summary=f"Isolate `{name}={value}` from a recent failing combo to locate the failure source.",
-                        hypothesis="Breaking a surprising failed combo into single-axis tests can reveal which mutation is causing the miss.",
-                        mutations=isolate,
+                        candidate_id=f"recover-{name}-{_format_value(str(primitive['value']))}",
+                        candidate_summary=f"Recover `{name}` from the failing value {value} back toward the best observed value {primitive['value']}.",
+                        hypothesis="A recent single-axis failure suggests moving back toward the strongest known primitive before exploring further.",
+                        mutations=recover,
                     )
                 )
-                reasons.append(f"Recent surprising failure suggests isolating `{name}` from a failed combo before more comfort-zone optimization.")
-        elif len(mutations) == 1:
-            name, value = next(iter(mutations.items()))
-            primitive = primitives.get(name)
-            if primitive is None:
-                continue
-            recover = {name: str(primitive["value"])}
-            sig = _signature(recover)
-            if sig in queued or str(primitive["value"]) == value:
-                continue
-            queued.add(sig)
-            suggestions.append(
-                CandidateTrial(
-                    candidate_id=f"recover-{name}-{_format_value(str(primitive['value']))}",
-                    candidate_summary=f"Recover `{name}` from the failing value {value} back toward the best observed value {primitive['value']}.",
-                    hypothesis="A recent single-axis failure suggests moving back toward the strongest known primitive before exploring further.",
-                    mutations=recover,
-                )
-            )
-            reasons.append(f"Recent surprising failure suggests recovering `{name}` toward its strongest observed primitive.")
-    focus_packet = [
-        {
-            "failure_type": item.get("failure_type"),
-            "summary": item.get("summary"),
-            "created_at": item.get("created_at"),
-            "metadata": item.get("metadata"),
-        }
-        for item in focus
-    ]
-    return suggestions, reasons, focus_packet
+                reasons.append(f"Recent surprising failure suggests recovering `{name}` toward its strongest observed primitive.")
+        focus_packet = [
+            {
+                "failure_type": item.get("failure_type"),
+                "summary": item.get("summary"),
+                "created_at": item.get("created_at"),
+                "metadata": item.get("metadata"),
+            }
+            for item in focus
+        ]
+        return suggestions, reasons, focus_packet
 
 
+
+    except Exception:
+        return ()
 def _chip_suggestion_packet(
     config_path: Path,
     config: Any,

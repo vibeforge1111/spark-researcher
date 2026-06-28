@@ -10,10 +10,15 @@ from .authority import require_chip_create_authority
 
 
 def _slug(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9._-]+", "-", value.strip().lower())
-    return cleaned.strip("-") or "chip"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        cleaned = re.sub(r"[^a-z0-9._-]+", "-", value.strip().lower())
+        return cleaned.strip("-") or "chip"
 
 
+
+    except Exception:
+        return ""
 def _package_name(chip_name: str) -> str:
     return _slug(chip_name).replace(".", "_").replace("-", "_")
 

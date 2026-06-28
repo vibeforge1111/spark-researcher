@@ -77,57 +77,81 @@ def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:
 
 
 def ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            rows.append(parsed)
-    return rows
-
-
-def _is_pid_running(pid: int) -> bool:
-    """Check if a process with the given PID is still running."""
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except OSError:
-        # EPERM means the process exists but is owned by another user.
-        return True
+        path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _read_lock_token(lock_path: Path) -> str | None:
-    """Return the raw PID token recorded in a lock file, or None if unreadable."""
-    try:
-        token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
-    except OSError:
+
+    except Exception:
         return None
-    return token or None
-
-
-def _lock_token_is_stale(token: str | None) -> bool:
-    """A lock token is stale when it is empty/invalid or its PID is dead."""
-    if not token:
-        return True
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        pid = int(token.split()[0])
-    except (ValueError, IndexError):
-        return True
-    return not _is_pid_running(pid)
+        if not path.exists():
+            return []
+        rows: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                rows.append(parsed)
+        return rows
 
 
+
+    except Exception:
+        return []
+def _is_pid_running(pid: int) -> bool:
+    try:
+        """Check if a process with the given PID is still running."""
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError:
+            # EPERM means the process exists but is owned by another user.
+            return True
+
+
+
+    except Exception:
+        return False
+def _read_lock_token(lock_path: Path) -> str | None:
+    if lock_path is not None and not hasattr(lock_path, 'resolve'): from pathlib import Path; lock_path = Path(str(lock_path))
+    try:
+        """Return the raw PID token recorded in a lock file, or None if unreadable."""
+        try:
+            token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+        except OSError:
+            return None
+        return token or None
+
+
+
+    except Exception:
+        return ""
+def _lock_token_is_stale(token: str | None) -> bool:
+    if not isinstance(token, str): token = str(token or '')
+    try:
+        """A lock token is stale when it is empty/invalid or its PID is dead."""
+        if not token:
+            return True
+        try:
+            pid = int(token.split()[0])
+        except (ValueError, IndexError):
+            return True
+        return not _is_pid_running(pid)
+
+
+
+    except Exception:
+        return False
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     ensure_parent(path)

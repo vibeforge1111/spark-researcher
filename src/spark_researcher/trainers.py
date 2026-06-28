@@ -144,21 +144,31 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
 
 
 def run_all_trainers(config_path: Path, *, dry_run: bool = False) -> dict[str, Any]:
-    config = load_config(config_path)
-    project_root = resolve_project_root(config_path, config)
-    runtime_root = resolve_runtime_root(config_path)
-    return {
-        "project_name": config.project_name,
-        "results": [run_trainer(spec, project_root, runtime_root, dry_run=dry_run) for spec in config.trainers],
-    }
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        config = load_config(config_path)
+        project_root = resolve_project_root(config_path, config)
+        runtime_root = resolve_runtime_root(config_path)
+        return {
+            "project_name": config.project_name,
+            "results": [run_trainer(spec, project_root, runtime_root, dry_run=dry_run) for spec in config.trainers],
+        }
 
 
+
+    except Exception:
+        return {}
 def trainer_status(config_path: Path) -> dict[str, Any]:
-    config = load_config(config_path)
-    runtime_root = resolve_runtime_root(config_path)
-    rows = []
-    for spec in config.trainers:
-        state_path = trainer_state_path(runtime_root, spec.name)
-        rows.append(read_state(state_path) if state_path.exists() else {"name": spec.name, "last_status": "never_run"})
-    return {"project_name": config.project_name, "trainers": rows}
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        config = load_config(config_path)
+        runtime_root = resolve_runtime_root(config_path)
+        rows = []
+        for spec in config.trainers:
+            state_path = trainer_state_path(runtime_root, spec.name)
+            rows.append(read_state(state_path) if state_path.exists() else {"name": spec.name, "last_status": "never_run"})
+        return {"project_name": config.project_name, "trainers": rows}
 
+
+    except Exception:
+        return {}

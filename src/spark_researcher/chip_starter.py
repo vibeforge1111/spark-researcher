@@ -199,229 +199,263 @@ def _generic_project(chip_name: str, package_name: str, domain: str, metric_name
 
 
 def _generic_readme(chip_name: str, domain: str, chip_root: Path) -> str:
-    return dedent(
-        f"""
-        # {chip_name}
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        return dedent(
+            f"""
+            # {chip_name}
 
-        `{chip_name}` is a Spark domain chip scaffold for `{domain}`.
+            `{chip_name}` is a Spark domain chip scaffold for `{domain}`.
 
-        Design-system rule:
+            Design-system rule:
 
-        - Spark has one runtime chip contract in `docs/CHIPS.md`
-        - choose your chip design path from `docs/CHIP_SYSTEMS.md`
-        - use `v1` for lighter exploration
-        - use `v2` for stricter, more durable standardization
+            - Spark has one runtime chip contract in `docs/CHIPS.md`
+            - choose your chip design path from `docs/CHIP_SYSTEMS.md`
+            - use `v1` for lighter exploration
+            - use `v2` for stricter, more durable standardization
 
-        ## Quick Start
+            ## Quick Start
 
-        ```powershell
-        cd {chip_root}
-        python -m pip install -e .
-        python -m pip install -e ..\\spark-researcher
-        $env:PYTHONPATH='..\\spark-researcher\\src;src'
-        python -m spark_researcher.cli chips validate
-        python -m spark_researcher.cli autoloop --command research
-        ```
-        """
-    ).strip()
+            ```powershell
+            cd {chip_root}
+            python -m pip install -e .
+            python -m pip install -e ..\\spark-researcher
+            $env:PYTHONPATH='..\\spark-researcher\\src;src'
+            python -m spark_researcher.cli chips validate
+            python -m spark_researcher.cli autoloop --command research
+            ```
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _generic_cli(package_name: str, domain: str, metric_name: str, goal: str) -> str:
-    baseline = "0.40" if goal == "maximize" else "0.60"
-    improved = "0.62" if goal == "maximize" else "0.38"
-    return "\n".join(
-        [
-            "from __future__ import annotations",
-            "",
-            "import argparse",
-            "import json",
-            "from pathlib import Path",
-            "",
-            "def _load(path: str) -> dict:",
-            '    return json.loads(Path(path).read_text(encoding="utf-8-sig"))',
-            "",
-            "def _write(path: str, payload: dict) -> None:",
-            '    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")',
-            "",
-            "def _mutations(payload: dict) -> dict[str, str]:",
-            '    candidate = payload.get("candidate", {})',
-            '    raw = candidate.get("mutations", {}) if isinstance(candidate, dict) else {}',
-            "    return {str(key): str(value) for key, value in raw.items()}",
-            "",
-            "def evaluate(payload: dict) -> dict:",
-            "    focused = bool(_mutations(payload))",
-            f"    metric_value = {improved} if focused else {baseline}",
-            '    verdict_confidence = 0.84 if focused else 0.5',
-            "    stdout = \"\\n\".join([",
-            f'        "{metric_name}: " + str(metric_value),',
-            '        "verdict_confidence: " + str(verdict_confidence),',
-            f'        "summary: " + ("Focused {domain} candidate" if focused else "Global baseline"),',
-            "    ])",
-            "    return {",
-            '        "returncode": 0, "stdout": stdout, "stderr": "",',
-            f'        "metrics": {{"{metric_name}": metric_value, "verdict_confidence": verdict_confidence}},',
-            '        "result": {"claim": "Placeholder.", "verdict": "supports" if focused else "inconclusive", "mechanism": "Placeholder."},',
-            "    }",
-            "",
-            "def suggest(payload: dict) -> dict:",
-            f'    return {{"baseline_metric": None, "reasons": ["Probe the primary {domain} axis first."], "suggestions": [{{"candidate_id": "primary-axis", "candidate_summary": "Probe the primary {domain} axis.", "hypothesis": "A focused {domain} axis should beat the baseline.", "mutations": {{"{domain}_axis": "primary"}}}}]}}',
-            "",
-            "def packets(payload: dict) -> dict:",
-            f'    return {{"documents": [{{"kind": "{domain}_belief", "slug": "{domain}-placeholder", "title": "{domain.title()} Placeholder", "content": "# Placeholder"}}]}}',
-            "",
-            "def watchtower(payload: dict) -> dict:",
-            f'    return {{"pages": [{{"path": "07-Domains/{domain.title()}/Home.md", "content": "# {domain.title()} Domain"}}]}}',
-            "",
-            "def main() -> None:",
-            f'    parser = argparse.ArgumentParser(prog="{package_name}")',
-            '    parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])',
-            '    parser.add_argument("--input", required=True)',
-            '    parser.add_argument("--output", required=True)',
-            "    args = parser.parse_args()",
-            "    payload = _load(args.input)",
-            '    response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)',
-            "    _write(args.output, response)",
-            "",
-            'if __name__ == "__main__":',
-            "    main()",
-        ]
-    )
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    if not isinstance(metric_name, str): metric_name = str(metric_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        baseline = "0.40" if goal == "maximize" else "0.60"
+        improved = "0.62" if goal == "maximize" else "0.38"
+        return "\n".join(
+            [
+                "from __future__ import annotations",
+                "",
+                "import argparse",
+                "import json",
+                "from pathlib import Path",
+                "",
+                "def _load(path: str) -> dict:",
+                '    return json.loads(Path(path).read_text(encoding="utf-8-sig"))',
+                "",
+                "def _write(path: str, payload: dict) -> None:",
+                '    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")',
+                "",
+                "def _mutations(payload: dict) -> dict[str, str]:",
+                '    candidate = payload.get("candidate", {})',
+                '    raw = candidate.get("mutations", {}) if isinstance(candidate, dict) else {}',
+                "    return {str(key): str(value) for key, value in raw.items()}",
+                "",
+                "def evaluate(payload: dict) -> dict:",
+                "    focused = bool(_mutations(payload))",
+                f"    metric_value = {improved} if focused else {baseline}",
+                '    verdict_confidence = 0.84 if focused else 0.5',
+                "    stdout = \"\\n\".join([",
+                f'        "{metric_name}: " + str(metric_value),',
+                '        "verdict_confidence: " + str(verdict_confidence),',
+                f'        "summary: " + ("Focused {domain} candidate" if focused else "Global baseline"),',
+                "    ])",
+                "    return {",
+                '        "returncode": 0, "stdout": stdout, "stderr": "",',
+                f'        "metrics": {{"{metric_name}": metric_value, "verdict_confidence": verdict_confidence}},',
+                '        "result": {"claim": "Placeholder.", "verdict": "supports" if focused else "inconclusive", "mechanism": "Placeholder."},',
+                "    }",
+                "",
+                "def suggest(payload: dict) -> dict:",
+                f'    return {{"baseline_metric": None, "reasons": ["Probe the primary {domain} axis first."], "suggestions": [{{"candidate_id": "primary-axis", "candidate_summary": "Probe the primary {domain} axis.", "hypothesis": "A focused {domain} axis should beat the baseline.", "mutations": {{"{domain}_axis": "primary"}}}}]}}',
+                "",
+                "def packets(payload: dict) -> dict:",
+                f'    return {{"documents": [{{"kind": "{domain}_belief", "slug": "{domain}-placeholder", "title": "{domain.title()} Placeholder", "content": "# Placeholder"}}]}}',
+                "",
+                "def watchtower(payload: dict) -> dict:",
+                f'    return {{"pages": [{{"path": "07-Domains/{domain.title()}/Home.md", "content": "# {domain.title()} Domain"}}]}}',
+                "",
+                "def main() -> None:",
+                f'    parser = argparse.ArgumentParser(prog="{package_name}")',
+                '    parser.add_argument("hook", choices=["evaluate", "suggest", "packets", "watchtower"])',
+                '    parser.add_argument("--input", required=True)',
+                '    parser.add_argument("--output", required=True)',
+                "    args = parser.parse_args()",
+                "    payload = _load(args.input)",
+                '    response = evaluate(payload) if args.hook == "evaluate" else suggest(payload) if args.hook == "suggest" else packets(payload) if args.hook == "packets" else watchtower(payload)',
+                "    _write(args.output, response)",
+                "",
+                'if __name__ == "__main__":',
+                "    main()",
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def _crypto_manifest(chip_name: str, package_name: str) -> str:
-    payload = {
-        "schema_version": "spark-chip.v1",
-        "io_protocol": "spark-hook-io.v1",
-        "chip_name": chip_name,
-        "domain": "trading",
-        "version": "0.1.0",
-        "description": "Experimental crypto trading doctrine-and-strategy chip with backtest and paper-trade promotion lanes.",
-        "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
-        "commands": {
-            "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
-            "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
-            "packets": ["python", "-m", f"{package_name}.cli", "packets"],
-            "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
-        },
-        "frontier": {
-            "allowed_mutations": {
-                "doctrine_id": [
-                    "trend_regime_following",
-                    "mean_reversion_liquidity_reclaim",
-                    "breakout_volatility_expansion",
-                    "risk_first_asymmetric_capture",
-                ],
-                "strategy_id": [
-                    "ema_pullback_long",
-                    "range_reclaim_scalp",
-                    "breakout_open_interest_confirmation",
-                    "funding_mean_revert",
-                ],
-                "market_regime": ["trend", "range", "high_vol", "event_driven"],
-                "timeframe": ["15m", "1h", "4h"],
-                "venue": ["binance", "bybit", "hyperliquid"],
-                "paper_gate": ["strict", "balanced"],
-                "asset_universe": ["BTC,ETH", "BTC,ETH,SOL", "SOL"],
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        payload = {
+            "schema_version": "spark-chip.v1",
+            "io_protocol": "spark-hook-io.v1",
+            "chip_name": chip_name,
+            "domain": "trading",
+            "version": "0.1.0",
+            "description": "Experimental crypto trading doctrine-and-strategy chip with backtest and paper-trade promotion lanes.",
+            "capabilities": ["evaluate", "suggest", "packets", "watchtower"],
+            "commands": {
+                "evaluate": ["python", "-m", f"{package_name}.cli", "evaluate"],
+                "suggest": ["python", "-m", f"{package_name}.cli", "suggest"],
+                "packets": ["python", "-m", f"{package_name}.cli", "packets"],
+                "watchtower": ["python", "-m", f"{package_name}.cli", "watchtower"],
             },
-            "open_mutation_fields": ["asset_universe"],
-            "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
-        },
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
+            "frontier": {
+                "allowed_mutations": {
+                    "doctrine_id": [
+                        "trend_regime_following",
+                        "mean_reversion_liquidity_reclaim",
+                        "breakout_volatility_expansion",
+                        "risk_first_asymmetric_capture",
+                    ],
+                    "strategy_id": [
+                        "ema_pullback_long",
+                        "range_reclaim_scalp",
+                        "breakout_open_interest_confirmation",
+                        "funding_mean_revert",
+                    ],
+                    "market_regime": ["trend", "range", "high_vol", "event_driven"],
+                    "timeframe": ["15m", "1h", "4h"],
+                    "venue": ["binance", "bybit", "hyperliquid"],
+                    "paper_gate": ["strict", "balanced"],
+                    "asset_universe": ["BTC,ETH", "BTC,ETH,SOL", "SOL"],
+                },
+                "open_mutation_fields": ["asset_universe"],
+                "field_patterns": {"asset_universe": "^[A-Z0-9,_-]{3,40}$"},
+            },
+        }
+        return json.dumps(payload, indent=2, sort_keys=True)
 
 
+
+    except Exception:
+        return ""
 def _crypto_project(chip_name: str, package_name: str) -> str:
-    payload = {
-        "project_name": chip_name,
-        "project_root": ".",
-        "eval_metric": "profitability_score",
-        "eval_goal": "maximize",
-        "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "crypto-trading-research.log"}},
-        "metrics": {
-            "profitability_score": {"pattern": r"^profitability_score:\s+([0-9.]+)$", "kind": "float"},
-            "sharpe_ratio": {"pattern": r"^sharpe_ratio:\s+([0-9.]+)$", "kind": "float"},
-            "max_drawdown": {"pattern": r"^max_drawdown:\s+([0-9.]+)$", "kind": "float"},
-            "win_rate": {"pattern": r"^win_rate:\s+([0-9.]+)$", "kind": "float"},
-            "paper_trade_readiness": {"pattern": r"^paper_trade_readiness:\s+([0-9.]+)$", "kind": "float"},
-            "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
-        },
-        "mutable_parameters": [],
-        "candidate_trials": [
-            {"candidate_id": "global-baseline", "candidate_summary": "Benchmark passive BTC/ETH exposure.", "hypothesis": "The passive baseline defines the floor before doctrine-guided trading.", "mutations": {}},
-            {"candidate_id": "trend-ema-btceth-4h", "candidate_summary": "Trend doctrine with EMA pullback continuation on BTC and ETH 4h.", "hypothesis": "Trend doctrine paired with continuation entries should beat passive baseline.", "mutations": {"doctrine_id": "trend_regime_following", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}},
-            {"candidate_id": "range-reclaim-majors-1h", "candidate_summary": "Mean-reversion reclaim on majors 1h.", "hypothesis": "Range doctrine should monetize rotation with tighter drawdown.", "mutations": {"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "range_reclaim_scalp", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "BTC,ETH,SOL", "paper_gate": "balanced"}},
-            {"candidate_id": "breakout-oi-sol-15m", "candidate_summary": "Breakout doctrine with OI confirmation on SOL 15m.", "hypothesis": "Breakout doctrine should win in high-vol bursts if drawdown stays bounded.", "mutations": {"doctrine_id": "breakout_volatility_expansion", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "high_vol", "timeframe": "15m", "venue": "hyperliquid", "asset_universe": "SOL", "paper_gate": "strict"}},
-        ],
-        "trainers": [],
-        "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
-        "chip": {"path": ".", "manifest": "spark-chip.json"},
-        "memory": {"backend": "local"},
-        "self_edit": {
-            "command": [],
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    try:
+        payload = {
+            "project_name": chip_name,
+            "project_root": ".",
+            "eval_metric": "profitability_score",
+            "eval_goal": "maximize",
+            "commands": {"research": {"args": [], "cwd": ".", "kind": "chip-evaluate", "log_name": "crypto-trading-research.log"}},
+            "metrics": {
+                "profitability_score": {"pattern": r"^profitability_score:\s+([0-9.]+)$", "kind": "float"},
+                "sharpe_ratio": {"pattern": r"^sharpe_ratio:\s+([0-9.]+)$", "kind": "float"},
+                "max_drawdown": {"pattern": r"^max_drawdown:\s+([0-9.]+)$", "kind": "float"},
+                "win_rate": {"pattern": r"^win_rate:\s+([0-9.]+)$", "kind": "float"},
+                "paper_trade_readiness": {"pattern": r"^paper_trade_readiness:\s+([0-9.]+)$", "kind": "float"},
+                "verdict_confidence": {"pattern": r"^verdict_confidence:\s+([0-9.]+)$", "kind": "float"},
+            },
+            "mutable_parameters": [],
+            "candidate_trials": [
+                {"candidate_id": "global-baseline", "candidate_summary": "Benchmark passive BTC/ETH exposure.", "hypothesis": "The passive baseline defines the floor before doctrine-guided trading.", "mutations": {}},
+                {"candidate_id": "trend-ema-btceth-4h", "candidate_summary": "Trend doctrine with EMA pullback continuation on BTC and ETH 4h.", "hypothesis": "Trend doctrine paired with continuation entries should beat passive baseline.", "mutations": {"doctrine_id": "trend_regime_following", "strategy_id": "ema_pullback_long", "market_regime": "trend", "timeframe": "4h", "venue": "binance", "asset_universe": "BTC,ETH", "paper_gate": "strict"}},
+                {"candidate_id": "range-reclaim-majors-1h", "candidate_summary": "Mean-reversion reclaim on majors 1h.", "hypothesis": "Range doctrine should monetize rotation with tighter drawdown.", "mutations": {"doctrine_id": "mean_reversion_liquidity_reclaim", "strategy_id": "range_reclaim_scalp", "market_regime": "range", "timeframe": "1h", "venue": "bybit", "asset_universe": "BTC,ETH,SOL", "paper_gate": "balanced"}},
+                {"candidate_id": "breakout-oi-sol-15m", "candidate_summary": "Breakout doctrine with OI confirmation on SOL 15m.", "hypothesis": "Breakout doctrine should win in high-vol bursts if drawdown stays bounded.", "mutations": {"doctrine_id": "breakout_volatility_expansion", "strategy_id": "breakout_open_interest_confirmation", "market_regime": "high_vol", "timeframe": "15m", "venue": "hyperliquid", "asset_universe": "SOL", "paper_gate": "strict"}},
+            ],
+            "trainers": [],
             "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
-            "prompt_preamble": "Keep the chip benchmark-first, risk-aware, and legible. Do not let backtest residue become doctrine without bridge evidence.",
-            "git_mode": "manual",
-            "auto_push": False,
-            "branch_prefix": "self-edit/",
-            "main_branch": "main",
-            "commit_message_template": "Apply self-edit proposal {proposal_id}",
-        },
-        "guardrails": {
-            "max_loop_iterations": 8,
-            "consecutive_discard_limit": 3,
-            "require_clean_git_for_self_edit": True,
-            "require_human_approval_for_self_edit": True,
-            "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
-        },
-    }
-    return json.dumps(payload, indent=2, sort_keys=True)
+            "chip": {"path": ".", "manifest": "spark-chip.json"},
+            "memory": {"backend": "local"},
+            "self_edit": {
+                "command": [],
+                "mutable_targets": [f"src/{package_name}", "docs", "README.md", "spark-chip.json", "pyproject.toml"],
+                "prompt_preamble": "Keep the chip benchmark-first, risk-aware, and legible. Do not let backtest residue become doctrine without bridge evidence.",
+                "git_mode": "manual",
+                "auto_push": False,
+                "branch_prefix": "self-edit/",
+                "main_branch": "main",
+                "commit_message_template": "Apply self-edit proposal {proposal_id}",
+            },
+            "guardrails": {
+                "max_loop_iterations": 8,
+                "consecutive_discard_limit": 3,
+                "require_clean_git_for_self_edit": True,
+                "require_human_approval_for_self_edit": True,
+                "blocked_command_fragments": ["shutdown", "format", "reg delete", "Remove-Item", "del /f", "rm -rf"],
+            },
+        }
+        return json.dumps(payload, indent=2, sort_keys=True)
 
 
+
+    except Exception:
+        return ""
 def _crypto_readme(chip_name: str, package_name: str, chip_root: Path) -> str:
-    return dedent(
-        f"""
-        # {chip_name}
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    if not isinstance(package_name, str): package_name = str(package_name or '')
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        return dedent(
+            f"""
+            # {chip_name}
 
-        `{chip_name}` is an experimental private-repo-ready Spark domain chip scaffold for crypto trading.
+            `{chip_name}` is an experimental private-repo-ready Spark domain chip scaffold for crypto trading.
 
-        It mirrors the startup chip standards, but adds the missing trading-specific lanes:
+            It mirrors the startup chip standards, but adds the missing trading-specific lanes:
 
-        - doctrine plus strategy combinations instead of strategy-only probes
-        - backtesting as the inner benchmark surface
-        - explicit bridge semantics for promotion to paper trade
-        - benchmark evidence, doctrine candidates, boundary candidates, and exploratory probes kept separate
+            - doctrine plus strategy combinations instead of strategy-only probes
+            - backtesting as the inner benchmark surface
+            - explicit bridge semantics for promotion to paper trade
+            - benchmark evidence, doctrine candidates, boundary candidates, and exploratory probes kept separate
 
-        Design-system rule:
+            Design-system rule:
 
-        - choose your chip design path from `docs/CHIP_SYSTEMS.md`
-        - use `v2` if this chip is meant to become a durable trading standard
-        - keep the runtime contract grounded in `docs/CHIPS.md`
+            - choose your chip design path from `docs/CHIP_SYSTEMS.md`
+            - use `v2` if this chip is meant to become a durable trading standard
+            - keep the runtime contract grounded in `docs/CHIPS.md`
 
-        ## Quick Start
+            ## Quick Start
 
-        ```powershell
-        cd {chip_root}
-        python -m pip install -e .
-        python -m pip install -e ..\\spark-researcher
-        $env:PYTHONPATH='..\\spark-researcher\\src;src'
-        python -m spark_researcher.cli chips validate
-        python -m spark_researcher.cli autoloop --command research
-        ```
+            ```powershell
+            cd {chip_root}
+            python -m pip install -e .
+            python -m pip install -e ..\\spark-researcher
+            $env:PYTHONPATH='..\\spark-researcher\\src;src'
+            python -m spark_researcher.cli chips validate
+            python -m spark_researcher.cli autoloop --command research
+            ```
 
-        ## Next Steps
+            ## Next Steps
 
-        1. Replace the deterministic evaluator in `src/{package_name}/cli.py` with a real backtest runner.
-        2. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
-        3. Consume only `queue_for_paper_trade` candidates in the paper-trade lane.
+            1. Replace the deterministic evaluator in `src/{package_name}/cli.py` with a real backtest runner.
+            2. Write bridge artifacts under `artifacts/promotion/benchmark_grounded/`.
+            3. Consume only `queue_for_paper_trade` candidates in the paper-trade lane.
 
-        Included experimental docs:
+            Included experimental docs:
 
-        - `docs/CRYPTO_TRADING_ONE_LOOP_SPEC.md`
-        - `docs/CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md`
-        """
-    ).strip()
+            - `docs/CRYPTO_TRADING_ONE_LOOP_SPEC.md`
+            - `docs/CRYPTO_TRADING_BENCH_PROMOTION_BRIDGE.md`
+            """
+        ).strip()
 
 
+
+    except Exception:
+        return ""
 def _crypto_cli(package_name: str) -> str:
     return dedent(
         f"""

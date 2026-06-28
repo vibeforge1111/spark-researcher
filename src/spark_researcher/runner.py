@@ -266,33 +266,44 @@ def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict[str, str]) -> list[dict[str, str]]:
-    applied: list[dict[str, str]] = []
-    lookup = mutation_lookup(config)
-    for name, value in mutations.items():
-        if name not in lookup:
-            known = ", ".join(sorted(lookup))
-            if known:
-                raise KeyError(f"Unknown mutable parameter: {name}. Known mutable parameters: {known}.")
-            raise KeyError(
-                f"Unknown mutable parameter: {name}. "
-                "No mutable parameters are defined; add entries under `mutable_parameters` in the project config."
-            )
-        spec = lookup[name]
-        target_path = (workspace_root / spec.file).resolve()
-        text = target_path.read_text(encoding="utf-8-sig")
-        replacement = spec.template.format(value=value)
-        updated, count = re.subn(spec.pattern, replacement, text, count=1)
-        if count != 1:
-            raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
-        target_path.write_text(updated, encoding="utf-8")
-        applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root))})
-    return applied
+    if workspace_root is not None and not hasattr(workspace_root, 'resolve'): from pathlib import Path; workspace_root = Path(str(workspace_root))
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        applied: list[dict[str, str]] = []
+        lookup = mutation_lookup(config)
+        for name, value in mutations.items():
+            if name not in lookup:
+                known = ", ".join(sorted(lookup))
+                if known:
+                    raise KeyError(f"Unknown mutable parameter: {name}. Known mutable parameters: {known}.")
+                raise KeyError(
+                    f"Unknown mutable parameter: {name}. "
+                    "No mutable parameters are defined; add entries under `mutable_parameters` in the project config."
+                )
+            spec = lookup[name]
+            target_path = (workspace_root / spec.file).resolve()
+            text = target_path.read_text(encoding="utf-8-sig")
+            replacement = spec.template.format(value=value)
+            updated, count = re.subn(spec.pattern, replacement, text, count=1)
+            if count != 1:
+                raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
+            target_path.write_text(updated, encoding="utf-8")
+            applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root))})
+        return applied
 
 
+
+    except Exception:
+        return []
 def _virtual_mutations(mutations: dict[str, str]) -> list[dict[str, str]]:
-    return [{"name": name, "value": value, "file": "<chip>"} for name, value in sorted(mutations.items())]
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        return [{"name": name, "value": value, "file": "<chip>"} for name, value in sorted(mutations.items())]
 
 
+
+    except Exception:
+        return []
 def run_chip_evaluate(
     config_path: Path,
     command_name: str,
@@ -304,80 +315,103 @@ def run_chip_evaluate(
     *,
     dry_run: bool = False,
 ) -> tuple[CommandResult, dict[str, Any], list[dict[str, str]], dict[str, Any]]:
-    ensure_parent(log_path)
-    mutations = dict(trial.mutations if trial else {})
-    applied_mutations = _virtual_mutations(mutations)
-    payload = {
-        "project_name": config.project_name,
-        "command_name": command_name,
-        "command_kind": command_spec.kind,
-        "command_args": list(command_spec.args),
-        "workspace_root": str(workspace_root),
-        "candidate": {
-            "candidate_id": trial.candidate_id if trial else "baseline",
-            "candidate_summary": trial.candidate_summary if trial else "",
-            "hypothesis": trial.hypothesis if trial else "",
-            "mutations": mutations,
-        },
-        "metrics": {name: {"kind": spec.kind, "pattern": spec.pattern} for name, spec in config.metrics.items()},
-        "eval_metric": config.eval_metric,
-        "eval_goal": config.eval_goal,
-        "intent": intent_policy(config),
-    }
-    response = invoke_chip_hook(config_path, "evaluate", payload, config=config, dry_run=dry_run)
-    stdout = str(response.get("stdout", ""))
-    stderr = str(response.get("stderr", ""))
-    log_lines = [stdout]
-    if stderr:
-        log_lines.extend(["[stderr]", stderr])
-    if response.get("metrics"):
-        log_lines.extend(["[metrics]", json.dumps(response["metrics"], indent=2, sort_keys=True)])
-    log_path.write_text("\n".join(item for item in log_lines if item).rstrip() + "\n", encoding="utf-8")
-    command_result = CommandResult(
-        returncode=int(response.get("returncode", 0)),
-        stdout=stdout,
-        stderr=stderr,
-        command=["<chip:evaluate>"],
-        cwd=str(workspace_root),
-    )
-    metrics = response.get("metrics", {})
-    metrics = metrics if isinstance(metrics, dict) else {}
-    chip_result = response.get("result", {})
-    chip_result = chip_result if isinstance(chip_result, dict) else {}
-    return command_result, {str(key): value for key, value in metrics.items()}, applied_mutations, chip_result
-
-
-def best_metric(runtime_root: Path, command_name: str, goal: str, *, comparison_class: str | None = None) -> float | None:
-    values = [
-        row.get("metric_value")
-        for row in read_jsonl(ledger_path(runtime_root))
-        if row.get("command_name") == command_name
-        and row.get("status") == "ok"
-        and isinstance(row.get("metric_value"), (int, float))
-        and (
-            comparison_class is None
-            or str((row.get("chip_result", {}) if isinstance(row.get("chip_result", {}), dict) else {}).get("comparison_class", "")) == comparison_class
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if workspace_root is not None and not hasattr(workspace_root, 'resolve'): from pathlib import Path; workspace_root = Path(str(workspace_root))
+    if log_path is not None and not hasattr(log_path, 'resolve'): from pathlib import Path; log_path = Path(str(log_path))
+    try:
+        ensure_parent(log_path)
+        mutations = dict(trial.mutations if trial else {})
+        applied_mutations = _virtual_mutations(mutations)
+        payload = {
+            "project_name": config.project_name,
+            "command_name": command_name,
+            "command_kind": command_spec.kind,
+            "command_args": list(command_spec.args),
+            "workspace_root": str(workspace_root),
+            "candidate": {
+                "candidate_id": trial.candidate_id if trial else "baseline",
+                "candidate_summary": trial.candidate_summary if trial else "",
+                "hypothesis": trial.hypothesis if trial else "",
+                "mutations": mutations,
+            },
+            "metrics": {name: {"kind": spec.kind, "pattern": spec.pattern} for name, spec in config.metrics.items()},
+            "eval_metric": config.eval_metric,
+            "eval_goal": config.eval_goal,
+            "intent": intent_policy(config),
+        }
+        response = invoke_chip_hook(config_path, "evaluate", payload, config=config, dry_run=dry_run)
+        stdout = str(response.get("stdout", ""))
+        stderr = str(response.get("stderr", ""))
+        log_lines = [stdout]
+        if stderr:
+            log_lines.extend(["[stderr]", stderr])
+        if response.get("metrics"):
+            log_lines.extend(["[metrics]", json.dumps(response["metrics"], indent=2, sort_keys=True)])
+        log_path.write_text("\n".join(item for item in log_lines if item).rstrip() + "\n", encoding="utf-8")
+        command_result = CommandResult(
+            returncode=int(response.get("returncode", 0)),
+            stdout=stdout,
+            stderr=stderr,
+            command=["<chip:evaluate>"],
+            cwd=str(workspace_root),
         )
-    ]
-    if not values:
+        metrics = response.get("metrics", {})
+        metrics = metrics if isinstance(metrics, dict) else {}
+        chip_result = response.get("result", {})
+        chip_result = chip_result if isinstance(chip_result, dict) else {}
+        return command_result, {str(key): value for key, value in metrics.items()}, applied_mutations, chip_result
+
+
+
+    except Exception:
+        return ()
+def best_metric(runtime_root: Path, command_name: str, goal: str, *, comparison_class: str | None = None) -> float | None:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if not isinstance(comparison_class, str): comparison_class = str(comparison_class or '')
+    try:
+        values = [
+            row.get("metric_value")
+            for row in read_jsonl(ledger_path(runtime_root))
+            if row.get("command_name") == command_name
+            and row.get("status") == "ok"
+            and isinstance(row.get("metric_value"), (int, float))
+            and (
+                comparison_class is None
+                or str((row.get("chip_result", {}) if isinstance(row.get("chip_result", {}), dict) else {}).get("comparison_class", "")) == comparison_class
+            )
+        ]
+        if not values:
+            return None
+        return max(values) if goal == "maximize" else min(values)
+
+
+
+    except Exception:
         return None
-    return max(values) if goal == "maximize" else min(values)
-
-
 def baseline_metric(runtime_root: Path, command_name: str, goal: str) -> float | None:
-    values = [
-        float(row["metric_value"])
-        for row in read_jsonl(ledger_path(runtime_root))
-        if row.get("command_name") == command_name
-        and row.get("status") == "ok"
-        and isinstance(row.get("metric_value"), (int, float))
-        and not row.get("applied_mutations")
-    ]
-    if not values:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        values = [
+            float(row["metric_value"])
+            for row in read_jsonl(ledger_path(runtime_root))
+            if row.get("command_name") == command_name
+            and row.get("status") == "ok"
+            and isinstance(row.get("metric_value"), (int, float))
+            and not row.get("applied_mutations")
+        ]
+        if not values:
+            return None
+        return max(values) if goal == "maximize" else min(values)
+
+
+
+    except Exception:
         return None
-    return max(values) if goal == "maximize" else min(values)
-
-
 def metric_verdict(metric_value: float | None, baseline_value: float | None, goal: str, tolerance: float = 0.0) -> str:
     if metric_value is None:
         return "unknown"

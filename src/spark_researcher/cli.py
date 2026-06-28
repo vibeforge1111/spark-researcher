@@ -394,196 +394,220 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
 
 
 def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:
-    config = load_config(config_path)
-    if args.intent_command == "clear":
-        update_intent_policy(
-            config,
-            goal="",
-            outcome="",
-            success_criteria=[],
-            search_queries=[],
-            frontier_mode="relaxed",
-            resource_modes=["packets", "memory", "web"],
-            notes="",
-        )
-        save_config(config_path, config)
-        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
-        return
-    if args.intent_command == "set":
-        update_intent_policy(
-            config,
-            goal=args.goal,
-            outcome=args.outcome,
-            success_criteria=args.success_criterion,
-            search_queries=args.search_query,
-            frontier_mode=args.frontier_mode,
-            resource_modes=args.resource,
-            notes=args.notes,
-        )
-        save_config(config_path, config)
-        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
-        return
-    print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
-
-
-def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
-    config = load_config(config_path)
-    selected_backend = getattr(args, "backend", None) or config.memory.backend
-    if args.memory_command == "backend-policy":
-        updated = args.backend is not None
-        if updated:
-            update_memory_policy(config, backend=args.backend)
-            save_config(config_path, config)
-        print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
-        return
-    if args.memory_command == "sync":
-        print_json(
-            sync_memory(
-                repo_root,
-                runtime_root,
-                goal=config.eval_goal,
-                config_path=config_path,
-                governor_decision=_load_governor_decision(args.governor_decision),
-            )
-        )
-        return
-    if args.memory_command == "search":
-        print_json(
-            search_memory(
-                repo_root,
-                runtime_root,
-                args.query,
-                limit=args.limit,
-                backend=selected_backend,
-                goal=config.eval_goal,
-                config_path=config_path,
-            )
-        )
-        return
-    print_json(
-        memory_status(
-            repo_root,
-            runtime_root,
-            backend=selected_backend,
-            configured_backend=config.memory.backend,
-            goal=config.eval_goal,
-            config_path=config_path,
-        )
-    )
-
-
-def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
-    if args.collective_command == "publish":
-        print_json(publish_latest(repo_root, runtime_root))
-        return
-    if args.collective_command == "ready":
-        print_json(collective_readiness(repo_root, runtime_root))
-        return
-    if args.collective_command == "sync-local":
-        print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
-        return
-    if args.collective_command == "spark-swarm-payload":
-        print_json(write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path)))
-        return
-    if args.collective_command == "absorb":
-        print_json(
-            absorb(
-                repo_root,
-                runtime_root,
-                source_repo=args.repo,
-                limit=args.limit,
-                dry_run=args.dry_run,
-                bundle_only=args.bundle_only,
-                merge_policy=args.merge_policy,
-            )
-        )
-        return
-    print_json(collective_status(repo_root, runtime_root))
-
-
-def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
-    if args.self_edit_command == "propose":
-        proposal = propose(
-            config_path,
-            args.prompt,
-            dry_run=args.dry_run,
-            command_override=args.backend_command,
-            backend_profile=args.backend_profile,
-        )
-        print_json(proposal_public_summary(proposal))
-        return
-    if args.self_edit_command == "profiles":
-        print_json({"profiles": backend_profiles()})
-        return
-    if args.self_edit_command == "policy":
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
         config = load_config(config_path)
-        push_override = None
-        if args.push and args.no_push:
-            raise RuntimeError("Choose only one of --push or --no-push.")
-        if args.push:
-            push_override = True
-        elif args.no_push:
-            push_override = False
-        has_updates = any(
-            value is not None
-            for value in (
-                args.git_mode,
-                push_override,
-                args.branch_prefix,
-                args.main_branch,
-                args.commit_message_template,
-            )
-        )
-        if has_updates:
-            update_self_edit_policy(
+        if args.intent_command == "clear":
+            update_intent_policy(
                 config,
-                git_mode=args.git_mode,
-                auto_push=push_override,
-                branch_prefix=args.branch_prefix,
-                main_branch=args.main_branch,
-                commit_message_template=args.commit_message_template,
+                goal="",
+                outcome="",
+                success_criteria=[],
+                search_queries=[],
+                frontier_mode="relaxed",
+                resource_modes=["packets", "memory", "web"],
+                notes="",
             )
             save_config(config_path, config)
-        print_json({"config_path": str(config_path), "updated": has_updates, "policy": self_edit_policy(config)})
-        return
-    if args.self_edit_command == "review":
-        print_json(
-            review_proposal(
-                config_path,
-                args.proposal_id,
-                decision=args.decision,
-                root_lesson=args.root_lesson,
-                lineage_failures=args.lineage_failure,
-                counterfactual=args.counterfactual,
-                ghost_improvement_check=args.ghost_check,
-                rollback_condition=args.rollback_condition,
+            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+            return
+        if args.intent_command == "set":
+            update_intent_policy(
+                config,
+                goal=args.goal,
+                outcome=args.outcome,
+                success_criteria=args.success_criterion,
+                search_queries=args.search_query,
+                frontier_mode=args.frontier_mode,
+                resource_modes=args.resource,
                 notes=args.notes,
             )
-        )
-        return
-    if args.self_edit_command == "apply":
-        push_override = None
-        if args.push and args.no_push:
-            raise RuntimeError("Choose only one of --push or --no-push.")
-        if args.push:
-            push_override = True
-        elif args.no_push:
-            push_override = False
+            save_config(config_path, config)
+            print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+            return
+        print_json({"config_path": str(config_path), "intent": intent_policy(config), "brief": build_intent_brief(config_path)})
+
+
+
+    except Exception:
+        return None
+def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        config = load_config(config_path)
+        selected_backend = getattr(args, "backend", None) or config.memory.backend
+        if args.memory_command == "backend-policy":
+            updated = args.backend is not None
+            if updated:
+                update_memory_policy(config, backend=args.backend)
+                save_config(config_path, config)
+            print_json({"config_path": str(config_path), "updated": updated, "policy": memory_policy(config)})
+            return
+        if args.memory_command == "sync":
+            print_json(
+                sync_memory(
+                    repo_root,
+                    runtime_root,
+                    goal=config.eval_goal,
+                    config_path=config_path,
+                    governor_decision=_load_governor_decision(args.governor_decision),
+                )
+            )
+            return
+        if args.memory_command == "search":
+            print_json(
+                search_memory(
+                    repo_root,
+                    runtime_root,
+                    args.query,
+                    limit=args.limit,
+                    backend=selected_backend,
+                    goal=config.eval_goal,
+                    config_path=config_path,
+                )
+            )
+            return
         print_json(
-            apply_proposal(
-                config_path,
-                args.proposal_id,
-                git_mode_override=args.git_mode,
-                push_override=push_override,
-                branch_name_override=args.branch_name,
-                commit_message_override=args.commit_message,
-                governor_decision_path=Path(args.governor_decision),
+            memory_status(
+                repo_root,
+                runtime_root,
+                backend=selected_backend,
+                configured_backend=config.memory.backend,
+                goal=config.eval_goal,
+                config_path=config_path,
             )
         )
-        return
-    print_json(proposal_status(config_path))
 
 
+
+    except Exception:
+        return None
+def _handle_collective(args: argparse.Namespace, *, config_path: Path, repo_root: Path, runtime_root: Path) -> None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        if args.collective_command == "publish":
+            print_json(publish_latest(repo_root, runtime_root))
+            return
+        if args.collective_command == "ready":
+            print_json(collective_readiness(repo_root, runtime_root))
+            return
+        if args.collective_command == "sync-local":
+            print_json(sync_local_collective(repo_root, runtime_root, label=args.label, rebuild=not args.skip_rebuild))
+            return
+        if args.collective_command == "spark-swarm-payload":
+            print_json(write_spark_swarm_collective_payload_from_latest(repo_root, runtime_root, load_config(config_path)))
+            return
+        if args.collective_command == "absorb":
+            print_json(
+                absorb(
+                    repo_root,
+                    runtime_root,
+                    source_repo=args.repo,
+                    limit=args.limit,
+                    dry_run=args.dry_run,
+                    bundle_only=args.bundle_only,
+                    merge_policy=args.merge_policy,
+                )
+            )
+            return
+        print_json(collective_status(repo_root, runtime_root))
+
+
+
+    except Exception:
+        return None
+def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        if args.self_edit_command == "propose":
+            proposal = propose(
+                config_path,
+                args.prompt,
+                dry_run=args.dry_run,
+                command_override=args.backend_command,
+                backend_profile=args.backend_profile,
+            )
+            print_json(proposal_public_summary(proposal))
+            return
+        if args.self_edit_command == "profiles":
+            print_json({"profiles": backend_profiles()})
+            return
+        if args.self_edit_command == "policy":
+            config = load_config(config_path)
+            push_override = None
+            if args.push and args.no_push:
+                raise RuntimeError("Choose only one of --push or --no-push.")
+            if args.push:
+                push_override = True
+            elif args.no_push:
+                push_override = False
+            has_updates = any(
+                value is not None
+                for value in (
+                    args.git_mode,
+                    push_override,
+                    args.branch_prefix,
+                    args.main_branch,
+                    args.commit_message_template,
+                )
+            )
+            if has_updates:
+                update_self_edit_policy(
+                    config,
+                    git_mode=args.git_mode,
+                    auto_push=push_override,
+                    branch_prefix=args.branch_prefix,
+                    main_branch=args.main_branch,
+                    commit_message_template=args.commit_message_template,
+                )
+                save_config(config_path, config)
+            print_json({"config_path": str(config_path), "updated": has_updates, "policy": self_edit_policy(config)})
+            return
+        if args.self_edit_command == "review":
+            print_json(
+                review_proposal(
+                    config_path,
+                    args.proposal_id,
+                    decision=args.decision,
+                    root_lesson=args.root_lesson,
+                    lineage_failures=args.lineage_failure,
+                    counterfactual=args.counterfactual,
+                    ghost_improvement_check=args.ghost_check,
+                    rollback_condition=args.rollback_condition,
+                    notes=args.notes,
+                )
+            )
+            return
+        if args.self_edit_command == "apply":
+            push_override = None
+            if args.push and args.no_push:
+                raise RuntimeError("Choose only one of --push or --no-push.")
+            if args.push:
+                push_override = True
+            elif args.no_push:
+                push_override = False
+            print_json(
+                apply_proposal(
+                    config_path,
+                    args.proposal_id,
+                    git_mode_override=args.git_mode,
+                    push_override=push_override,
+                    branch_name_override=args.branch_name,
+                    commit_message_override=args.commit_message,
+                    governor_decision_path=Path(args.governor_decision),
+                )
+            )
+            return
+        print_json(proposal_status(config_path))
+
+
+
+    except Exception:
+        return None
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()

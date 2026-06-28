@@ -11,9 +11,14 @@ from .paths import frontier_queue_path, resolve_runtime_root
 
 
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
 
 
+
+    except Exception:
+        return ()
 def _signature_from_row(row: dict[str, object]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
 

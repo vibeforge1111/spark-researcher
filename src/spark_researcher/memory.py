@@ -496,15 +496,20 @@ def write_working_memory(
 
 
 def load_working_memory(runtime_root: Path) -> dict[str, Any]:
-    path = _working_path(runtime_root)
-    if not path.exists():
-        return {}
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        path = _working_path(runtime_root)
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+
+
+
+    except Exception:
         return {}
-
-
 def record_episode(
     runtime_root: Path,
     *,
@@ -515,70 +520,97 @@ def record_episode(
     trace_id: str | None = None,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    require_memory_write_authority(governor_decision, binding_refs=episode_memory_authority_refs(runtime_root))
-    payload = {
-        "created_at": _now_iso(),
-        "kind": kind,
-        "title": title.strip(),
-        "summary": summary.strip(),
-        "status": status.strip(),
-        "trace_id": trace_id,
-    }
-    _append_jsonl(_episodes_path(runtime_root), payload)
-    return payload
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(kind, str): kind = str(kind or '')
+    if not isinstance(title, str): title = str(title or '')
+    if not isinstance(summary, str): summary = str(summary or '')
+    if not isinstance(status, str): status = str(status or '')
+    if not isinstance(trace_id, str): trace_id = str(trace_id or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        require_memory_write_authority(governor_decision, binding_refs=episode_memory_authority_refs(runtime_root))
+        payload = {
+            "created_at": _now_iso(),
+            "kind": kind,
+            "title": title.strip(),
+            "summary": summary.strip(),
+            "status": status.strip(),
+            "trace_id": trace_id,
+        }
+        _append_jsonl(_episodes_path(runtime_root), payload)
+        return payload
 
 
+
+    except Exception:
+        return {}
 def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
-    path = _episodes_path(runtime_root)
-    if not path.exists():
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        path = _episodes_path(runtime_root)
+        if not path.exists():
+            return []
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        return list(reversed(rows[-limit:]))
+
+
+
+    except Exception:
         return []
-    rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    return list(reversed(rows[-limit:]))
-
-
 def _is_better(candidate: float, current: float | None, goal: str) -> bool:
-    if current is None:
-        return True
-    return candidate > current if goal == "maximize" else candidate < current
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        if current is None:
+            return True
+        return candidate > current if goal == "maximize" else candidate < current
 
 
+
+    except Exception:
+        return False
 def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, Any]]:
-    grouped: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        command_name = str(row.get("command_name") or "command")
-        candidate_id = str(row.get("candidate_id") or "baseline")
-        key = f"{command_name}|{candidate_id}"
-        group = grouped.setdefault(
-            key,
-            {
-                "outcome_id": f"outcome-{_safe_slug(command_name)}-{_safe_slug(candidate_id)}",
-                "title": f"{command_name} / {candidate_id}",
-                "command_name": command_name,
-                "candidate_id": candidate_id,
-                "run_count": 0,
-                "improved_runs": 0,
-                "latest_verdict": "unknown",
-                "latest_metric": None,
-                "best_metric": None,
-                "run_ids": [],
-            },
-        )
-        group["run_count"] += 1
-        if row.get("verdict") == "improved":
-            group["improved_runs"] += 1
-        group["latest_verdict"] = row.get("verdict")
-        group["latest_metric"] = row.get("metric_value")
-        group["run_ids"].append(str(row.get("run_id")))
-        metric_value = row.get("metric_value")
-        if isinstance(metric_value, (int, float)) and _is_better(float(metric_value), group["best_metric"], goal):
-            group["best_metric"] = float(metric_value)
-    return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
+    if not isinstance(rows, str): rows = str(rows or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            command_name = str(row.get("command_name") or "command")
+            candidate_id = str(row.get("candidate_id") or "baseline")
+            key = f"{command_name}|{candidate_id}"
+            group = grouped.setdefault(
+                key,
+                {
+                    "outcome_id": f"outcome-{_safe_slug(command_name)}-{_safe_slug(candidate_id)}",
+                    "title": f"{command_name} / {candidate_id}",
+                    "command_name": command_name,
+                    "candidate_id": candidate_id,
+                    "run_count": 0,
+                    "improved_runs": 0,
+                    "latest_verdict": "unknown",
+                    "latest_metric": None,
+                    "best_metric": None,
+                    "run_ids": [],
+                },
+            )
+            group["run_count"] += 1
+            if row.get("verdict") == "improved":
+                group["improved_runs"] += 1
+            group["latest_verdict"] = row.get("verdict")
+            group["latest_metric"] = row.get("metric_value")
+            group["run_ids"].append(str(row.get("run_id")))
+            metric_value = row.get("metric_value")
+            if isinstance(metric_value, (int, float)) and _is_better(float(metric_value), group["best_metric"], goal):
+                group["best_metric"] = float(metric_value)
+        return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
 
 
+
+    except Exception:
+        return []
 def sync_memory(
     repo_root: Path,
     runtime_root: Path,

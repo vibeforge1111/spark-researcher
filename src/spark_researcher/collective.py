@@ -163,166 +163,193 @@ def _specialization_descriptor(repo_root: Path) -> dict[str, Any]:
 
 
 def _evolution_path_id(specialization_key: str, command_name: str) -> str:
-    return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
+    if not isinstance(specialization_key, str): specialization_key = str(specialization_key or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
 
 
+
+    except Exception:
+        return ""
 def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
-    run_id = str(record.get("run_id") or "latest")
-    refs = []
-    for kind, label, path_key in (
-        ("run_trace", "Run directory", "run_dir"),
-        ("run_trace", "Run log", "log_path"),
-        ("run_trace", "Trace file", "trace_path"),
-    ):
-        path_value = record.get(path_key)
-        if not path_value:
-            continue
-        refs.append(
-            {
-                "id": f"{run_id}:{path_key}",
-                "kind": kind,
-                "label": label,
-                "path": str(path_value),
-                "url": None,
-                "hash": None,
-            }
-        )
-    return refs
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        run_id = str(record.get("run_id") or "latest")
+        refs = []
+        for kind, label, path_key in (
+            ("run_trace", "Run directory", "run_dir"),
+            ("run_trace", "Run log", "log_path"),
+            ("run_trace", "Trace file", "trace_path"),
+        ):
+            path_value = record.get(path_key)
+            if not path_value:
+                continue
+            refs.append(
+                {
+                    "id": f"{run_id}:{path_key}",
+                    "kind": kind,
+                    "label": label,
+                    "path": str(path_value),
+                    "url": None,
+                    "hash": None,
+                }
+            )
+        return refs
 
 
+
+    except Exception:
+        return []
 def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
-    chip_result = record.get("chip_result", {})
-    if not isinstance(chip_result, dict):
-        return None
-    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
-        return None
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        chip_result = record.get("chip_result", {})
+        if not isinstance(chip_result, dict):
+            return None
+        if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
+            return None
 
-    metrics: dict[str, Any] = {}
-    scalar_fields = (
-        ("benchmark_profile", "benchmarkProfile"),
-        ("benchmark_profile_label", "benchmarkProfileLabel"),
-        ("baseline_id", "baselineId"),
-        ("benchmark_pass_rate", "benchmarkPassRate"),
-        ("outcome_score", "outcomeScore"),
-        ("constraint_score", "constraintScore"),
-        ("track_count", "trackCount"),
-        ("evidence_count", "evidenceCount"),
-        ("total_tool_calls_mean", "totalToolCallsMean"),
-    )
-    for source_key, target_key in scalar_fields:
-        value = chip_result.get(source_key)
-        if value is None:
-            continue
-        metrics[target_key] = value
-
-    track_summaries = chip_result.get("track_summaries", [])
-    if isinstance(track_summaries, list) and track_summaries:
-        metrics["trackSummaries"] = track_summaries
-        def _safe_float(value: Any, default: float = 0.0) -> float:
-            try:
-                return float(value) if value is not None else default
-            except (ValueError, TypeError):
-                return default
-
-        strongest = max(
-            (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: _safe_float(item.get("scenario_score_mean")),
-            default=None,
+        metrics: dict[str, Any] = {}
+        scalar_fields = (
+            ("benchmark_profile", "benchmarkProfile"),
+            ("benchmark_profile_label", "benchmarkProfileLabel"),
+            ("baseline_id", "baselineId"),
+            ("benchmark_pass_rate", "benchmarkPassRate"),
+            ("outcome_score", "outcomeScore"),
+            ("constraint_score", "constraintScore"),
+            ("track_count", "trackCount"),
+            ("evidence_count", "evidenceCount"),
+            ("total_tool_calls_mean", "totalToolCallsMean"),
         )
-        weakest = min(
-            (item for item in track_summaries if isinstance(item, dict)),
-            key=lambda item: _safe_float(item.get("scenario_score_mean")),
-            default=None,
-        )
-        if isinstance(strongest, dict):
-            metrics["strongestTrack"] = strongest
-        if isinstance(weakest, dict):
-            metrics["weakestTrack"] = weakest
+        for source_key, target_key in scalar_fields:
+            value = chip_result.get(source_key)
+            if value is None:
+                continue
+            metrics[target_key] = value
 
-    suite_report = chip_result.get("suite_report")
-    if isinstance(suite_report, dict):
-        metrics["benchmarkVersion"] = suite_report.get("benchmark_version")
-        metrics["scenarioPackVersion"] = suite_report.get("scenario_pack_version")
-        metrics["benchmarkSplit"] = suite_report.get("split")
+        track_summaries = chip_result.get("track_summaries", [])
+        if isinstance(track_summaries, list) and track_summaries:
+            metrics["trackSummaries"] = track_summaries
+            def _safe_float(value: Any, default: float = 0.0) -> float:
+                try:
+                    return float(value) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
 
-    return metrics or None
+            strongest = max(
+                (item for item in track_summaries if isinstance(item, dict)),
+                key=lambda item: _safe_float(item.get("scenario_score_mean")),
+                default=None,
+            )
+            weakest = min(
+                (item for item in track_summaries if isinstance(item, dict)),
+                key=lambda item: _safe_float(item.get("scenario_score_mean")),
+                default=None,
+            )
+            if isinstance(strongest, dict):
+                metrics["strongestTrack"] = strongest
+            if isinstance(weakest, dict):
+                metrics["weakestTrack"] = weakest
 
-
-def _trading_benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
-    chip_result = record.get("chip_result", {})
-    if not isinstance(chip_result, dict):
-        return None
-    if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
-        return None
-
-    metrics: dict[str, Any] = {
-        "benchmarkProfile": "contract_window_backtest",
-        "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
-        "requestedTimeframe": chip_result.get("requested_timeframe"),
-        "evaluatedAsset": chip_result.get("evaluated_asset"),
-        "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
-        "fallbackReason": chip_result.get("data_fallback_reason"),
-        "contractCount": chip_result.get("contract_count"),
-        "coveredContractCount": chip_result.get("covered_contract_count"),
-        "tradeCount": chip_result.get("trade_count"),
-        "minimumTradeCount": chip_result.get("minimum_trade_count"),
-        "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
-        "holdoutProfitability": chip_result.get("holdout_profitability_score"),
-        "walkForwardConsistency": chip_result.get("walk_forward_consistency"),
-        "stressResilience": chip_result.get("stress_resilience"),
-    }
-    record_metrics = record.get("metrics", {})
-    if isinstance(record_metrics, dict):
-        metrics["paperTradeReadiness"] = record_metrics.get("paper_trade_readiness")
-        metrics["maxDrawdown"] = record_metrics.get("max_drawdown")
-        metrics["winRate"] = record_metrics.get("win_rate")
-        metrics["sharpeRatio"] = record_metrics.get("sharpe_ratio")
-    return {key: value for key, value in metrics.items() if value is not None} or None
-
-
-def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not benchmark_metrics:
-        return None
-    chip_result = record.get("chip_result", {})
-    if not isinstance(chip_result, dict):
-        return None
-    if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
-        return None
-
-    component_scores: dict[str, float] = {}
-    for item in benchmark_metrics.get("trackSummaries", []):
-        if not isinstance(item, dict):
-            continue
-        track = str(item.get("track") or "").strip()
-        score = item.get("scenario_score_mean")
-        if not track or not isinstance(score, (int, float)):
-            continue
-        component_scores[track] = float(score)
-
-    strongest_track = benchmark_metrics.get("strongestTrack")
-    weakest_track = benchmark_metrics.get("weakestTrack")
-    scenario_pack = benchmark_metrics.get("scenarioPackVersion")
-    if scenario_pack is None:
         suite_report = chip_result.get("suite_report")
         if isinstance(suite_report, dict):
-            scenario_pack = suite_report.get("scenario_pack_version")
+            metrics["benchmarkVersion"] = suite_report.get("benchmark_version")
+            metrics["scenarioPackVersion"] = suite_report.get("scenario_pack_version")
+            metrics["benchmarkSplit"] = suite_report.get("split")
 
-    scenario_id = chip_result.get("track_focus") or chip_result.get("factor_id") or record.get("candidate_id")
+        return metrics or None
 
-    return {
-        "benchmark": {
-            "benchmarkName": "TheStartupBench",
-            "scenarioId": scenario_id,
-            "scenarioPack": scenario_pack,
-            "baselineId": benchmark_metrics.get("baselineId"),
-            "strongestComponent": strongest_track.get("track") if isinstance(strongest_track, dict) else None,
-            "weakestComponent": weakest_track.get("track") if isinstance(weakest_track, dict) else None,
-            "componentScores": component_scores,
-            "planner": None,
+
+
+    except Exception:
+        return {}
+def _trading_benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        chip_result = record.get("chip_result", {})
+        if not isinstance(chip_result, dict):
+            return None
+        if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
+            return None
+
+        metrics: dict[str, Any] = {
+            "benchmarkProfile": "contract_window_backtest",
+            "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
+            "requestedTimeframe": chip_result.get("requested_timeframe"),
+            "evaluatedAsset": chip_result.get("evaluated_asset"),
+            "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
+            "fallbackReason": chip_result.get("data_fallback_reason"),
+            "contractCount": chip_result.get("contract_count"),
+            "coveredContractCount": chip_result.get("covered_contract_count"),
+            "tradeCount": chip_result.get("trade_count"),
+            "minimumTradeCount": chip_result.get("minimum_trade_count"),
+            "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
+            "holdoutProfitability": chip_result.get("holdout_profitability_score"),
+            "walkForwardConsistency": chip_result.get("walk_forward_consistency"),
+            "stressResilience": chip_result.get("stress_resilience"),
         }
-    }
+        record_metrics = record.get("metrics", {})
+        if isinstance(record_metrics, dict):
+            metrics["paperTradeReadiness"] = record_metrics.get("paper_trade_readiness")
+            metrics["maxDrawdown"] = record_metrics.get("max_drawdown")
+            metrics["winRate"] = record_metrics.get("win_rate")
+            metrics["sharpeRatio"] = record_metrics.get("sharpe_ratio")
+        return {key: value for key, value in metrics.items() if value is not None} or None
 
 
+
+    except Exception:
+        return {}
+def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(record, str): record = str(record or '')
+    if not isinstance(benchmark_metrics, str): benchmark_metrics = str(benchmark_metrics or '')
+    try:
+        if not benchmark_metrics:
+            return None
+        chip_result = record.get("chip_result", {})
+        if not isinstance(chip_result, dict):
+            return None
+        if str(chip_result.get("comparison_class", "")).strip() != "benchmark_grounded":
+            return None
+
+        component_scores: dict[str, float] = {}
+        for item in benchmark_metrics.get("trackSummaries", []):
+            if not isinstance(item, dict):
+                continue
+            track = str(item.get("track") or "").strip()
+            score = item.get("scenario_score_mean")
+            if not track or not isinstance(score, (int, float)):
+                continue
+            component_scores[track] = float(score)
+
+        strongest_track = benchmark_metrics.get("strongestTrack")
+        weakest_track = benchmark_metrics.get("weakestTrack")
+        scenario_pack = benchmark_metrics.get("scenarioPackVersion")
+        if scenario_pack is None:
+            suite_report = chip_result.get("suite_report")
+            if isinstance(suite_report, dict):
+                scenario_pack = suite_report.get("scenario_pack_version")
+
+        scenario_id = chip_result.get("track_focus") or chip_result.get("factor_id") or record.get("candidate_id")
+
+        return {
+            "benchmark": {
+                "benchmarkName": "TheStartupBench",
+                "scenarioId": scenario_id,
+                "scenarioPack": scenario_pack,
+                "baselineId": benchmark_metrics.get("baselineId"),
+                "strongestComponent": strongest_track.get("track") if isinstance(strongest_track, dict) else None,
+                "weakestComponent": weakest_track.get("track") if isinstance(weakest_track, dict) else None,
+                "componentScores": component_scores,
+                "planner": None,
+            }
+        }
+
+
+
+    except Exception:
+        return {}
 def _trading_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     chip_result = record.get("chip_result", {})
     if not isinstance(chip_result, dict):

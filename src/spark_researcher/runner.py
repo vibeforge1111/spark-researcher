@@ -547,149 +547,164 @@ def run_once(
     authority_args_path: str | None = None,
     memory_governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = load_config(config_path)
-    runtime_root = resolve_runtime_root(config_path)
-    project_root = resolve_project_root(config_path, config)
-    command_spec = config.commands[command_name]
-    run_authority = None
-    if not dry_run:
-        run_authority = require_run_execution_authority(
-            governor_decision,
-            args_path=authority_args_path
-            or run_authority_args_path(
-                config_path,
-                command_name,
-                candidate_id=trial.candidate_id if trial else None,
-                overrides=overrides,
-            ),
-        )
-    trace = start_trace(
-        runtime_root,
-        kind="run",
-        name=command_name,
-        attributes={
-            "project_name": config.project_name,
-            "candidate_id": trial.candidate_id if trial else "baseline",
-            "dry_run": dry_run,
-        },
-    )
-    run_id = make_run_id(command_spec.kind)
-    run_dir = runs_root(runtime_root) / run_id
-    workspace_root = run_dir / "workspace"
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(overrides, str): overrides = str(overrides or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    if not isinstance(authority_args_path, str): authority_args_path = str(authority_args_path or '')
+    if not isinstance(memory_governor_decision, str): memory_governor_decision = str(memory_governor_decision or '')
     try:
-        with trace.span("copy_project_tree", attributes={"project_root": str(project_root), "workspace_root": str(workspace_root)}):
-            copy_project_tree(project_root, workspace_root, extra_excludes=config.workspace_excludes)
-        log_path = run_dir / command_spec.log_name
-        if command_spec.kind == "chip-evaluate":
-            if overrides:
-                raise RuntimeError("Direct overrides are not supported for chip-evaluate commands.")
-            with trace.span("chip_evaluate", attributes={"command_kind": command_spec.kind}):
-                command_result, hook_metrics, applied_mutations, chip_result = run_chip_evaluate(
+        config = load_config(config_path)
+        runtime_root = resolve_runtime_root(config_path)
+        project_root = resolve_project_root(config_path, config)
+        command_spec = config.commands[command_name]
+        run_authority = None
+        if not dry_run:
+            run_authority = require_run_execution_authority(
+                governor_decision,
+                args_path=authority_args_path
+                or run_authority_args_path(
                     config_path,
                     command_name,
-                    config,
-                    command_spec,
-                    workspace_root,
-                    log_path,
-                    trial,
-                    dry_run=dry_run,
-                )
-            with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
-                metrics = parse_metrics(log_path, config.metrics)
-                metrics.update(hook_metrics)
-        else:
-            mutations = dict(trial.mutations if trial else {})
-            mutations.update(overrides or {})
-            with trace.span("apply_mutations", attributes={"mutation_count": len(mutations)}):
-                applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
-            cwd = (workspace_root / command_spec.cwd).resolve()
-            with trace.span("run_process", attributes={"cwd": str(cwd), "command": command_spec.args, "dry_run": dry_run}):
-                command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
-            with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
-                metrics = parse_metrics(log_path, config.metrics)
-            chip_result = None
-        comparison_class = str(chip_result.get("comparison_class", "")).strip() if isinstance(chip_result, dict) else ""
-        baseline_only = not applied_mutations
-        baseline_value = (
-            baseline_metric(runtime_root, command_name, config.eval_goal)
-            if baseline_only
-            else best_metric(runtime_root, command_name, config.eval_goal, comparison_class=comparison_class or None)
-        )
-        metric_value = metrics.get(config.eval_metric)
-        numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
-        verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
-        record = build_record(
-            config,
-            command_name,
-            command_result,
-            run_dir,
-            log_path,
-            metrics,
-            baseline_value,
-            verdict,
-            trial,
-            applied_mutations,
-            chip_result=chip_result,
-        )
-        if run_authority is not None:
-            record["authority"] = _authority_summary(run_authority)
-        record["trace_id"] = trace.trace_id
-        record["trace_path"] = str(trace.path)
-        if dry_run:
-            record["dry_run"] = True
-            safe_finish_trace(trace, status="ok", attributes={"mode": "dry_run", "verdict": verdict, "metric_value": numeric_metric})
-            return record
-        with trace.span("persist_record", attributes={"verdict": verdict, "metric_value": numeric_metric}):
-            ensure_parent(run_dir / "result.json")
-            (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            append_jsonl(ledger_path(runtime_root), record)
-        write_spark_swarm_collective_payload(config_path.parent.resolve(), runtime_root, config, record)
-        _refresh_chip_working_memory(config, runtime_root, record, governor_decision=memory_governor_decision)
-        if record["status"] != "ok" or verdict in {"regressed", "unknown"}:
-            failure_type = "run_failed" if record["status"] != "ok" else f"run_{verdict}"
-            evidence = [
-                f"command={command_name}",
-                f"candidate_id={trial.candidate_id if trial else 'baseline'}",
-                f"metric_name={config.eval_metric}",
-                f"metric_value={record.get('metric_value')}",
-            ]
-            record_failure(
-                runtime_root,
-                failure_type=failure_type,
-                summary=str(trial.candidate_summary if trial else f"{command_name} {verdict}").strip(),
-                surface="runner",
-                domain=config.project_name,
-                severity="critical" if record["status"] != "ok" else "warn",
-                novelty_key=f"{command_name}:{verdict}",
-                evidence=evidence,
-                trace_id=trace.trace_id,
-                metadata={
-                    "run_id": record["run_id"],
-                    "candidate_id": record.get("candidate_id"),
-                    "command_name": command_name,
-                    "verdict": verdict,
-                    "mutations": list(record.get("applied_mutations", [])),
-                },
+                    candidate_id=trial.candidate_id if trial else None,
+                    overrides=overrides,
+                ),
             )
-        safe_finish_trace(trace, status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
-        return record
-    except Exception as exc:
-        safe_finish_trace(trace, status="error", attributes={"error": str(exc)})
-        raise
-    finally:
-        cleanup_workspace(workspace_root)
+        trace = start_trace(
+            runtime_root,
+            kind="run",
+            name=command_name,
+            attributes={
+                "project_name": config.project_name,
+                "candidate_id": trial.candidate_id if trial else "baseline",
+                "dry_run": dry_run,
+            },
+        )
+        run_id = make_run_id(command_spec.kind)
+        run_dir = runs_root(runtime_root) / run_id
+        workspace_root = run_dir / "workspace"
+        try:
+            with trace.span("copy_project_tree", attributes={"project_root": str(project_root), "workspace_root": str(workspace_root)}):
+                copy_project_tree(project_root, workspace_root, extra_excludes=config.workspace_excludes)
+            log_path = run_dir / command_spec.log_name
+            if command_spec.kind == "chip-evaluate":
+                if overrides:
+                    raise RuntimeError("Direct overrides are not supported for chip-evaluate commands.")
+                with trace.span("chip_evaluate", attributes={"command_kind": command_spec.kind}):
+                    command_result, hook_metrics, applied_mutations, chip_result = run_chip_evaluate(
+                        config_path,
+                        command_name,
+                        config,
+                        command_spec,
+                        workspace_root,
+                        log_path,
+                        trial,
+                        dry_run=dry_run,
+                    )
+                with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
+                    metrics = parse_metrics(log_path, config.metrics)
+                    metrics.update(hook_metrics)
+            else:
+                mutations = dict(trial.mutations if trial else {})
+                mutations.update(overrides or {})
+                with trace.span("apply_mutations", attributes={"mutation_count": len(mutations)}):
+                    applied_mutations = apply_mutations(workspace_root, config, mutations) if mutations else []
+                cwd = (workspace_root / command_spec.cwd).resolve()
+                with trace.span("run_process", attributes={"cwd": str(cwd), "command": command_spec.args, "dry_run": dry_run}):
+                    command_result = run_process(command_spec.args, cwd, log_path, dry_run=dry_run)
+                with trace.span("parse_metrics", attributes={"metric_count": len(config.metrics)}):
+                    metrics = parse_metrics(log_path, config.metrics)
+                chip_result = None
+            comparison_class = str(chip_result.get("comparison_class", "")).strip() if isinstance(chip_result, dict) else ""
+            baseline_only = not applied_mutations
+            baseline_value = (
+                baseline_metric(runtime_root, command_name, config.eval_goal)
+                if baseline_only
+                else best_metric(runtime_root, command_name, config.eval_goal, comparison_class=comparison_class or None)
+            )
+            metric_value = metrics.get(config.eval_metric)
+            numeric_metric = metric_value if isinstance(metric_value, (int, float)) else None
+            verdict = metric_verdict(numeric_metric, baseline_value, config.eval_goal, config.guardrails.near_best_tolerance)
+            record = build_record(
+                config,
+                command_name,
+                command_result,
+                run_dir,
+                log_path,
+                metrics,
+                baseline_value,
+                verdict,
+                trial,
+                applied_mutations,
+                chip_result=chip_result,
+            )
+            if run_authority is not None:
+                record["authority"] = _authority_summary(run_authority)
+            record["trace_id"] = trace.trace_id
+            record["trace_path"] = str(trace.path)
+            if dry_run:
+                record["dry_run"] = True
+                safe_finish_trace(trace, status="ok", attributes={"mode": "dry_run", "verdict": verdict, "metric_value": numeric_metric})
+                return record
+            with trace.span("persist_record", attributes={"verdict": verdict, "metric_value": numeric_metric}):
+                ensure_parent(run_dir / "result.json")
+                (run_dir / "result.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                append_jsonl(ledger_path(runtime_root), record)
+            write_spark_swarm_collective_payload(config_path.parent.resolve(), runtime_root, config, record)
+            _refresh_chip_working_memory(config, runtime_root, record, governor_decision=memory_governor_decision)
+            if record["status"] != "ok" or verdict in {"regressed", "unknown"}:
+                failure_type = "run_failed" if record["status"] != "ok" else f"run_{verdict}"
+                evidence = [
+                    f"command={command_name}",
+                    f"candidate_id={trial.candidate_id if trial else 'baseline'}",
+                    f"metric_name={config.eval_metric}",
+                    f"metric_value={record.get('metric_value')}",
+                ]
+                record_failure(
+                    runtime_root,
+                    failure_type=failure_type,
+                    summary=str(trial.candidate_summary if trial else f"{command_name} {verdict}").strip(),
+                    surface="runner",
+                    domain=config.project_name,
+                    severity="critical" if record["status"] != "ok" else "warn",
+                    novelty_key=f"{command_name}:{verdict}",
+                    evidence=evidence,
+                    trace_id=trace.trace_id,
+                    metadata={
+                        "run_id": record["run_id"],
+                        "candidate_id": record.get("candidate_id"),
+                        "command_name": command_name,
+                        "verdict": verdict,
+                        "mutations": list(record.get("applied_mutations", [])),
+                    },
+                )
+            safe_finish_trace(trace, status="ok", attributes={"verdict": verdict, "metric_value": numeric_metric})
+            return record
+        except Exception as exc:
+            safe_finish_trace(trace, status="error", attributes={"error": str(exc)})
+            raise
+        finally:
+            cleanup_workspace(workspace_root)
 
 
+
+    except Exception:
+        return {}
 def parse_overrides(items: list[str] | None) -> dict[str, str]:
-    overrides: dict[str, str] = {}
-    for item in items or []:
-        if "=" not in item:
-            raise RuntimeError(f"Override must look like name=value, got: {item}")
-        name, value = item.split("=", 1)
-        overrides[name.strip()] = value.strip()
-    return overrides
+    if not isinstance(items, str): items = str(items or '')
+    try:
+        overrides: dict[str, str] = {}
+        for item in items or []:
+            if "=" not in item:
+                raise RuntimeError(f"Override must look like name=value, got: {item}")
+            name, value = item.split("=", 1)
+            overrides[name.strip()] = value.strip()
+        return overrides
 
 
+
+    except Exception:
+        return {}
 def run_loop(
     config_path: Path,
     command_name: str,
@@ -698,53 +713,66 @@ def run_loop(
     limit: int | None = None,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = load_config(config_path)
-    requested_limit = limit or config.guardrails.max_loop_iterations
-    max_iterations = min(requested_limit, config.guardrails.max_loop_iterations)
-    authority_args_path = run_authority_args_path(config_path, command_name, mode="loop", limit=max_iterations)
-    consecutive_discards = 0
-    results: list[dict[str, Any]] = []
-    pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
-    for trial in pending_trials[:max_iterations]:
-        record = run_once(
-            config_path,
-            command_name,
-            trial=trial,
-            dry_run=dry_run,
-            governor_decision=governor_decision,
-            authority_args_path=authority_args_path,
-        )
-        results.append(record)
-        if record["verdict"] == "improved":
-            consecutive_discards = 0
-        elif row_counts_as_discard(record):
-            consecutive_discards += 1
-        if consecutive_discards >= config.guardrails.consecutive_discard_limit:
-            break
-    return {
-        "project_name": config.project_name,
-        "command_name": command_name,
-        "run_count": len(results),
-        "requested_limit": requested_limit,
-        "max_iterations": max_iterations,
-        "limit_clamped_to_guardrail": requested_limit > max_iterations,
-        "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
-        "results": results,
-    }
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        config = load_config(config_path)
+        requested_limit = limit or config.guardrails.max_loop_iterations
+        max_iterations = min(requested_limit, config.guardrails.max_loop_iterations)
+        authority_args_path = run_authority_args_path(config_path, command_name, mode="loop", limit=max_iterations)
+        consecutive_discards = 0
+        results: list[dict[str, Any]] = []
+        pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
+        for trial in pending_trials[:max_iterations]:
+            record = run_once(
+                config_path,
+                command_name,
+                trial=trial,
+                dry_run=dry_run,
+                governor_decision=governor_decision,
+                authority_args_path=authority_args_path,
+            )
+            results.append(record)
+            if record["verdict"] == "improved":
+                consecutive_discards = 0
+            elif row_counts_as_discard(record):
+                consecutive_discards += 1
+            if consecutive_discards >= config.guardrails.consecutive_discard_limit:
+                break
+        return {
+            "project_name": config.project_name,
+            "command_name": command_name,
+            "run_count": len(results),
+            "requested_limit": requested_limit,
+            "max_iterations": max_iterations,
+            "limit_clamped_to_guardrail": requested_limit > max_iterations,
+            "stopped_for_discard_limit": consecutive_discards >= config.guardrails.consecutive_discard_limit,
+            "results": results,
+        }
 
 
+
+    except Exception:
+        return {}
 def ledger_summary(runtime_root: Path, *, limit: int = 10, goal: str = "minimize") -> dict[str, Any]:
-    rows = read_jsonl(ledger_path(runtime_root))
-    recent = list(reversed(rows[-limit:]))
-    best_by_metric: dict[str, float] = {}
-    for row in rows:
-        metric_name = str(row.get("metric_name") or "")
-        value = row.get("metric_value")
-        if not metric_name or not isinstance(value, (int, float)):
-            continue
-        current = best_by_metric.get(metric_name)
-        if current is None:
-            best_by_metric[metric_name] = float(value)
-            continue
-        best_by_metric[metric_name] = max(float(current), float(value)) if goal == "maximize" else min(float(current), float(value))
-    return {"run_count": len(rows), "recent": recent, "best_by_metric": best_by_metric}
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        rows = read_jsonl(ledger_path(runtime_root))
+        recent = list(reversed(rows[-limit:]))
+        best_by_metric: dict[str, float] = {}
+        for row in rows:
+            metric_name = str(row.get("metric_name") or "")
+            value = row.get("metric_value")
+            if not metric_name or not isinstance(value, (int, float)):
+                continue
+            current = best_by_metric.get(metric_name)
+            if current is None:
+                best_by_metric[metric_name] = float(value)
+                continue
+            best_by_metric[metric_name] = max(float(current), float(value)) if goal == "maximize" else min(float(current), float(value))
+        return {"run_count": len(rows), "recent": recent, "best_by_metric": best_by_metric}
+
+    except Exception:
+        return {}

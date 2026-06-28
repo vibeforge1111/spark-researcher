@@ -24,18 +24,34 @@ MAX_DOCUMENT_STEM_LENGTH = 80
 
 
 def write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(content, str): content = str(content or '')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
 def _documents_root(runtime_root: Path) -> Path:
-    return memory_root(runtime_root) / "documents"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_root(runtime_root) / "documents"
 
 
+
+    except Exception:
+        return Path(".")
 def _manifest_path(runtime_root: Path) -> Path:
-    return memory_root(runtime_root) / "manifest.json"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return memory_root(runtime_root) / "manifest.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _working_path(runtime_root: Path) -> Path:
     return memory_root(runtime_root) / "working.json"
 

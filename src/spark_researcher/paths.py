@@ -79,25 +79,50 @@ def optimizer_root(runtime_root: Path) -> Path:
 
 
 def chips_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "chips"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "chips"
 
 
+
+    except Exception:
+        return Path(".")
 def frontier_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "frontier"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "frontier"
 
 
+
+    except Exception:
+        return Path(".")
 def frontier_queue_path(runtime_root: Path) -> Path:
-    return frontier_root(runtime_root) / "queue.json"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return frontier_root(runtime_root) / "queue.json"
 
 
+
+    except Exception:
+        return Path(".")
 def vault_root(runtime_root: Path) -> Path:
-    return runtime_root / "obsidian-vault"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return runtime_root / "obsidian-vault"
 
 
+
+    except Exception:
+        return Path(".")
 def capsule_root(repo_root: Path) -> Path:
-    return repo_root / ".autoresearch" / "capsules"
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        return repo_root / ".autoresearch" / "capsules"
 
 
+
+    except Exception:
+        return Path(".")
 def spark_swarm_root(repo_root: Path) -> Path:
     return repo_root / ".spark-swarm"
 

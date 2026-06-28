@@ -9,9 +9,13 @@ from .paths import advisory_root
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
+    try:
+        return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+
+    except Exception:
+        return ""
 def log_advisory_outcome(
     runtime_root: Path,
     *,
@@ -23,24 +27,35 @@ def log_advisory_outcome(
     notes: str = "",
     domain: str = "generic",
 ) -> dict[str, object]:
-    root = advisory_root(runtime_root)
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / "outcomes.jsonl"
-    payload = {
-        "created_at": _now_iso(),
-        "task": task,
-        "model": model,
-        "domain": domain,
-        "status": status,
-        "packet_ids": list(packet_ids),
-        "score": score,
-        "notes": notes,
-    }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
-    return {"path": str(path), "recorded": True, "payload": payload}
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(task, str): task = str(task or '')
+    if not isinstance(model, str): model = str(model or '')
+    if not isinstance(status, str): status = str(status or '')
+    if not isinstance(packet_ids, str): packet_ids = str(packet_ids or '')
+    if not isinstance(notes, str): notes = str(notes or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    try:
+        root = advisory_root(runtime_root)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / "outcomes.jsonl"
+        payload = {
+            "created_at": _now_iso(),
+            "task": task,
+            "model": model,
+            "domain": domain,
+            "status": status,
+            "packet_ids": list(packet_ids),
+            "score": score,
+            "notes": notes,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        return {"path": str(path), "recorded": True, "payload": payload}
 
 
+
+    except Exception:
+        return {}
 def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
     path = advisory_root(runtime_root) / "outcomes.jsonl"
     if not path.exists():

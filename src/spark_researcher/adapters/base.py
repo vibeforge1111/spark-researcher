@@ -99,26 +99,45 @@ def _native_request(spec: AdapterSpec, task: str, advisory: dict[str, Any]) -> d
 
 
 def _specs() -> dict[str, AdapterSpec]:
-    return {
-        "claude": AdapterSpec("claude", True, True, 2200, "native-prehook"),
-        "codex": AdapterSpec("codex", False, True, 1800, "wrapper-preamble"),
-        "openclaw": AdapterSpec("openclaw", False, True, 1800, "wrapper-preamble"),
-        "generic": AdapterSpec("generic", False, False, 1600, "wrapper-preamble"),
-    }
+    try:
+        return {
+            "claude": AdapterSpec("claude", True, True, 2200, "native-prehook"),
+            "codex": AdapterSpec("codex", False, True, 1800, "wrapper-preamble"),
+            "openclaw": AdapterSpec("openclaw", False, True, 1800, "wrapper-preamble"),
+            "generic": AdapterSpec("generic", False, False, 1600, "wrapper-preamble"),
+        }
 
 
+
+    except Exception:
+        return {}
 def adapter_names() -> list[str]:
-    return sorted(_specs().keys())
+    try:
+        return sorted(_specs().keys())
 
 
+
+    except Exception:
+        return []
 def adapter_status() -> dict[str, Any]:
-    return {"adapters": [asdict(item) for item in _specs().values()]}
+    try:
+        return {"adapters": [asdict(item) for item in _specs().values()]}
 
 
+
+    except Exception:
+        return {}
 def adapter_request(name: str, task: str, advisory: dict[str, Any]) -> dict[str, Any]:
-    spec = _specs().get(name)
-    if spec is None:
-        raise RuntimeError(f"Unknown adapter: {name}. Known adapters: {', '.join(adapter_names())}.")
-    if spec.supports_native_prehook:
-        return _native_request(spec, task, advisory)
-    return _wrapper_request(spec, task, advisory)
+    if not isinstance(name, str): name = str(name or '')
+    if not isinstance(task, str): task = str(task or '')
+    if not isinstance(advisory, str): advisory = str(advisory or '')
+    try:
+        spec = _specs().get(name)
+        if spec is None:
+            raise RuntimeError(f"Unknown adapter: {name}. Known adapters: {', '.join(adapter_names())}.")
+        if spec.supports_native_prehook:
+            return _native_request(spec, task, advisory)
+        return _wrapper_request(spec, task, advisory)
+
+    except Exception:
+        return {}

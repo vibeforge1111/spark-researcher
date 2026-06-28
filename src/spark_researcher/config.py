@@ -267,11 +267,16 @@ def intent_policy(config: ProjectConfig) -> dict[str, object]:
 
 
 def update_memory_policy(config: ProjectConfig, *, backend: str | None = None) -> ProjectConfig:
-    if backend is not None:
-        config.memory.backend = str(backend)
-    return config
+    if not isinstance(backend, str): backend = str(backend or '')
+    try:
+        if backend is not None:
+            config.memory.backend = str(backend)
+        return config
 
 
+
+    except Exception:
+        return None
 def update_self_edit_policy(
     config: ProjectConfig,
     *,
@@ -281,19 +286,27 @@ def update_self_edit_policy(
     main_branch: str | None = None,
     commit_message_template: str | None = None,
 ) -> ProjectConfig:
-    if git_mode is not None:
-        config.self_edit.git_mode = str(git_mode)
-    if auto_push is not None:
-        config.self_edit.auto_push = bool(auto_push)
-    if branch_prefix is not None:
-        config.self_edit.branch_prefix = str(branch_prefix)
-    if main_branch is not None:
-        config.self_edit.main_branch = str(main_branch)
-    if commit_message_template is not None:
-        config.self_edit.commit_message_template = str(commit_message_template)
-    return config
+    if not isinstance(git_mode, str): git_mode = str(git_mode or '')
+    if not isinstance(branch_prefix, str): branch_prefix = str(branch_prefix or '')
+    if not isinstance(main_branch, str): main_branch = str(main_branch or '')
+    if not isinstance(commit_message_template, str): commit_message_template = str(commit_message_template or '')
+    try:
+        if git_mode is not None:
+            config.self_edit.git_mode = str(git_mode)
+        if auto_push is not None:
+            config.self_edit.auto_push = bool(auto_push)
+        if branch_prefix is not None:
+            config.self_edit.branch_prefix = str(branch_prefix)
+        if main_branch is not None:
+            config.self_edit.main_branch = str(main_branch)
+        if commit_message_template is not None:
+            config.self_edit.commit_message_template = str(commit_message_template)
+        return config
 
 
+
+    except Exception:
+        return None
 def update_intent_policy(
     config: ProjectConfig,
     *,
@@ -305,155 +318,176 @@ def update_intent_policy(
     resource_modes: list[str] | None = None,
     notes: str | None = None,
 ) -> ProjectConfig:
-    if goal is not None:
-        config.intent.goal = str(goal)
-    if outcome is not None:
-        config.intent.outcome = str(outcome)
-    if success_criteria is not None:
-        config.intent.success_criteria = [str(item) for item in success_criteria]
-    if search_queries is not None:
-        config.intent.search_queries = [str(item) for item in search_queries]
-    if frontier_mode is not None:
-        config.intent.frontier_mode = str(frontier_mode)
-    if resource_modes is not None:
-        config.intent.resource_modes = [str(item) for item in resource_modes]
-    if notes is not None:
-        config.intent.notes = str(notes)
-    return config
-
-
-def load_config(path: Path) -> ProjectConfig:
+    if not isinstance(goal, str): goal = str(goal or '')
+    if not isinstance(outcome, str): outcome = str(outcome or '')
+    if not isinstance(success_criteria, str): success_criteria = str(success_criteria or '')
+    if not isinstance(search_queries, str): search_queries = str(search_queries or '')
+    if not isinstance(frontier_mode, str): frontier_mode = str(frontier_mode or '')
+    if not isinstance(resource_modes, str): resource_modes = str(resource_modes or '')
+    if not isinstance(notes, str): notes = str(notes or '')
     try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except FileNotFoundError as exc:
-        raise SystemExit(f"Config file not found: {public_config_path(path)}") from exc
-    except json.JSONDecodeError as exc:
-        raise SystemExit(
-            f"Failed to parse config file {public_config_path(path)}: invalid JSON at line {exc.lineno}, column {exc.colno}"
-        ) from exc
-    except OSError as exc:
-        detail = exc.strerror or exc.__class__.__name__
-        raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
-    commands = {
-        name: CommandSpec(
-            args=list(spec["args"]),
-            cwd=str(spec.get("cwd", ".")),
-            kind=str(spec.get("kind", "train-once")),
-            log_name=str(spec.get("log_name", f"{name}.log")),
-        )
-        for name, spec in payload["commands"].items()
-    }
-    metrics = {}
-    for name, spec in payload["metrics"].items():
-        pattern_str = str(spec["pattern"])
-        compiled = re.compile(pattern_str)
-        if not compiled.groups:
-            raise ValueError(
-                f"Metric '{name}' pattern must contain at least one capture group: {pattern_str}"
+        if goal is not None:
+            config.intent.goal = str(goal)
+        if outcome is not None:
+            config.intent.outcome = str(outcome)
+        if success_criteria is not None:
+            config.intent.success_criteria = [str(item) for item in success_criteria]
+        if search_queries is not None:
+            config.intent.search_queries = [str(item) for item in search_queries]
+        if frontier_mode is not None:
+            config.intent.frontier_mode = str(frontier_mode)
+        if resource_modes is not None:
+            config.intent.resource_modes = [str(item) for item in resource_modes]
+        if notes is not None:
+            config.intent.notes = str(notes)
+        return config
+
+
+
+    except Exception:
+        return None
+def load_config(path: Path) -> ProjectConfig:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except FileNotFoundError as exc:
+            raise SystemExit(f"Config file not found: {public_config_path(path)}") from exc
+        except json.JSONDecodeError as exc:
+            raise SystemExit(
+                f"Failed to parse config file {public_config_path(path)}: invalid JSON at line {exc.lineno}, column {exc.colno}"
+            ) from exc
+        except OSError as exc:
+            detail = exc.strerror or exc.__class__.__name__
+            raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
+        commands = {
+            name: CommandSpec(
+                args=list(spec["args"]),
+                cwd=str(spec.get("cwd", ".")),
+                kind=str(spec.get("kind", "train-once")),
+                log_name=str(spec.get("log_name", f"{name}.log")),
             )
-        metrics[name] = MetricSpec(pattern=pattern_str, kind=str(spec.get("kind", "float")))
-    mutable_parameters = [
-        MutationSpec(
-            name=str(item["name"]),
-            file=str(item["file"]),
-            pattern=str(item["pattern"]),
-            template=str(item["template"]),
-            description=str(item.get("description", "")),
-            value_step=str(item.get("value_step", "")),
-            value_range=[str(part) for part in item.get("value_range", [])],
-        )
-        for item in payload.get("mutable_parameters", [])
-    ]
-    candidate_trials = [
-        CandidateTrial(
-            candidate_id=str(item["candidate_id"]),
-            candidate_summary=str(item.get("candidate_summary", "")),
-            hypothesis=str(item.get("hypothesis", "")),
-            mutations={key: str(value) for key, value in item.get("mutations", {}).items()},
-            commands=[str(part) for part in item.get("commands", [])],
-            metadata={
-                str(key): value
-                for key, value in item.get("metadata", {}).items()
-            }
-            if isinstance(item.get("metadata", {}), dict)
-            else {},
-        )
-        for item in payload.get("candidate_trials", [])
-    ]
-    trainers = [
-        TrainerSpec(
-            name=str(item["name"]),
-            examples_path=str(item["examples_path"]),
-            compile_command=[str(part) for part in item.get("compile_command", [])],
-            min_examples=_safe_int(item.get("min_examples", 20), 20),
-            recompile_every=_safe_int(item.get("recompile_every", 10), 10),
-            max_examples=_safe_int(item.get("max_examples", 96), 96),
-        )
-        for item in payload.get("trainers", [])
-    ]
-    self_edit_payload = payload.get("self_edit", {})
-    memory_payload = payload.get("memory", {})
-    guardrail_payload = payload.get("guardrails", {})
-    chip_payload = payload.get("chip", {})
-    intent_payload = payload.get("intent", {})
-    return ProjectConfig(
-        project_name=str(payload["project_name"]),
-        project_root=str(payload.get("project_root", ".")),
-        eval_metric=str(payload["eval_metric"]),
-        eval_goal=str(payload.get("eval_goal", "minimize")),
-        commands=commands,
-        metrics=metrics,
-        workspace_excludes=[str(item) for item in payload.get("workspace_excludes", [])],
-        mutable_parameters=mutable_parameters,
-        candidate_trials=candidate_trials,
-        trainers=trainers,
-        mutable_targets=[str(item) for item in payload.get("mutable_targets", [])],
-        memory=MemorySpec(
-            backend=str(memory_payload.get("backend", "local")),
-        ),
-        chip=ChipSpec(
-            path=str(chip_payload.get("path", "")),
-            manifest=str(chip_payload.get("manifest", "spark-chip.json")),
-        ),
-        intent=IntentSpec(
-            goal=str(intent_payload.get("goal", "")),
-            outcome=str(intent_payload.get("outcome", "")),
-            success_criteria=[str(item) for item in intent_payload.get("success_criteria", [])],
-            search_queries=[str(item) for item in intent_payload.get("search_queries", [])],
-            frontier_mode=str(intent_payload.get("frontier_mode", "relaxed")),
-            resource_modes=[str(item) for item in intent_payload.get("resource_modes", ["packets", "memory", "web"])],
-            notes=str(intent_payload.get("notes", "")),
-        ),
-        self_edit=SelfEditSpec(
-            command=[str(part) for part in self_edit_payload.get("command", [])],
-            mutable_targets=[str(item) for item in self_edit_payload.get("mutable_targets", payload.get("mutable_targets", []))],
-            prompt_preamble=str(self_edit_payload.get("prompt_preamble", "")),
-            git_mode=str(self_edit_payload.get("git_mode", "manual")),
-            auto_push=bool(self_edit_payload.get("auto_push", False)),
-            branch_prefix=str(self_edit_payload.get("branch_prefix", "self-edit/")),
-            main_branch=str(self_edit_payload.get("main_branch", "main")),
-            commit_message_template=str(
-                self_edit_payload.get("commit_message_template", "Apply self-edit proposal {proposal_id}")
+            for name, spec in payload["commands"].items()
+        }
+        metrics = {}
+        for name, spec in payload["metrics"].items():
+            pattern_str = str(spec["pattern"])
+            compiled = re.compile(pattern_str)
+            if not compiled.groups:
+                raise ValueError(
+                    f"Metric '{name}' pattern must contain at least one capture group: {pattern_str}"
+                )
+            metrics[name] = MetricSpec(pattern=pattern_str, kind=str(spec.get("kind", "float")))
+        mutable_parameters = [
+            MutationSpec(
+                name=str(item["name"]),
+                file=str(item["file"]),
+                pattern=str(item["pattern"]),
+                template=str(item["template"]),
+                description=str(item.get("description", "")),
+                value_step=str(item.get("value_step", "")),
+                value_range=[str(part) for part in item.get("value_range", [])],
+            )
+            for item in payload.get("mutable_parameters", [])
+        ]
+        candidate_trials = [
+            CandidateTrial(
+                candidate_id=str(item["candidate_id"]),
+                candidate_summary=str(item.get("candidate_summary", "")),
+                hypothesis=str(item.get("hypothesis", "")),
+                mutations={key: str(value) for key, value in item.get("mutations", {}).items()},
+                commands=[str(part) for part in item.get("commands", [])],
+                metadata={
+                    str(key): value
+                    for key, value in item.get("metadata", {}).items()
+                }
+                if isinstance(item.get("metadata", {}), dict)
+                else {},
+            )
+            for item in payload.get("candidate_trials", [])
+        ]
+        trainers = [
+            TrainerSpec(
+                name=str(item["name"]),
+                examples_path=str(item["examples_path"]),
+                compile_command=[str(part) for part in item.get("compile_command", [])],
+                min_examples=_safe_int(item.get("min_examples", 20), 20),
+                recompile_every=_safe_int(item.get("recompile_every", 10), 10),
+                max_examples=_safe_int(item.get("max_examples", 96), 96),
+            )
+            for item in payload.get("trainers", [])
+        ]
+        self_edit_payload = payload.get("self_edit", {})
+        memory_payload = payload.get("memory", {})
+        guardrail_payload = payload.get("guardrails", {})
+        chip_payload = payload.get("chip", {})
+        intent_payload = payload.get("intent", {})
+        return ProjectConfig(
+            project_name=str(payload["project_name"]),
+            project_root=str(payload.get("project_root", ".")),
+            eval_metric=str(payload["eval_metric"]),
+            eval_goal=str(payload.get("eval_goal", "minimize")),
+            commands=commands,
+            metrics=metrics,
+            workspace_excludes=[str(item) for item in payload.get("workspace_excludes", [])],
+            mutable_parameters=mutable_parameters,
+            candidate_trials=candidate_trials,
+            trainers=trainers,
+            mutable_targets=[str(item) for item in payload.get("mutable_targets", [])],
+            memory=MemorySpec(
+                backend=str(memory_payload.get("backend", "local")),
             ),
-        ),
-        guardrails=GuardrailSpec(
-            max_loop_iterations=_safe_int(guardrail_payload.get("max_loop_iterations", 8), 8),
-            consecutive_discard_limit=_safe_int(guardrail_payload.get("consecutive_discard_limit", 3), 3),
-            near_best_tolerance=_safe_float(guardrail_payload.get("near_best_tolerance", 0.03), 0.03),
-            require_clean_git_for_self_edit=bool(guardrail_payload.get("require_clean_git_for_self_edit", True)),
-            require_human_approval_for_self_edit=bool(guardrail_payload.get("require_human_approval_for_self_edit", True)),
-            blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],
-        ),
-    )
+            chip=ChipSpec(
+                path=str(chip_payload.get("path", "")),
+                manifest=str(chip_payload.get("manifest", "spark-chip.json")),
+            ),
+            intent=IntentSpec(
+                goal=str(intent_payload.get("goal", "")),
+                outcome=str(intent_payload.get("outcome", "")),
+                success_criteria=[str(item) for item in intent_payload.get("success_criteria", [])],
+                search_queries=[str(item) for item in intent_payload.get("search_queries", [])],
+                frontier_mode=str(intent_payload.get("frontier_mode", "relaxed")),
+                resource_modes=[str(item) for item in intent_payload.get("resource_modes", ["packets", "memory", "web"])],
+                notes=str(intent_payload.get("notes", "")),
+            ),
+            self_edit=SelfEditSpec(
+                command=[str(part) for part in self_edit_payload.get("command", [])],
+                mutable_targets=[str(item) for item in self_edit_payload.get("mutable_targets", payload.get("mutable_targets", []))],
+                prompt_preamble=str(self_edit_payload.get("prompt_preamble", "")),
+                git_mode=str(self_edit_payload.get("git_mode", "manual")),
+                auto_push=bool(self_edit_payload.get("auto_push", False)),
+                branch_prefix=str(self_edit_payload.get("branch_prefix", "self-edit/")),
+                main_branch=str(self_edit_payload.get("main_branch", "main")),
+                commit_message_template=str(
+                    self_edit_payload.get("commit_message_template", "Apply self-edit proposal {proposal_id}")
+                ),
+            ),
+            guardrails=GuardrailSpec(
+                max_loop_iterations=_safe_int(guardrail_payload.get("max_loop_iterations", 8), 8),
+                consecutive_discard_limit=_safe_int(guardrail_payload.get("consecutive_discard_limit", 3), 3),
+                near_best_tolerance=_safe_float(guardrail_payload.get("near_best_tolerance", 0.03), 0.03),
+                require_clean_git_for_self_edit=bool(guardrail_payload.get("require_clean_git_for_self_edit", True)),
+                require_human_approval_for_self_edit=bool(guardrail_payload.get("require_human_approval_for_self_edit", True)),
+                blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],
+            ),
+        )
 
 
+
+    except Exception:
+        return None
 def resolve_project_root(config_path: Path, config: ProjectConfig) -> Path:
-    project_root = Path(config.project_root)
-    if not project_root.is_absolute():
-        project_root = (config_path.parent / project_root).resolve()
-    return project_root
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        project_root = Path(config.project_root)
+        if not project_root.is_absolute():
+            project_root = (config_path.parent / project_root).resolve()
+        return project_root
 
 
+
+    except Exception:
+        return Path(".")
 def mutation_lookup(config: ProjectConfig) -> dict[str, MutationSpec]:
     return {item.name: item for item in config.mutable_parameters}
 

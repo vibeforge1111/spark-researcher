@@ -15,30 +15,47 @@ from .tracing import start_trace
 
 
 def _infer_domain(config_path: Path, explicit_domain: str | None = None) -> str:
-    if explicit_domain:
-        return explicit_domain
-    context = load_chip_context(config_path)
-    if context is not None:
-        return str(context.manifest.get("domain", "generic"))
-    return "generic"
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(explicit_domain, str): explicit_domain = str(explicit_domain or '')
+    try:
+        if explicit_domain:
+            return explicit_domain
+        context = load_chip_context(config_path)
+        if context is not None:
+            return str(context.manifest.get("domain", "generic"))
+        return "generic"
 
 
+
+    except Exception:
+        return ""
 def _task_type(task: str, domain: str) -> str:
-    lowered = task.lower()
-    if "belief" in lowered or "packet" in lowered:
-        return f"{domain}_packeting"
-    if "research" in lowered or "explore" in lowered:
-        return f"{domain}_research"
-    if "improve" in lowered or "optimize" in lowered:
-        return f"{domain}_optimization"
-    return f"{domain}_advisory"
+    if not isinstance(task, str): task = str(task or '')
+    if not isinstance(domain, str): domain = str(domain or '')
+    try:
+        lowered = task.lower()
+        if "belief" in lowered or "packet" in lowered:
+            return f"{domain}_packeting"
+        if "research" in lowered or "explore" in lowered:
+            return f"{domain}_research"
+        if "improve" in lowered or "optimize" in lowered:
+            return f"{domain}_optimization"
+        return f"{domain}_advisory"
 
 
+
+    except Exception:
+        return ""
 def _compress_claim(text: str, *, limit: int = 140) -> str:
-    compact = " ".join(text.split()).lstrip("- ").strip()
-    return compact if len(compact) <= limit else compact[: limit - 3].rstrip() + "..."
+    if not isinstance(text, str): text = str(text or '')
+    try:
+        compact = " ".join(text.split()).lstrip("- ").strip()
+        return compact if len(compact) <= limit else compact[: limit - 3].rstrip() + "..."
 
 
+
+    except Exception:
+        return ""
 def _guidance_from_packets(packet_rows: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
     guidance: list[str] = []
     boundaries: list[str] = []

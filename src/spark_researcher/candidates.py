@@ -28,49 +28,75 @@ def _continuous_status_path(runtime_root: Path) -> Path:
 
 
 def _continuous_stop_path(runtime_root: Path) -> Path:
-    return runtime_root / "artifacts" / "loop" / "STOP"
-
-
-def _continuous_stop_requested(path: Path | None) -> bool:
-    return path is not None and path.exists()
-
-
-def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
-    tracked = [
-        runtime_root / "artifacts" / "research" / "refresh.json",
-        runtime_root / "artifacts" / "research" / "frontier.json",
-        runtime_root / "artifacts" / "research" / "selection.json",
-        runtime_root / "artifacts" / "research" / "agent.json",
-        runtime_root / "artifacts" / "optimizer" / "startup_packet_extractor.last_batch.json",
-        runtime_root / "artifacts" / "realworld" / "queue.json",
-        ledger_path(runtime_root),
-    ]
-    return {
-        str(path): path.stat().st_mtime
-        for path in tracked
-        if path.exists()
-    }
-
-
-def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
-    path = _continuous_status_path(runtime_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with locked_file(path):
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
-    path = _continuous_status_path(runtime_root)
-    if not path.exists():
-        return {}
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
     try:
-        with locked_file(path):
-            payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        return runtime_root / "artifacts" / "loop" / "STOP"
+
+
+
+    except Exception:
+        return Path(".")
+def _continuous_stop_requested(path: Path | None) -> bool:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        return path is not None and path.exists()
+
+
+
+    except Exception:
+        return False
+def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        tracked = [
+            runtime_root / "artifacts" / "research" / "refresh.json",
+            runtime_root / "artifacts" / "research" / "frontier.json",
+            runtime_root / "artifacts" / "research" / "selection.json",
+            runtime_root / "artifacts" / "research" / "agent.json",
+            runtime_root / "artifacts" / "optimizer" / "startup_packet_extractor.last_batch.json",
+            runtime_root / "artifacts" / "realworld" / "queue.json",
+            ledger_path(runtime_root),
+        ]
+        return {
+            str(path): path.stat().st_mtime
+            for path in tracked
+            if path.exists()
+        }
+
+
+
+    except Exception:
         return {}
-    return payload if isinstance(payload, dict) else {}
+def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> None:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        path = _continuous_status_path(runtime_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with locked_file(path):
+            path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
+def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        path = _continuous_status_path(runtime_root)
+        if not path.exists():
+            return {}
+        try:
+            with locked_file(path):
+                payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+
+
+    except Exception:
+        return {}
 def _process_alive(pid: int) -> bool:
     if pid <= 0:
         return False

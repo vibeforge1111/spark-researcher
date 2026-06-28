@@ -125,35 +125,60 @@ def _signature_from_row(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
 
 
 def _metric_is_better(candidate: float, baseline: float | None, goal: str) -> bool:
-    if baseline is None:
-        return True
-    return candidate > baseline if goal == "maximize" else candidate < baseline
-
-
-def _best_value(values: list[float], goal: str) -> float | None:
-    if not values:
-        return None
-    return max(values) if goal == "maximize" else min(values)
-
-
-def _format_value(value: str) -> str:
-    return value.replace("_", "_u_").replace(".", "_dot_").replace("-", "_dash_")
-
-
-def _parse_decimal(value: str) -> Decimal | None:
+    if not isinstance(goal, str): goal = str(goal or '')
     try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
+        if baseline is None:
+            return True
+        return candidate > baseline if goal == "maximize" else candidate < baseline
+
+
+
+    except Exception:
+        return False
+def _best_value(values: list[float], goal: str) -> float | None:
+    if not isinstance(values, list): values = list(values or [])
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        if not values:
+            return None
+        return max(values) if goal == "maximize" else min(values)
+
+
+
+    except Exception:
         return None
+def _format_value(value: str) -> str:
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        return value.replace("_", "_u_").replace(".", "_dot_").replace("-", "_dash_")
 
 
+
+    except Exception:
+        return ""
+def _parse_decimal(value: str) -> Decimal | None:
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+
+
+
+    except Exception:
+        return None
 def _format_decimal(value: Decimal) -> str:
-    text = format(value.normalize(), "f")
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return "0" if text in {"-0", ""} else text
+    try:
+        text = format(value.normalize(), "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return "0" if text in {"-0", ""} else text
 
 
+
+    except Exception:
+        return ""
 def _candidate_id(mutations: dict[str, str]) -> str:
     parts = [f"{name}-{_format_value(value)}" for name, value in sorted(mutations.items())]
     return "combo-" + "-".join(parts)

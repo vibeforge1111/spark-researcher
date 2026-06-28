@@ -139,80 +139,105 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
-    docs_root = _documents_root(runtime_root)
-    return {
-        "backend": "local",
-        "document_count": 0,
-        "documents_root": str(docs_root),
-        "source_runs": 0,
-        "kinds": {},
-        "memory_tiers": {},
-        "outcomes": [],
-        "self_edit_documents": [],
-        "chip_documents": [],
-        "working_memory": load_working_memory(runtime_root),
-        "episode_count": len(load_episode_memory(runtime_root)),
-    }
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        docs_root = _documents_root(runtime_root)
+        return {
+            "backend": "local",
+            "document_count": 0,
+            "documents_root": str(docs_root),
+            "source_runs": 0,
+            "kinds": {},
+            "memory_tiers": {},
+            "outcomes": [],
+            "self_edit_documents": [],
+            "chip_documents": [],
+            "working_memory": load_working_memory(runtime_root),
+            "episode_count": len(load_episode_memory(runtime_root)),
+        }
 
 
+
+    except Exception:
+        return {}
 def _local_manifest(runtime_root: Path) -> dict[str, Any]:
-    manifest_path = _manifest_path(runtime_root)
-    if manifest_path.exists():
-        try:
-            return json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            # A concurrent memory sync may briefly leave the manifest half-written.
-            pass
-    return _empty_manifest(runtime_root)
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        manifest_path = _manifest_path(runtime_root)
+        if manifest_path.exists():
+            try:
+                return json.loads(manifest_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                # A concurrent memory sync may briefly leave the manifest half-written.
+                pass
+        return _empty_manifest(runtime_root)
 
 
+
+    except Exception:
+        return {}
 def _kind_priority(kind: str) -> int:
-    priorities = {
-        "startup_research": 20,
-        "startup_doctrine": 18,
-        "startup_boundary": 16,
-        "startup_benchmark": 14,
-        "belief": 12,
-        "self_edit": 8,
-        "episode": 6,
-        "outcome": 4,
-        "run": 2,
-        "working": 0,
-    }
-    return priorities.get(kind, 0)
+    if not isinstance(kind, str): kind = str(kind or '')
+    try:
+        priorities = {
+            "startup_research": 20,
+            "startup_doctrine": 18,
+            "startup_boundary": 16,
+            "startup_benchmark": 14,
+            "belief": 12,
+            "self_edit": 8,
+            "episode": 6,
+            "outcome": 4,
+            "run": 2,
+            "working": 0,
+        }
+        return priorities.get(kind, 0)
 
 
+
+    except Exception:
+        return 0
 def _tier_priority(tier: str) -> int:
-    priorities = {
-        "research_grounded": 28,
-        "grounded_doctrine": 30,
-        "grounded_boundary": 26,
-        "benchmark_evidence": 22,
-        "state_snapshot": 18,
-        "belief": 16,
-        "exploratory_frontier": 8,
-        "raw_outcome": 4,
-        "raw_run": 2,
-    }
-    return priorities.get(tier, 0)
+    if not isinstance(tier, str): tier = str(tier or '')
+    try:
+        priorities = {
+            "research_grounded": 28,
+            "grounded_doctrine": 30,
+            "grounded_boundary": 26,
+            "benchmark_evidence": 22,
+            "state_snapshot": 18,
+            "belief": 16,
+            "exploratory_frontier": 8,
+            "raw_outcome": 4,
+            "raw_run": 2,
+        }
+        return priorities.get(tier, 0)
 
 
+
+    except Exception:
+        return 0
 def _default_memory_tier(kind: str) -> str:
-    defaults = {
-        "startup_research": "research_grounded",
-        "startup_doctrine": "grounded_doctrine",
-        "startup_boundary": "grounded_boundary",
-        "startup_benchmark": "benchmark_evidence",
-        "belief": "belief",
-        "working": "state_snapshot",
-        "episode": "state_snapshot",
-        "outcome": "raw_outcome",
-        "run": "raw_run",
-        "startup_factor": "exploratory_frontier",
-    }
-    return defaults.get(kind, "raw_run")
+    if not isinstance(kind, str): kind = str(kind or '')
+    try:
+        defaults = {
+            "startup_research": "research_grounded",
+            "startup_doctrine": "grounded_doctrine",
+            "startup_boundary": "grounded_boundary",
+            "startup_benchmark": "benchmark_evidence",
+            "belief": "belief",
+            "working": "state_snapshot",
+            "episode": "state_snapshot",
+            "outcome": "raw_outcome",
+            "run": "raw_run",
+            "startup_factor": "exploratory_frontier",
+        }
+        return defaults.get(kind, "raw_run")
 
 
+
+    except Exception:
+        return ""
 def _infer_document_kind(path: Path) -> str:
     stem = path.stem
     if stem == "working-memory":

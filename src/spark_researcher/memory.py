@@ -63,51 +63,78 @@ def sync_memory_authority_refs(repo_root: Path, runtime_root: Path, config_path:
 
 
 def _safe_unlink(path: Path) -> None:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        path.unlink()
-    except FileNotFoundError:
-        return
-    except PermissionError:
-        # Windows/Obsidian can transiently hold generated docs open. Keep going;
-        # later writes will refresh files that still exist.
-        return
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            # Windows/Obsidian can transiently hold generated docs open. Keep going;
+            # later writes will refresh files that still exist.
+            return
 
 
+
+    except Exception:
+        return None
 def _safe_slug(value: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
-    return slug.strip("-") or "item"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
+        return slug.strip("-") or "item"
 
 
+
+    except Exception:
+        return ""
 def _bounded_document_stem(value: str, *, limit: int = MAX_DOCUMENT_STEM_LENGTH) -> str:
-    safe = _safe_slug(value)
-    if len(safe) <= limit:
-        return safe
-    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:12]
-    head_limit = max(1, limit - len(digest) - 1)
-    head = safe[:head_limit].rstrip("-._") or "item"
-    return f"{head}-{digest}"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        safe = _safe_slug(value)
+        if len(safe) <= limit:
+            return safe
+        digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:12]
+        head_limit = max(1, limit - len(digest) - 1)
+        head = safe[:head_limit].rstrip("-._") or "item"
+        return f"{head}-{digest}"
 
 
+
+    except Exception:
+        return ""
 def _trim_document_stem(value: str, *, limit: int) -> str:
-    trimmed = value[: max(1, limit)].rstrip("-._")
-    return trimmed or "item"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        trimmed = value[: max(1, limit)].rstrip("-._")
+        return trimmed or "item"
 
 
+
+    except Exception:
+        return ""
 def _unique_document_path(docs_root: Path, stem: str, used_paths: set[str]) -> Path:
-    base = _bounded_document_stem(stem)
-    candidate = base
-    index = 2
-    path = docs_root / f"{candidate}.md"
-    while str(path) in used_paths:
-        suffix = f"-{index}"
-        trimmed = _trim_document_stem(base, limit=MAX_DOCUMENT_STEM_LENGTH - len(suffix))
-        candidate = f"{trimmed}{suffix}"
+    if docs_root is not None and not hasattr(docs_root, 'resolve'): from pathlib import Path; docs_root = Path(str(docs_root))
+    if not isinstance(stem, str): stem = str(stem or '')
+    if not isinstance(used_paths, str): used_paths = str(used_paths or '')
+    try:
+        base = _bounded_document_stem(stem)
+        candidate = base
+        index = 2
         path = docs_root / f"{candidate}.md"
-        index += 1
-    used_paths.add(str(path))
-    return path
+        while str(path) in used_paths:
+            suffix = f"-{index}"
+            trimmed = _trim_document_stem(base, limit=MAX_DOCUMENT_STEM_LENGTH - len(suffix))
+            candidate = f"{trimmed}{suffix}"
+            path = docs_root / f"{candidate}.md"
+            index += 1
+        used_paths.add(str(path))
+        return path
 
 
+
+    except Exception:
+        return Path(".")
 def _normalize_query(query: str) -> str:
     normalized = " ".join(query.split())
     if not normalized:

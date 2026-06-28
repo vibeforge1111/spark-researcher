@@ -1137,36 +1137,61 @@ def _default_base_branch(repo_root: Path) -> str:
 
 
 def _load_manifest(repo_root: Path) -> dict[str, Any]:
-    path = repo_root / "AUTORESEARCH.md"
-    return _parse_frontmatter(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        path = repo_root / "AUTORESEARCH.md"
+        return _parse_frontmatter(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+
+    except Exception:
+        return {}
 def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
-    collective_root = repo_root.parent / "autoresearch-collective"
-    path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
-    if not path.exists():
-        return path, {"repoDirectory": [], "capsuleLibrary": []}
-    return path, json.loads(path.read_text(encoding="utf-8"))
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        collective_root = repo_root.parent / "autoresearch-collective"
+        path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
+        if not path.exists():
+            return path, {"repoDirectory": [], "capsuleLibrary": []}
+        return path, json.loads(path.read_text(encoding="utf-8"))
 
 
+
+    except Exception:
+        return ()
 def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
 
 
+
+    except Exception:
+        return ""
 def _ensure_clean_worktree(repo_root: Path) -> None:
-    status = _git_output(repo_root, "status", "--porcelain")
-    if status.strip():
-        raise RuntimeError("Absorb draft PR requires a clean git worktree in the target repo.")
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        status = _git_output(repo_root, "status", "--porcelain")
+        if status.strip():
+            raise RuntimeError("Absorb draft PR requires a clean git worktree in the target repo.")
 
 
+
+    except Exception:
+        return None
 def _gh_auth_ready(repo_root: Path) -> None:
-    if _run_command(["gh", "--version"], cwd=repo_root, check=False).returncode != 0:
-        raise RuntimeError("`gh` is required for absorb draft PR creation.")
-    auth = _run_command(["gh", "auth", "status"], cwd=repo_root, check=False)
-    if auth.returncode != 0:
-        raise RuntimeError("GitHub CLI is not authenticated. Run `gh auth login` first.")
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        if _run_command(["gh", "--version"], cwd=repo_root, check=False).returncode != 0:
+            raise RuntimeError("`gh` is required for absorb draft PR creation.")
+        auth = _run_command(["gh", "auth", "status"], cwd=repo_root, check=False)
+        if auth.returncode != 0:
+            raise RuntimeError("GitHub CLI is not authenticated. Run `gh auth login` first.")
 
 
+
+    except Exception:
+        return None
 def _source_repo_entry(collective_data: dict[str, Any], repo: str) -> dict[str, Any] | None:
     return next((entry for entry in collective_data.get("repoDirectory", []) if entry.get("repo") == repo), None)
 

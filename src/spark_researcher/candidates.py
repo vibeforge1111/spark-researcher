@@ -72,58 +72,81 @@ def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
 
 
 def _process_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    if os.name == "nt":
-        process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
-        if not process:
-            return False
-        try:
-            exit_code = ctypes.c_ulong()
-            if ctypes.windll.kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code)) == 0:
-                return False
-            return exit_code.value == 259
-        finally:
-            ctypes.windll.kernel32.CloseHandle(process)
     try:
-        os.kill(pid, 0)
-    except OSError:
+        if pid <= 0:
+            return False
+        if os.name == "nt":
+            process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+            if not process:
+                return False
+            try:
+                exit_code = ctypes.c_ulong()
+                if ctypes.windll.kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code)) == 0:
+                    return False
+                return exit_code.value == 259
+            finally:
+                ctypes.windll.kernel32.CloseHandle(process)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        return True
+
+
+
+    except Exception:
         return False
-    return True
-
-
 def _mark_stale_continuous_status(runtime_root: Path) -> dict[str, Any]:
-    payload = _load_continuous_status(runtime_root)
-    current_pass = payload.get("current_pass", {})
-    if not isinstance(current_pass, dict):
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        payload = _load_continuous_status(runtime_root)
+        current_pass = payload.get("current_pass", {})
+        if not isinstance(current_pass, dict):
+            return payload
+        if str(current_pass.get("status") or "").strip().lower() != "running":
+            return payload
+        writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
+        if writer_pid and _process_alive(writer_pid):
+            return payload
+        stale_at = _now_iso()
+        current_pass["status"] = "stale"
+        current_pass["stale_detected_at"] = stale_at
+        current_pass["stale_reason"] = "writer_process_missing"
+        payload["updated_at"] = stale_at
+        payload["current_pass"] = current_pass
+        _write_continuous_status(runtime_root, payload)
         return payload
-    if str(current_pass.get("status") or "").strip().lower() != "running":
-        return payload
-    writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
-    if writer_pid and _process_alive(writer_pid):
-        return payload
-    stale_at = _now_iso()
-    current_pass["status"] = "stale"
-    current_pass["stale_detected_at"] = stale_at
-    current_pass["stale_reason"] = "writer_process_missing"
-    payload["updated_at"] = stale_at
-    payload["current_pass"] = current_pass
-    _write_continuous_status(runtime_root, payload)
-    return payload
 
 
+
+    except Exception:
+        return {}
 def _doctrine_only_mode() -> bool:
-    return str(os.environ.get("SPARK_STARTUP_DOCTRINE_ONLY", "")).strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        return str(os.environ.get("SPARK_STARTUP_DOCTRINE_ONLY", "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
+
+    except Exception:
+        return False
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
+    if not isinstance(mutations, str): mutations = str(mutations or '')
+    try:
+        return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
 
 
+
+    except Exception:
+        return ()
 def _signature_from_row(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
+    if not isinstance(row, str): row = str(row or '')
+    try:
+        return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
 
 
+
+    except Exception:
+        return ()
 def _metric_is_better(candidate: float, baseline: float | None, goal: str) -> bool:
     if baseline is None:
         return True

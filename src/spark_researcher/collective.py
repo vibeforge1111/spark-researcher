@@ -497,273 +497,304 @@ def _resolved_spark_swarm_workspace_id() -> str | None:
 
 
 def _runtime_blocker(record: dict[str, Any]) -> str | None:
-    status = str(record.get("status") or "").strip()
-    verdict = str(record.get("verdict") or "").strip()
-    if status and status != "ok":
-        returncode = record.get("returncode")
-        return f"Run failed with returncode {returncode}." if returncode is not None else "Run failed."
-    if verdict and verdict not in {"improved", "flat", "baseline", "near_best"}:
-        return f"Run verdict: {verdict}."
-    return None
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        status = str(record.get("status") or "").strip()
+        verdict = str(record.get("verdict") or "").strip()
+        if status and status != "ok":
+            returncode = record.get("returncode")
+            return f"Run failed with returncode {returncode}." if returncode is not None else "Run failed."
+        if verdict and verdict not in {"improved", "flat", "baseline", "near_best"}:
+            return f"Run verdict: {verdict}."
+        return None
 
 
+
+    except Exception:
+        return ""
 def build_spark_swarm_collective_payload(
     repo_root: Path,
     runtime_root: Path,
     config: ProjectConfig,
     record: dict[str, Any],
 ) -> dict[str, Any]:
-    emitted_at = str(record.get("created_at") or datetime.now(UTC).replace(microsecond=0).isoformat())
-    run_id = str(record.get("run_id") or "latest")
-    command_name = str(record.get("command_name") or "run")
-    metric_name = str(record.get("metric_name") or config.eval_metric)
-    metric_value = record.get("metric_value")
-    status = str(record.get("status") or "failed")
-    verdict = str(record.get("verdict") or "unknown")
-    runtime_state = "running" if status == "ok" else "blocked"
-    evidence_lane = "live_evidence"
-    chip_result = record.get("chip_result", {})
-    if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
-        evidence_lane = "benchmark_evidence"
-    benchmark_metrics = _benchmark_metrics(record) or _trading_benchmark_metrics(record)
-    benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics) or _trading_outcome_context(record, benchmark_metrics)
-    outcome_scorecard = _outcome_scorecard(record, benchmark_metrics)
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        emitted_at = str(record.get("created_at") or datetime.now(UTC).replace(microsecond=0).isoformat())
+        run_id = str(record.get("run_id") or "latest")
+        command_name = str(record.get("command_name") or "run")
+        metric_name = str(record.get("metric_name") or config.eval_metric)
+        metric_value = record.get("metric_value")
+        status = str(record.get("status") or "failed")
+        verdict = str(record.get("verdict") or "unknown")
+        runtime_state = "running" if status == "ok" else "blocked"
+        evidence_lane = "live_evidence"
+        chip_result = record.get("chip_result", {})
+        if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
+            evidence_lane = "benchmark_evidence"
+        benchmark_metrics = _benchmark_metrics(record) or _trading_benchmark_metrics(record)
+        benchmark_outcome_context = _benchmark_outcome_context(record, benchmark_metrics) or _trading_outcome_context(record, benchmark_metrics)
+        outcome_scorecard = _outcome_scorecard(record, benchmark_metrics)
 
-    workspace_id = _resolved_spark_swarm_workspace_id() or ""
-    agent_id, agent_label = _agent_identity(repo_root)
-    specialization = _specialization_descriptor(repo_root)
-    specialization_id = str(specialization["id"])
-    repo_id = f"repo:{_slug(str(specialization['key']))}"
-    outcome_id = f"outcome:{run_id}"
-    insight_like = status == "ok" and verdict not in {"regressed", "unknown"}
-    improvement_like = status == "ok" and verdict in {"improved", "near_best"}
-    contradiction_like = status != "ok" or verdict in {"regressed", "unknown"}
+        workspace_id = _resolved_spark_swarm_workspace_id() or ""
+        agent_id, agent_label = _agent_identity(repo_root)
+        specialization = _specialization_descriptor(repo_root)
+        specialization_id = str(specialization["id"])
+        repo_id = f"repo:{_slug(str(specialization['key']))}"
+        outcome_id = f"outcome:{run_id}"
+        insight_like = status == "ok" and verdict not in {"regressed", "unknown"}
+        improvement_like = status == "ok" and verdict in {"improved", "near_best"}
+        contradiction_like = status != "ok" or verdict in {"regressed", "unknown"}
 
-    insight_id = f"insight:{run_id}"
-    mastery_id = f"mastery:{run_id}"
-    contradiction_id = f"contradiction:{run_id}"
-    path_id = _evolution_path_id(str(specialization["key"]), command_name)
-    summary = f"{command_name} {verdict} on {metric_name}={metric_value}"
+        insight_id = f"insight:{run_id}"
+        mastery_id = f"mastery:{run_id}"
+        contradiction_id = f"contradiction:{run_id}"
+        path_id = _evolution_path_id(str(specialization["key"]), command_name)
+        summary = f"{command_name} {verdict} on {metric_name}={metric_value}"
 
-    insights: list[dict[str, Any]] = []
-    masteries: list[dict[str, Any]] = []
-    contradictions: list[dict[str, Any]] = []
-    evidence = [
-        {
-            "lane": evidence_lane,
-            "support": "strong" if evidence_lane == "benchmark_evidence" and improvement_like else "moderate" if improvement_like else "weak",
-            "summary": summary,
-            "artifactRefs": _artifact_refs(record),
-            **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
-        }
-    ]
-
-    if insight_like:
-        insights.append(
+        insights: list[dict[str, Any]] = []
+        masteries: list[dict[str, Any]] = []
+        contradictions: list[dict[str, Any]] = []
+        evidence = [
             {
-                "id": insight_id,
-                "specializationId": specialization_id,
+                "lane": evidence_lane,
+                "support": "strong" if evidence_lane == "benchmark_evidence" and improvement_like else "moderate" if improvement_like else "weak",
                 "summary": summary,
-                "mechanism": str(record.get("candidate_summary") or "").strip() or None,
-                "boundary": None,
-                "contradiction": None,
-                "confidence": 0.8 if evidence_lane == "benchmark_evidence" else 0.65,
-                "evidenceLane": evidence_lane,
-                "sourceRefs": [str(record.get("run_dir") or "")] if record.get("run_dir") else [],
-                "status": (
-                    "benchmark_supported"
-                    if evidence_lane == "benchmark_evidence"
-                    else "live_supported" if verdict in {"improved", "near_best"} else "captured"
-                ),
+                "artifactRefs": _artifact_refs(record),
                 **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
-                "createdAt": emitted_at,
-                "updatedAt": emitted_at,
             }
-        )
-        if evidence_lane == "benchmark_evidence":
-            masteries.append(
+        ]
+
+        if insight_like:
+            insights.append(
                 {
-                    "id": mastery_id,
-                    "derivedFromInsightId": insight_id,
-                    "specializationScope": str(specialization["key"]),
-                    "shareScope": "selective",
-                    "status": "provisional_mastery",
-                    "supportCount": 1,
-                    "contradictionCount": 0,
-                    "benchmarkStrength": 0.9,
-                    "liveStrength": None,
-                    "summary": f"{command_name} benchmark-backed mastery candidate",
+                    "id": insight_id,
+                    "specializationId": specialization_id,
+                    "summary": summary,
+                    "mechanism": str(record.get("candidate_summary") or "").strip() or None,
+                    "boundary": None,
+                    "contradiction": None,
+                    "confidence": 0.8 if evidence_lane == "benchmark_evidence" else 0.65,
+                    "evidenceLane": evidence_lane,
+                    "sourceRefs": [str(record.get("run_dir") or "")] if record.get("run_dir") else [],
+                    "status": (
+                        "benchmark_supported"
+                        if evidence_lane == "benchmark_evidence"
+                        else "live_supported" if verdict in {"improved", "near_best"} else "captured"
+                    ),
                     **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
                     "createdAt": emitted_at,
                     "updatedAt": emitted_at,
                 }
             )
+            if evidence_lane == "benchmark_evidence":
+                masteries.append(
+                    {
+                        "id": mastery_id,
+                        "derivedFromInsightId": insight_id,
+                        "specializationScope": str(specialization["key"]),
+                        "shareScope": "selective",
+                        "status": "provisional_mastery",
+                        "supportCount": 1,
+                        "contradictionCount": 0,
+                        "benchmarkStrength": 0.9,
+                        "liveStrength": None,
+                        "summary": f"{command_name} benchmark-backed mastery candidate",
+                        **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
+                        "createdAt": emitted_at,
+                        "updatedAt": emitted_at,
+                    }
+                )
 
-    if contradiction_like:
-        contradictions.append(
-            {
-                "id": contradiction_id,
-                "targetType": "insight" if insights else "upgrade",
-                "targetId": insight_id if insights else path_id,
-                "severity": "critical" if status != "ok" else "warn",
-                "summary": summary,
-                "sourceRef": str(record.get("log_path") or "") or None,
-                "createdAt": emitted_at,
-            }
-        )
+        if contradiction_like:
+            contradictions.append(
+                {
+                    "id": contradiction_id,
+                    "targetType": "insight" if insights else "upgrade",
+                    "targetId": insight_id if insights else path_id,
+                    "severity": "critical" if status != "ok" else "warn",
+                    "summary": summary,
+                    "sourceRef": str(record.get("log_path") or "") or None,
+                    "createdAt": emitted_at,
+                }
+            )
 
-    outcome_verdict = "contradicted" if status != "ok" else verdict if verdict in {"improved", "flat", "regressed", "contradicted"} else "flat"
+        outcome_verdict = "contradicted" if status != "ok" else verdict if verdict in {"improved", "flat", "regressed", "contradicted"} else "flat"
 
-    return {
-        "workspaceId": workspace_id,
-        "agentId": agent_id,
-        "runtimeSource": _runtime_source(record, agent_id=agent_id, run_id=run_id),
-        "specialization": specialization,
-        "runtimePulse": {
+        return {
+            "workspaceId": workspace_id,
             "agentId": agent_id,
-            "repoId": repo_id,
-            "runtimeState": runtime_state,
-            "passNumber": len(read_jsonl(ledger_path(runtime_root))),
-            "stageKey": command_name,
-            "stageLabel": command_name.replace("-", " ").title(),
-            "blocker": _runtime_blocker(record),
-            "recommendation": "Review the newest insight and outcome." if improvement_like else "Review the contradiction and latest outcome.",
-            "lastUpdatedAt": emitted_at,
-        },
-        "intelligencePulse": {
-            "specializationId": specialization_id,
-            "specializationLabel": agent_label,
-            "activeEvolutionPathId": path_id,
-            "activeEvolutionPathSummary": f"Improve {command_name} on {metric_name}",
-            "newestInsightId": insight_id if insights else None,
-            "newestInsightSummary": insights[0]["summary"] if insights else None,
-            "strongestMasteryId": masteries[0]["id"] if masteries else None,
-            "strongestMasterySummary": masteries[0]["summary"] if masteries else None,
-            "pendingContradictionCount": len(contradictions),
-            "pendingUpgradeCount": 0,
-            "recommendedAbsorbTargetId": insight_id if insights else None,
-            "recommendedUpgradeId": None,
-            "evidence": evidence,
-        },
-        "evolutionPaths": [
-            {
-                "id": path_id,
-                "scope": "specialization",
+            "runtimeSource": _runtime_source(record, agent_id=agent_id, run_id=run_id),
+            "specialization": specialization,
+            "runtimePulse": {
+                "agentId": agent_id,
+                "repoId": repo_id,
+                "runtimeState": runtime_state,
+                "passNumber": len(read_jsonl(ledger_path(runtime_root))),
+                "stageKey": command_name,
+                "stageLabel": command_name.replace("-", " ").title(),
+                "blocker": _runtime_blocker(record),
+                "recommendation": "Review the newest insight and outcome." if improvement_like else "Review the contradiction and latest outcome.",
+                "lastUpdatedAt": emitted_at,
+            },
+            "intelligencePulse": {
                 "specializationId": specialization_id,
-                "summary": f"Improve {command_name} on {metric_name}",
-                "status": "open",
-                "assignedAgentId": agent_id,
-                "bestOutcomeId": outcome_id if improvement_like else None,
-                "expiresAt": None,
-                "createdAt": emitted_at,
-                "updatedAt": emitted_at,
-            }
-        ],
-        "insights": insights,
-        "masteries": masteries,
-        "masteryReviews": [],
-        "contradictions": contradictions,
-        "upgrades": [],
-        "upgradeDeliveries": [],
-        "outcomes": [
-            {
-                "id": outcome_id,
-                "targetType": "evolution_path",
-                "targetId": path_id,
-                "evidenceLane": evidence_lane,
-                "verdict": outcome_verdict,
-                "summary": summary,
-                "metricName": metric_name,
-                "metricValue": float(metric_value) if isinstance(metric_value, (int, float)) else None,
-                **({"context": {**(benchmark_outcome_context or {}), **({"scorecard": outcome_scorecard} if outcome_scorecard else {})}} if benchmark_outcome_context or outcome_scorecard else {}),
-                **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
-                "createdAt": emitted_at,
-            }
-        ],
-        "artifactRefs": _artifact_refs(record),
-        "emittedAt": emitted_at,
-    }
+                "specializationLabel": agent_label,
+                "activeEvolutionPathId": path_id,
+                "activeEvolutionPathSummary": f"Improve {command_name} on {metric_name}",
+                "newestInsightId": insight_id if insights else None,
+                "newestInsightSummary": insights[0]["summary"] if insights else None,
+                "strongestMasteryId": masteries[0]["id"] if masteries else None,
+                "strongestMasterySummary": masteries[0]["summary"] if masteries else None,
+                "pendingContradictionCount": len(contradictions),
+                "pendingUpgradeCount": 0,
+                "recommendedAbsorbTargetId": insight_id if insights else None,
+                "recommendedUpgradeId": None,
+                "evidence": evidence,
+            },
+            "evolutionPaths": [
+                {
+                    "id": path_id,
+                    "scope": "specialization",
+                    "specializationId": specialization_id,
+                    "summary": f"Improve {command_name} on {metric_name}",
+                    "status": "open",
+                    "assignedAgentId": agent_id,
+                    "bestOutcomeId": outcome_id if improvement_like else None,
+                    "expiresAt": None,
+                    "createdAt": emitted_at,
+                    "updatedAt": emitted_at,
+                }
+            ],
+            "insights": insights,
+            "masteries": masteries,
+            "masteryReviews": [],
+            "contradictions": contradictions,
+            "upgrades": [],
+            "upgradeDeliveries": [],
+            "outcomes": [
+                {
+                    "id": outcome_id,
+                    "targetType": "evolution_path",
+                    "targetId": path_id,
+                    "evidenceLane": evidence_lane,
+                    "verdict": outcome_verdict,
+                    "summary": summary,
+                    "metricName": metric_name,
+                    "metricValue": float(metric_value) if isinstance(metric_value, (int, float)) else None,
+                    **({"context": {**(benchmark_outcome_context or {}), **({"scorecard": outcome_scorecard} if outcome_scorecard else {})}} if benchmark_outcome_context or outcome_scorecard else {}),
+                    **({"benchmarkMetrics": benchmark_metrics} if benchmark_metrics else {}),
+                    "createdAt": emitted_at,
+                }
+            ],
+            "artifactRefs": _artifact_refs(record),
+            "emittedAt": emitted_at,
+        }
 
 
+
+    except Exception:
+        return {}
 def write_spark_swarm_collective_payload(
     repo_root: Path,
     runtime_root: Path,
     config: ProjectConfig,
     record: dict[str, Any],
 ) -> dict[str, Any]:
-    payload = build_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
-    path = spark_swarm_collective_payload_path(repo_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {
-        "payload_path": str(path),
-        "workspace_id": payload.get("workspaceId") or None,
-        "agent_id": payload.get("agentId"),
-        "insight_count": len(payload.get("insights", [])),
-        "mastery_count": len(payload.get("masteries", [])),
-        "contradiction_count": len(payload.get("contradictions", [])),
-        "outcome_count": len(payload.get("outcomes", [])),
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        payload = build_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
+        path = spark_swarm_collective_payload_path(repo_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return {
+            "payload_path": str(path),
+            "workspace_id": payload.get("workspaceId") or None,
+            "agent_id": payload.get("agentId"),
+            "insight_count": len(payload.get("insights", [])),
+            "mastery_count": len(payload.get("masteries", [])),
+            "contradiction_count": len(payload.get("contradictions", [])),
+            "outcome_count": len(payload.get("outcomes", [])),
+        }
 
 
+
+    except Exception:
+        return {}
 def write_spark_swarm_collective_payload_from_latest(
     repo_root: Path,
     runtime_root: Path,
     config: ProjectConfig,
 ) -> dict[str, Any]:
-    record = latest_metric_run(runtime_root)
-    if record is None:
-        raise RuntimeError("No metric runs available to export for Spark Swarm.")
-    return write_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        record = latest_metric_run(runtime_root)
+        if record is None:
+            raise RuntimeError("No metric runs available to export for Spark Swarm.")
+        return write_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
 
 
+
+    except Exception:
+        return {}
 def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
-    run = latest_metric_run(runtime_root)
-    if run is None:
-        raise RuntimeError("No metric runs available to publish.")
-    capsule_id = f"{now_stamp()}-{run.get('run_id')}"
-    root = capsule_root(repo_root)
-    root.mkdir(parents=True, exist_ok=True)
-    verdict = _normalized_collective_verdict(
-        str(run.get("verdict") or ""),
-        status=str(run.get("status") or ""),
-    )
-    payload = {
-        "capsule_id": capsule_id,
-        "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
-        "title": f"{run.get('project_name')} {run.get('candidate_id') or run.get('run_id')}",
-        "summary": f"{verdict} on {run.get('metric_name')}={run.get('metric_value')}",
-        "metric_name": run.get("metric_name"),
-        "metric_value": run.get("metric_value"),
-        "baseline_value": run.get("baseline_value"),
-        "verdict": verdict,
-        "run_id": run.get("run_id"),
-        "artifact_paths": [run.get("run_dir"), run.get("log_path")],
-    }
-    markdown = "\n".join(
-        [
-            "---",
-            *(f"{key}: {json.dumps(value) if isinstance(value, (dict, list)) else value}" for key, value in payload.items()),
-            "export_kind: latest",
-            "---",
-            "",
-            f"# {payload['title']}",
-            "",
-            payload["summary"],
-            "",
-            f"- metric: `{payload['metric_name']}` = `{payload['metric_value']}`",
-            f"- baseline: `{payload['baseline_value']}`",
-            f"- verdict: `{payload['verdict']}`",
-            f"- run_id: `{payload['run_id']}`",
-        ]
-    )
-    md_path = root / f"{capsule_id}.md"
-    json_path = root / f"{capsule_id}.manifest.json"
-    md_path.write_text(markdown + "\n", encoding="utf-8")
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        run = latest_metric_run(runtime_root)
+        if run is None:
+            raise RuntimeError("No metric runs available to publish.")
+        capsule_id = f"{now_stamp()}-{run.get('run_id')}"
+        root = capsule_root(repo_root)
+        root.mkdir(parents=True, exist_ok=True)
+        verdict = _normalized_collective_verdict(
+            str(run.get("verdict") or ""),
+            status=str(run.get("status") or ""),
+        )
+        payload = {
+            "capsule_id": capsule_id,
+            "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "title": f"{run.get('project_name')} {run.get('candidate_id') or run.get('run_id')}",
+            "summary": f"{verdict} on {run.get('metric_name')}={run.get('metric_value')}",
+            "metric_name": run.get("metric_name"),
+            "metric_value": run.get("metric_value"),
+            "baseline_value": run.get("baseline_value"),
+            "verdict": verdict,
+            "run_id": run.get("run_id"),
+            "artifact_paths": [run.get("run_dir"), run.get("log_path")],
+        }
+        markdown = "\n".join(
+            [
+                "---",
+                *(f"{key}: {json.dumps(value) if isinstance(value, (dict, list)) else value}" for key, value in payload.items()),
+                "export_kind: latest",
+                "---",
+                "",
+                f"# {payload['title']}",
+                "",
+                payload["summary"],
+                "",
+                f"- metric: `{payload['metric_name']}` = `{payload['metric_value']}`",
+                f"- baseline: `{payload['baseline_value']}`",
+                f"- verdict: `{payload['verdict']}`",
+                f"- run_id: `{payload['run_id']}`",
+            ]
+        )
+        md_path = root / f"{capsule_id}.md"
+        json_path = root / f"{capsule_id}.manifest.json"
+        md_path.write_text(markdown + "\n", encoding="utf-8")
+        json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
 
 
+
+    except Exception:
+        return {}
 def _payload_run_id(path: Path) -> str | None:
     if not path.exists():
         return None

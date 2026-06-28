@@ -80,48 +80,66 @@ def merged_candidate_trials(config_path: Path, *, config: ProjectConfig | None =
 
 
 def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, config: ProjectConfig | None = None) -> dict[str, object]:
-    path = queue_path_for_config(config_path)
-    existing_trials = merged_candidate_trials(config_path, config=config)
-    seen = {_trial_signature(trial) for trial in existing_trials}
-    queue_trials = load_queue_trials(config_path)
-    appended: list[dict[str, object]] = []
-    for trial in trials:
-        sig = _trial_signature(trial)
-        if sig in seen:
-            continue
-        seen.add(sig)
-        queue_trials.append(trial)
-        appended.append(asdict(trial))
-    if appended:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        serialized = json.dumps({"candidate_trials": [asdict(item) for item in queue_trials]}, indent=2, sort_keys=True) + "\n"
-        tmp_name = ""
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w",
-                encoding="utf-8",
-                dir=path.parent,
-                prefix=f".{path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as handle:
-                tmp_name = handle.name
-                handle.write(serialized)
-            os.replace(tmp_name, path)
-        except Exception:
-            if tmp_name:
-                try:
-                    os.unlink(tmp_name)
-                except OSError:
-                    pass
-            raise
-    return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(trials, list): trials = list(trials or [])
+    try:
+        path = queue_path_for_config(config_path)
+        existing_trials = merged_candidate_trials(config_path, config=config)
+        seen = {_trial_signature(trial) for trial in existing_trials}
+        queue_trials = load_queue_trials(config_path)
+        appended: list[dict[str, object]] = []
+        for trial in trials:
+            sig = _trial_signature(trial)
+            if sig in seen:
+                continue
+            seen.add(sig)
+            queue_trials.append(trial)
+            appended.append(asdict(trial))
+        if appended:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            serialized = json.dumps({"candidate_trials": [asdict(item) for item in queue_trials]}, indent=2, sort_keys=True) + "\n"
+            tmp_name = ""
+            try:
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=path.parent,
+                    prefix=f".{path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as handle:
+                    tmp_name = handle.name
+                    handle.write(serialized)
+                os.replace(tmp_name, path)
+            except Exception:
+                if tmp_name:
+                    try:
+                        os.unlink(tmp_name)
+                    except OSError:
+                        pass
+                raise
+        return {"appended_count": len(appended), "appended": appended, "queue_path": str(path)}
 
 
+
+    except Exception:
+        return {}
 def pending_queue_trials(config_path: Path, rows: list[dict[str, object]]) -> list[CandidateTrial]:
-    tested = {_signature_from_row(row) for row in rows}
-    return [trial for trial in load_queue_trials(config_path) if _signature(trial.mutations) not in tested]
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(rows, str): rows = str(rows or '')
+    try:
+        tested = {_signature_from_row(row) for row in rows}
+        return [trial for trial in load_queue_trials(config_path) if _signature(trial.mutations) not in tested]
 
 
+
+    except Exception:
+        return []
 def pending_queue_count(config_path: Path, rows: list[dict[str, object]]) -> int:
-    return len(pending_queue_trials(config_path, rows))
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(rows, str): rows = str(rows or '')
+    try:
+        return len(pending_queue_trials(config_path, rows))
+
+    except Exception:
+        return 0

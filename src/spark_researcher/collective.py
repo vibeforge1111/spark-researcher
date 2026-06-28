@@ -114,82 +114,110 @@ def latest_metric_run(runtime_root: Path) -> dict[str, Any] | None:
 
 
 def _runtime_source(record: dict[str, Any], *, agent_id: str, run_id: str) -> dict[str, Any]:
-    chip_result = record.get("chip_result", {})
-    comparison_class = ""
-    if isinstance(chip_result, dict):
-        comparison_class = str(chip_result.get("comparison_class", "")).strip()
+    if not isinstance(record, str): record = str(record or '')
+    if not isinstance(agent_id, str): agent_id = str(agent_id or '')
+    if not isinstance(run_id, str): run_id = str(run_id or '')
+    try:
+        chip_result = record.get("chip_result", {})
+        comparison_class = ""
+        if isinstance(chip_result, dict):
+            comparison_class = str(chip_result.get("comparison_class", "")).strip()
 
-    loop_kind = "benchmark" if comparison_class == "benchmark_grounded" else "generalist"
-    return {
-        "kind": "spark_researcher",
-        "version": "0.1.0",
-        "loopKind": loop_kind,
-        "sourceInstanceId": agent_id,
-        "sourceRunId": f"spark-researcher:{run_id}",
-        "chipKey": None,
-        "chipLabel": None,
-    }
+        loop_kind = "benchmark" if comparison_class == "benchmark_grounded" else "generalist"
+        return {
+            "kind": "spark_researcher",
+            "version": "0.1.0",
+            "loopKind": loop_kind,
+            "sourceInstanceId": agent_id,
+            "sourceRunId": f"spark-researcher:{run_id}",
+            "chipKey": None,
+            "chipLabel": None,
+        }
 
 
+
+    except Exception:
+        return {}
 def _agent_identity(repo_root: Path) -> tuple[str, str]:
-    fields = _manifest_metadata(repo_root)
-    agent_label = (
-        str(fields.get("agent.name") or "").strip()
-        or str(fields.get("name") or "").strip()
-        or os.environ.get("SPARK_SWARM_AGENT_NAME")
-        or repo_root.name
-    )
-    repo_value = str(fields.get("repo") or "").strip()
-    agent_key = _repo_key(repo_value) if repo_value else _slug(agent_label)
-    return f"agent:{agent_key}", agent_label
-
-
-def _specialization_descriptor(repo_root: Path) -> dict[str, Any]:
-    fields = _manifest_metadata(repo_root)
-    repo_label = (
-        str(fields.get("name") or "").strip()
-        or str(fields.get("repo.name") or "").strip()
-        or str(fields.get("repo") or "").strip().split("/")[-1]
-        or repo_root.name
-    )
-    repo_value = str(fields.get("repo") or "").strip()
-    key = _repo_key(repo_value) if repo_value else _slug(repo_label)
-    return {
-        "id": f"specialization:{key}",
-        "key": key,
-        "label": repo_label,
-        "memoryPolicy": "selective",
-    }
-
-
-def _evolution_path_id(specialization_key: str, command_name: str) -> str:
-    return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
-
-
-def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
-    run_id = str(record.get("run_id") or "latest")
-    refs = []
-    for kind, label, path_key in (
-        ("run_trace", "Run directory", "run_dir"),
-        ("run_trace", "Run log", "log_path"),
-        ("run_trace", "Trace file", "trace_path"),
-    ):
-        path_value = record.get(path_key)
-        if not path_value:
-            continue
-        refs.append(
-            {
-                "id": f"{run_id}:{path_key}",
-                "kind": kind,
-                "label": label,
-                "path": str(path_value),
-                "url": None,
-                "hash": None,
-            }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        fields = _manifest_metadata(repo_root)
+        agent_label = (
+            str(fields.get("agent.name") or "").strip()
+            or str(fields.get("name") or "").strip()
+            or os.environ.get("SPARK_SWARM_AGENT_NAME")
+            or repo_root.name
         )
-    return refs
+        repo_value = str(fields.get("repo") or "").strip()
+        agent_key = _repo_key(repo_value) if repo_value else _slug(agent_label)
+        return f"agent:{agent_key}", agent_label
 
 
+
+    except Exception:
+        return ()
+def _specialization_descriptor(repo_root: Path) -> dict[str, Any]:
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        fields = _manifest_metadata(repo_root)
+        repo_label = (
+            str(fields.get("name") or "").strip()
+            or str(fields.get("repo.name") or "").strip()
+            or str(fields.get("repo") or "").strip().split("/")[-1]
+            or repo_root.name
+        )
+        repo_value = str(fields.get("repo") or "").strip()
+        key = _repo_key(repo_value) if repo_value else _slug(repo_label)
+        return {
+            "id": f"specialization:{key}",
+            "key": key,
+            "label": repo_label,
+            "memoryPolicy": "selective",
+        }
+
+
+
+    except Exception:
+        return {}
+def _evolution_path_id(specialization_key: str, command_name: str) -> str:
+    if not isinstance(specialization_key, str): specialization_key = str(specialization_key or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
+
+
+
+    except Exception:
+        return ""
+def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(record, str): record = str(record or '')
+    try:
+        run_id = str(record.get("run_id") or "latest")
+        refs = []
+        for kind, label, path_key in (
+            ("run_trace", "Run directory", "run_dir"),
+            ("run_trace", "Run log", "log_path"),
+            ("run_trace", "Trace file", "trace_path"),
+        ):
+            path_value = record.get(path_key)
+            if not path_value:
+                continue
+            refs.append(
+                {
+                    "id": f"{run_id}:{path_key}",
+                    "kind": kind,
+                    "label": label,
+                    "path": str(path_value),
+                    "url": None,
+                    "hash": None,
+                }
+            )
+        return refs
+
+
+
+    except Exception:
+        return []
 def _benchmark_metrics(record: dict[str, Any]) -> dict[str, Any] | None:
     chip_result = record.get("chip_result", {})
     if not isinstance(chip_result, dict):

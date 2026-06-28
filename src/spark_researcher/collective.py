@@ -711,146 +711,173 @@ def write_spark_swarm_collective_payload_from_latest(
     runtime_root: Path,
     config: ProjectConfig,
 ) -> dict[str, Any]:
-    record = latest_metric_run(runtime_root)
-    if record is None:
-        raise RuntimeError("No metric runs available to export for Spark Swarm.")
-    return write_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        record = latest_metric_run(runtime_root)
+        if record is None:
+            raise RuntimeError("No metric runs available to export for Spark Swarm.")
+        return write_spark_swarm_collective_payload(repo_root, runtime_root, config, record)
 
 
+
+    except Exception:
+        return {}
 def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
-    run = latest_metric_run(runtime_root)
-    if run is None:
-        raise RuntimeError("No metric runs available to publish.")
-    capsule_id = f"{now_stamp()}-{run.get('run_id')}"
-    root = capsule_root(repo_root)
-    root.mkdir(parents=True, exist_ok=True)
-    verdict = _normalized_collective_verdict(
-        str(run.get("verdict") or ""),
-        status=str(run.get("status") or ""),
-    )
-    payload = {
-        "capsule_id": capsule_id,
-        "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
-        "title": f"{run.get('project_name')} {run.get('candidate_id') or run.get('run_id')}",
-        "summary": f"{verdict} on {run.get('metric_name')}={run.get('metric_value')}",
-        "metric_name": run.get("metric_name"),
-        "metric_value": run.get("metric_value"),
-        "baseline_value": run.get("baseline_value"),
-        "verdict": verdict,
-        "run_id": run.get("run_id"),
-        "artifact_paths": [run.get("run_dir"), run.get("log_path")],
-    }
-    markdown = "\n".join(
-        [
-            "---",
-            *(f"{key}: {json.dumps(value) if isinstance(value, (dict, list)) else value}" for key, value in payload.items()),
-            "export_kind: latest",
-            "---",
-            "",
-            f"# {payload['title']}",
-            "",
-            payload["summary"],
-            "",
-            f"- metric: `{payload['metric_name']}` = `{payload['metric_value']}`",
-            f"- baseline: `{payload['baseline_value']}`",
-            f"- verdict: `{payload['verdict']}`",
-            f"- run_id: `{payload['run_id']}`",
-        ]
-    )
-    md_path = root / f"{capsule_id}.md"
-    json_path = root / f"{capsule_id}.manifest.json"
-    md_path.write_text(markdown + "\n", encoding="utf-8")
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        run = latest_metric_run(runtime_root)
+        if run is None:
+            raise RuntimeError("No metric runs available to publish.")
+        capsule_id = f"{now_stamp()}-{run.get('run_id')}"
+        root = capsule_root(repo_root)
+        root.mkdir(parents=True, exist_ok=True)
+        verdict = _normalized_collective_verdict(
+            str(run.get("verdict") or ""),
+            status=str(run.get("status") or ""),
+        )
+        payload = {
+            "capsule_id": capsule_id,
+            "created_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "title": f"{run.get('project_name')} {run.get('candidate_id') or run.get('run_id')}",
+            "summary": f"{verdict} on {run.get('metric_name')}={run.get('metric_value')}",
+            "metric_name": run.get("metric_name"),
+            "metric_value": run.get("metric_value"),
+            "baseline_value": run.get("baseline_value"),
+            "verdict": verdict,
+            "run_id": run.get("run_id"),
+            "artifact_paths": [run.get("run_dir"), run.get("log_path")],
+        }
+        markdown = "\n".join(
+            [
+                "---",
+                *(f"{key}: {json.dumps(value) if isinstance(value, (dict, list)) else value}" for key, value in payload.items()),
+                "export_kind: latest",
+                "---",
+                "",
+                f"# {payload['title']}",
+                "",
+                payload["summary"],
+                "",
+                f"- metric: `{payload['metric_name']}` = `{payload['metric_value']}`",
+                f"- baseline: `{payload['baseline_value']}`",
+                f"- verdict: `{payload['verdict']}`",
+                f"- run_id: `{payload['run_id']}`",
+            ]
+        )
+        md_path = root / f"{capsule_id}.md"
+        json_path = root / f"{capsule_id}.manifest.json"
+        md_path.write_text(markdown + "\n", encoding="utf-8")
+        json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return {"capsule_id": capsule_id, "markdown_path": str(md_path), "manifest_path": str(json_path)}
 
 
+
+    except Exception:
+        return {}
 def _payload_run_id(path: Path) -> str | None:
-    if not path.exists():
-        return None
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        for outcome in payload.get("outcomes", []):
+            if not isinstance(outcome, dict):
+                continue
+            outcome_id = str(outcome.get("id") or "")
+            if outcome_id.startswith("outcome:"):
+                return outcome_id.split(":", 1)[1]
         return None
-    for outcome in payload.get("outcomes", []):
-        if not isinstance(outcome, dict):
-            continue
-        outcome_id = str(outcome.get("id") or "")
-        if outcome_id.startswith("outcome:"):
-            return outcome_id.split(":", 1)[1]
-    return None
 
 
+
+    except Exception:
+        return ""
 def _payload_workspace_id(path: Path) -> str | None:
-    if not path.exists():
-        return None
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    workspace_id = str(payload.get("workspaceId") or "").strip()
-    return workspace_id or None
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        workspace_id = str(payload.get("workspaceId") or "").strip()
+        return workspace_id or None
 
 
+
+    except Exception:
+        return ""
 def _payload_path_diagnostics(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"ok": False, "reason": "missing_payload"}
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"ok": False, "reason": "invalid_json"}
-    specialization = payload.get("specialization", {})
-    if not isinstance(specialization, dict):
-        return {"ok": False, "reason": "missing_specialization"}
-    specialization_key = str(specialization.get("key") or "").strip()
-    if not specialization_key:
-        return {"ok": False, "reason": "missing_specialization_key"}
+        if not path.exists():
+            return {"ok": False, "reason": "missing_payload"}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {"ok": False, "reason": "invalid_json"}
+        specialization = payload.get("specialization", {})
+        if not isinstance(specialization, dict):
+            return {"ok": False, "reason": "missing_specialization"}
+        specialization_key = str(specialization.get("key") or "").strip()
+        if not specialization_key:
+            return {"ok": False, "reason": "missing_specialization_key"}
 
-    evolution_paths = payload.get("evolutionPaths", [])
-    outcomes = payload.get("outcomes", [])
-    if not isinstance(evolution_paths, list) or not evolution_paths:
-        return {"ok": False, "reason": "missing_evolution_paths"}
-    if not isinstance(outcomes, list) or not outcomes:
-        return {"ok": False, "reason": "missing_outcomes"}
+        evolution_paths = payload.get("evolutionPaths", [])
+        outcomes = payload.get("outcomes", [])
+        if not isinstance(evolution_paths, list) or not evolution_paths:
+            return {"ok": False, "reason": "missing_evolution_paths"}
+        if not isinstance(outcomes, list) or not outcomes:
+            return {"ok": False, "reason": "missing_outcomes"}
 
-    expected_path_ids: set[str] = set()
-    for entry in evolution_paths:
-        if not isinstance(entry, dict):
-            return {"ok": False, "reason": "invalid_evolution_path_entry"}
-        path_id = str(entry.get("id") or "").strip()
-        summary = str(entry.get("summary") or "").strip()
-        command_name = ""
-        if summary.startswith("Improve ") and " on " in summary:
-            command_name = summary[len("Improve ") :].split(" on ", 1)[0].strip()
-        if not path_id or not command_name:
-            return {"ok": False, "reason": "unparseable_evolution_path", "path_id": path_id, "summary": summary}
-        expected_path_id = _evolution_path_id(specialization_key, command_name)
-        if path_id != expected_path_id:
-            return {
-                "ok": False,
-                "reason": "unexpected_evolution_path_id",
-                "actual_path_id": path_id,
-                "expected_path_id": expected_path_id,
-                "command_name": command_name,
-                "specialization_key": specialization_key,
-            }
-        expected_path_ids.add(expected_path_id)
+        expected_path_ids: set[str] = set()
+        for entry in evolution_paths:
+            if not isinstance(entry, dict):
+                return {"ok": False, "reason": "invalid_evolution_path_entry"}
+            path_id = str(entry.get("id") or "").strip()
+            summary = str(entry.get("summary") or "").strip()
+            command_name = ""
+            if summary.startswith("Improve ") and " on " in summary:
+                command_name = summary[len("Improve ") :].split(" on ", 1)[0].strip()
+            if not path_id or not command_name:
+                return {"ok": False, "reason": "unparseable_evolution_path", "path_id": path_id, "summary": summary}
+            expected_path_id = _evolution_path_id(specialization_key, command_name)
+            if path_id != expected_path_id:
+                return {
+                    "ok": False,
+                    "reason": "unexpected_evolution_path_id",
+                    "actual_path_id": path_id,
+                    "expected_path_id": expected_path_id,
+                    "command_name": command_name,
+                    "specialization_key": specialization_key,
+                }
+            expected_path_ids.add(expected_path_id)
 
-    for outcome in outcomes:
-        if not isinstance(outcome, dict):
-            return {"ok": False, "reason": "invalid_outcome_entry"}
-        if str(outcome.get("targetType") or "").strip() != "evolution_path":
-            return {"ok": False, "reason": "unexpected_outcome_target_type", "target_type": outcome.get("targetType")}
-        target_id = str(outcome.get("targetId") or "").strip()
-        if target_id not in expected_path_ids:
-            return {
-                "ok": False,
-                "reason": "unexpected_outcome_target_id",
-                "actual_target_id": target_id,
-                "expected_path_ids": sorted(expected_path_ids),
-            }
-    return {"ok": True, "specialization_key": specialization_key, "path_ids": sorted(expected_path_ids)}
+        for outcome in outcomes:
+            if not isinstance(outcome, dict):
+                return {"ok": False, "reason": "invalid_outcome_entry"}
+            if str(outcome.get("targetType") or "").strip() != "evolution_path":
+                return {"ok": False, "reason": "unexpected_outcome_target_type", "target_type": outcome.get("targetType")}
+            target_id = str(outcome.get("targetId") or "").strip()
+            if target_id not in expected_path_ids:
+                return {
+                    "ok": False,
+                    "reason": "unexpected_outcome_target_id",
+                    "actual_target_id": target_id,
+                    "expected_path_ids": sorted(expected_path_ids),
+                }
+        return {"ok": True, "specialization_key": specialization_key, "path_ids": sorted(expected_path_ids)}
 
 
+
+    except Exception:
+        return {}
 def _payload_paths_match_specialization(path: Path) -> bool:
     diagnostics = _payload_path_diagnostics(path)
     return bool(diagnostics.get("ok"))

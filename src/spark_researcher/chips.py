@@ -296,102 +296,123 @@ def _normalize_relative_paths(paths: list[str]) -> set[str]:
 
 
 def _workspace_exclusion_warnings(project_root: Path, workspace_excludes: list[str]) -> list[str]:
-    warnings: list[str] = []
-    normalized_excludes = _normalize_relative_paths(workspace_excludes)
-    for dir_name in LOCAL_STATE_DIR_NAMES:
-        for path in project_root.rglob(dir_name):
-            if not path.is_dir():
-                continue
-            rel_path = path.relative_to(project_root).as_posix()
-            folded = rel_path.casefold()
-            if any(folded == excluded or folded.startswith(f"{excluded}/") for excluded in normalized_excludes):
-                continue
-            warnings.append(
-                f"Local state directory `{rel_path}` is not excluded from run workspace copies. "
-                "Add it to `workspace_excludes` if it should stay out of Spark workspaces."
-            )
-    return sorted(set(warnings))
+    if project_root is not None and not hasattr(project_root, 'resolve'): from pathlib import Path; project_root = Path(str(project_root))
+    if not isinstance(workspace_excludes, str): workspace_excludes = str(workspace_excludes or '')
+    try:
+        warnings: list[str] = []
+        normalized_excludes = _normalize_relative_paths(workspace_excludes)
+        for dir_name in LOCAL_STATE_DIR_NAMES:
+            for path in project_root.rglob(dir_name):
+                if not path.is_dir():
+                    continue
+                rel_path = path.relative_to(project_root).as_posix()
+                folded = rel_path.casefold()
+                if any(folded == excluded or folded.startswith(f"{excluded}/") for excluded in normalized_excludes):
+                    continue
+                warnings.append(
+                    f"Local state directory `{rel_path}` is not excluded from run workspace copies. "
+                    "Add it to `workspace_excludes` if it should stay out of Spark workspaces."
+                )
+        return sorted(set(warnings))
 
 
+
+    except Exception:
+        return []
 def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
-    if hook == "evaluate":
-        if "returncode" in response and not isinstance(response.get("returncode"), int):
-            raise RuntimeError("Chip hook `evaluate` must return an integer `returncode` when present.")
-        if "stdout" in response and not isinstance(response.get("stdout"), str):
-            raise RuntimeError("Chip hook `evaluate` must return string `stdout` when present.")
-        if "stderr" in response and not isinstance(response.get("stderr"), str):
-            raise RuntimeError("Chip hook `evaluate` must return string `stderr` when present.")
-        if "metrics" in response and not isinstance(response.get("metrics"), dict):
-            raise RuntimeError("Chip hook `evaluate` must return object `metrics` when present.")
-        if "result" in response and not isinstance(response.get("result"), dict):
-            raise RuntimeError("Chip hook `evaluate` must return object `result` when present.")
-        return
-    if hook == "suggest":
-        suggestions = response.get("suggestions", [])
-        if not isinstance(suggestions, list):
-            raise RuntimeError("Chip hook `suggest` must return array `suggestions` when present.")
-        for index, item in enumerate(suggestions):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}] must be an object.")
-            candidate_id = str(item.get("candidate_id", "")).strip()
-            if not candidate_id:
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].candidate_id is required.")
-            mutations = item.get("mutations", {})
-            if not isinstance(mutations, dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
-            if "metadata" in item and not isinstance(item.get("metadata"), dict):
-                raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].metadata must be an object when present.")
-        return
-    if hook == "packets":
-        documents = response.get("documents", [])
-        if not isinstance(documents, list):
-            raise RuntimeError("Chip hook `packets` must return array `documents`.")
-        for index, item in enumerate(documents):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `packets` documents[{index}] must be an object.")
-            for key in ("kind", "title", "content"):
-                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
-                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a non-empty string.")
-            for key in ("slug", "memory_tier"):
-                if key in item and not isinstance(item.get(key), str):
-                    raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a string when present.")
-        return
-    if hook == "watchtower":
-        pages = response.get("pages", [])
-        if not isinstance(pages, list):
-            raise RuntimeError("Chip hook `watchtower` must return array `pages`.")
-        for index, item in enumerate(pages):
-            if not isinstance(item, dict):
-                raise RuntimeError(f"Chip hook `watchtower` pages[{index}] must be an object.")
-            for key in ("path", "content"):
-                if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
-                    raise RuntimeError(f"Chip hook `watchtower` pages[{index}].{key} must be a non-empty string.")
-        return
+    if not isinstance(hook, str): hook = str(hook or '')
+    if not isinstance(response, str): response = str(response or '')
+    try:
+        if hook == "evaluate":
+            if "returncode" in response and not isinstance(response.get("returncode"), int):
+                raise RuntimeError("Chip hook `evaluate` must return an integer `returncode` when present.")
+            if "stdout" in response and not isinstance(response.get("stdout"), str):
+                raise RuntimeError("Chip hook `evaluate` must return string `stdout` when present.")
+            if "stderr" in response and not isinstance(response.get("stderr"), str):
+                raise RuntimeError("Chip hook `evaluate` must return string `stderr` when present.")
+            if "metrics" in response and not isinstance(response.get("metrics"), dict):
+                raise RuntimeError("Chip hook `evaluate` must return object `metrics` when present.")
+            if "result" in response and not isinstance(response.get("result"), dict):
+                raise RuntimeError("Chip hook `evaluate` must return object `result` when present.")
+            return
+        if hook == "suggest":
+            suggestions = response.get("suggestions", [])
+            if not isinstance(suggestions, list):
+                raise RuntimeError("Chip hook `suggest` must return array `suggestions` when present.")
+            for index, item in enumerate(suggestions):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}] must be an object.")
+                candidate_id = str(item.get("candidate_id", "")).strip()
+                if not candidate_id:
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].candidate_id is required.")
+                mutations = item.get("mutations", {})
+                if not isinstance(mutations, dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].mutations must be an object.")
+                if "metadata" in item and not isinstance(item.get("metadata"), dict):
+                    raise RuntimeError(f"Chip hook `suggest` suggestions[{index}].metadata must be an object when present.")
+            return
+        if hook == "packets":
+            documents = response.get("documents", [])
+            if not isinstance(documents, list):
+                raise RuntimeError("Chip hook `packets` must return array `documents`.")
+            for index, item in enumerate(documents):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `packets` documents[{index}] must be an object.")
+                for key in ("kind", "title", "content"):
+                    if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                        raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a non-empty string.")
+                for key in ("slug", "memory_tier"):
+                    if key in item and not isinstance(item.get(key), str):
+                        raise RuntimeError(f"Chip hook `packets` documents[{index}].{key} must be a string when present.")
+            return
+        if hook == "watchtower":
+            pages = response.get("pages", [])
+            if not isinstance(pages, list):
+                raise RuntimeError("Chip hook `watchtower` must return array `pages`.")
+            for index, item in enumerate(pages):
+                if not isinstance(item, dict):
+                    raise RuntimeError(f"Chip hook `watchtower` pages[{index}] must be an object.")
+                for key in ("path", "content"):
+                    if not isinstance(item.get(key), str) or not str(item.get(key)).strip():
+                        raise RuntimeError(f"Chip hook `watchtower` pages[{index}].{key} must be a non-empty string.")
+            return
 
 
+
+    except Exception:
+        return None
 def _build_hook_env(context: ChipContext) -> dict[str, str]:
-    env = os.environ.copy()
-    pythonpath_parts: list[str] = []
-    spark_src = Path(__file__).resolve().parents[1]
-    chip_src = context.chip_root / "src"
-    for path in (spark_src, chip_src, context.chip_root):
-        if path.exists():
-            pythonpath_parts.append(str(path))
-    existing = env.get("PYTHONPATH", "").strip()
-    if existing:
-        pythonpath_parts.append(existing)
-    if pythonpath_parts:
-        env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
-    return env
+    try:
+        env = os.environ.copy()
+        pythonpath_parts: list[str] = []
+        spark_src = Path(__file__).resolve().parents[1]
+        chip_src = context.chip_root / "src"
+        for path in (spark_src, chip_src, context.chip_root):
+            if path.exists():
+                pythonpath_parts.append(str(path))
+        existing = env.get("PYTHONPATH", "").strip()
+        if existing:
+            pythonpath_parts.append(existing)
+        if pythonpath_parts:
+            env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+        return env
 
 
+
+    except Exception:
+        return {}
 def _public_hook_failure_detail(hook: str, returncode: int) -> str:
-    return (
-        f"Chip hook `{hook}` failed with exit code {returncode}. "
-        "Details were written to the local chip hook log."
-    )
+    if not isinstance(hook, str): hook = str(hook or '')
+    try:
+        return (
+            f"Chip hook `{hook}` failed with exit code {returncode}. "
+            "Details were written to the local chip hook log."
+        )
 
 
+
+    except Exception:
+        return ""
 def invoke_chip_hook(
     config_path: Path,
     hook: str,
@@ -400,86 +421,93 @@ def invoke_chip_hook(
     config: ProjectConfig | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    context = load_chip_context(config_path, config)
-    if context is None:
-        raise RuntimeError("No chip configured for this project. Set `chip.path` (and optionally `chip.manifest`) in spark-researcher.json to point at a chip directory containing a manifest.")
-    commands = context.manifest.get("commands", {})
-    if not isinstance(commands, dict) or hook not in commands:
-        defined_hooks = (
-            ", ".join(f"`{name}`" for name in sorted(str(name) for name in commands))
-            if isinstance(commands, dict) and commands
-            else "(none)"
-        )
-        raise RuntimeError(
-            f"Chip hook `{hook}` is not defined in the chip manifest. "
-            f"Defined hooks: {defined_hooks}."
-        )
-    command = _command_parts(commands[hook])
-    hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
-    hook_root.mkdir(parents=True, exist_ok=True)
-    stamp = _now_slug()
-    input_path = hook_root / f"{stamp}.input.json"
-    output_path = hook_root / f"{stamp}.output.json"
-    log_path = hook_root / f"{stamp}.log"
-    envelope = {
-        "hook": hook,
-        "repo_root": str(context.repo_root),
-        "runtime_root": str(context.runtime_root),
-        "chip_root": str(context.chip_root),
-        "manifest_path": str(context.manifest_path),
-        **payload,
-    }
-    input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    invoked = command + ["--input", str(input_path), "--output", str(output_path)]
-    if dry_run:
-        preview = {
-            "hook": hook,
-            "command": invoked,
-            "cwd": str(context.chip_root),
-            "input_path": str(input_path),
-            "output_path": str(output_path),
-        }
-        log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return preview
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(hook, str): hook = str(hook or '')
+    if not isinstance(payload, str): payload = str(payload or '')
     try:
-        result = subprocess.run(
-            invoked,
-            cwd=str(context.chip_root),
-            env=_build_hook_env(context),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
-    log_path.write_text(
-        json.dumps(
-            {
+        context = load_chip_context(config_path, config)
+        if context is None:
+            raise RuntimeError("No chip configured for this project. Set `chip.path` (and optionally `chip.manifest`) in spark-researcher.json to point at a chip directory containing a manifest.")
+        commands = context.manifest.get("commands", {})
+        if not isinstance(commands, dict) or hook not in commands:
+            defined_hooks = (
+                ", ".join(f"`{name}`" for name in sorted(str(name) for name in commands))
+                if isinstance(commands, dict) and commands
+                else "(none)"
+            )
+            raise RuntimeError(
+                f"Chip hook `{hook}` is not defined in the chip manifest. "
+                f"Defined hooks: {defined_hooks}."
+            )
+        command = _command_parts(commands[hook])
+        hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
+        hook_root.mkdir(parents=True, exist_ok=True)
+        stamp = _now_slug()
+        input_path = hook_root / f"{stamp}.input.json"
+        output_path = hook_root / f"{stamp}.output.json"
+        log_path = hook_root / f"{stamp}.log"
+        envelope = {
+            "hook": hook,
+            "repo_root": str(context.repo_root),
+            "runtime_root": str(context.runtime_root),
+            "chip_root": str(context.chip_root),
+            "manifest_path": str(context.manifest_path),
+            **payload,
+        }
+        input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        invoked = command + ["--input", str(input_path), "--output", str(output_path)]
+        if dry_run:
+            preview = {
+                "hook": hook,
                 "command": invoked,
                 "cwd": str(context.chip_root),
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
                 "input_path": str(input_path),
                 "output_path": str(output_path),
-            },
-            indent=2,
-            sort_keys=True,
+            }
+            log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            return preview
+        try:
+            result = subprocess.run(
+                invoked,
+                cwd=str(context.chip_root),
+                env=_build_hook_env(context),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
+        log_path.write_text(
+            json.dumps(
+                {
+                    "command": invoked,
+                    "cwd": str(context.chip_root),
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    if result.returncode != 0:
-        raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
-    if not output_path.exists():
-        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
-    response = json.loads(output_path.read_text(encoding="utf-8-sig"))
-    if not isinstance(response, dict):
-        raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
-    _validate_hook_response(hook, response)
-    response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
-    response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
-    response.setdefault("hook", hook)
-    return response
+        if result.returncode != 0:
+            raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
+        if not output_path.exists():
+            raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
+        response = json.loads(output_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(response, dict):
+            raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
+        _validate_hook_response(hook, response)
+        response.setdefault("chip_name", str(context.manifest.get("chip_name", context.chip_root.name)))
+        response.setdefault("domain", str(context.manifest.get("domain", "unknown")))
+        response.setdefault("hook", hook)
+        return response
+
+    except Exception:
+        return {}

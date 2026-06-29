@@ -17,6 +17,7 @@ from .authority import require_run_execution_authority
 from .chips import invoke_chip_hook
 from .collective import write_spark_swarm_collective_payload
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
+from ._filelock import ensure_parent, locked_file
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
@@ -76,10 +77,6 @@ def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -94,36 +91,6 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
         if isinstance(parsed, dict):
             rows.append(parsed)
     return rows
-
-
-@contextmanager
-def locked_file(path: Path, *, timeout_seconds: float = 30.0):
-    ensure_parent(path)
-    lock_path = path.with_name(path.name + ".lock")
-    deadline = time.monotonic() + timeout_seconds
-    handle: int | None = None
-    while handle is None:
-        try:
-            handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            if time.monotonic() >= deadline:
-                owner = None
-                try:
-                    owner = lock_path.read_text(encoding="utf-8", errors="ignore").strip()[:64] or None
-                except OSError:
-                    owner = None
-                suffix = f" (owner={owner})" if owner else ""
-                raise TimeoutError(f"Timed out waiting for ledger lock: {lock_path}{suffix}")
-            time.sleep(0.05)
-    try:
-        os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
-        yield
-    finally:
-        os.close(handle)
-        try:
-            lock_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:

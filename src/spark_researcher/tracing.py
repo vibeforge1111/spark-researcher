@@ -28,7 +28,7 @@ def _index_path(runtime_root: Path) -> Path:
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    from .runner import locked_file
+    from ._filelock import locked_file
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with locked_file(path):

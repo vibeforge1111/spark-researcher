@@ -1097,7 +1097,7 @@ def _run_command(
     *,
     cwd: Path,
     check: bool = True,
-    timeout: int = 60,
+    timeout: int = COLLECTIVE_COMMAND_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(

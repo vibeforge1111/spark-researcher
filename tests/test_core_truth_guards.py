@@ -304,7 +304,7 @@ def test_trace_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.Monke
         locked_paths.append(path)
         yield
 
-    monkeypatch.setattr("spark_researcher.runner.locked_file", fake_lock)
+    monkeypatch.setattr("spark_researcher._filelock.locked_file", fake_lock)
 
     recorder = start_trace(tmp_path, kind="advisory_research", name="retry")
     recorder.event("citation_check")

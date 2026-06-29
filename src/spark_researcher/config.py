@@ -171,6 +171,22 @@ def _safe_float(value: Any, default: float) -> float:
         return default
 
 
+_VALID_EVAL_GOALS = frozenset({"maximize", "minimize"})
+
+
+def _validate_eval_goal(goal: str) -> str:
+    """Validate that eval_goal is one of the allowed values.
+
+    Raises ValueError if the goal is not 'maximize' or 'minimize'.
+    """
+    if goal not in _VALID_EVAL_GOALS:
+        raise ValueError(
+            f"eval_goal must be one of {sorted(_VALID_EVAL_GOALS)}, "
+            f"got {goal!r}"
+        )
+    return goal
+
+
 def config_to_payload(config: ProjectConfig) -> dict[str, object]:
     return {
         "project_name": config.project_name,
@@ -400,7 +416,7 @@ def load_config(path: Path) -> ProjectConfig:
         project_name=str(payload["project_name"]),
         project_root=str(payload.get("project_root", ".")),
         eval_metric=str(payload["eval_metric"]),
-        eval_goal=str(payload.get("eval_goal", "minimize")),
+        eval_goal=_validate_eval_goal(str(payload.get("eval_goal", "minimize"))),
         commands=commands,
         metrics=metrics,
         workspace_excludes=[str(item) for item in payload.get("workspace_excludes", [])],

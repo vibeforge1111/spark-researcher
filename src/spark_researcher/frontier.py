@@ -131,8 +131,16 @@ def frontier_suggest(
         for row in rows
         if row.get("command_name") == command_name
     }
+    def _numeric_metric(row: dict) -> float:
+        """Return metric_value as float if numeric, else -inf for sorting."""
+        raw = row.get("metric_value", 0.0) or 0.0
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return float("-inf")
+
     best_rows = [row for row in rows if row.get("command_name") == command_name and row.get("applied_mutations")][-3:]
-    best_rows = sorted(best_rows, key=lambda item: float(item.get("metric_value", 0.0) or 0.0), reverse=config.eval_goal == "maximize")[:3]
+    best_rows = sorted(best_rows, key=_numeric_metric, reverse=config.eval_goal == "maximize")[:3]
     winner_text = [
         {"candidate_id": row.get("candidate_id"), "metric_value": row.get("metric_value"), "verdict": row.get("verdict"), "mutations": {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}}
         for row in best_rows

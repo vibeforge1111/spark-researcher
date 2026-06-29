@@ -24,7 +24,7 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     # Lazy import to avoid a circular import: runner imports record_failure
     # from this module at top level, so importing locked_file from runner at
     # module load time would leave one of the two modules partially initialized.
-    from .runner import locked_file
+    from ._filelock import locked_file
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with locked_file(path):

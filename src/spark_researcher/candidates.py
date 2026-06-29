@@ -15,7 +15,8 @@ from .config import CandidateTrial, MutationSpec, intent_policy, load_config, tr
 from .failures import load_failures, surprise_status
 from .frontier import frontier_suggest
 from .paths import ledger_path, resolve_runtime_root
-from .runner import locked_file, read_jsonl, run_authority_args_path, run_once
+from ._filelock import locked_file
+from .runner import read_jsonl, run_authority_args_path, run_once
 from .trial_queue import append_queue_trials, merged_candidate_trials
 
 

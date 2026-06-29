@@ -295,7 +295,7 @@ def render_self_edit_queue(runtime_root: Path) -> str:
     for proposal_path in sorted(root.glob("*/proposal.json"), reverse=True):
         try:
             proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError):
             continue
         if not isinstance(proposal, dict):
             continue
@@ -404,7 +404,7 @@ def build_vault(
         for path in sorted(trainer_dir.glob("*.json")):
             try:
                 trainer_row = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, OSError):
                 continue
             if isinstance(trainer_row, dict):
                 trainer_rows.append(trainer_row)

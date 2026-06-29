@@ -813,7 +813,11 @@ def apply_proposal(
     if run_git_status(repo_root):
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
-    workspace_root = Path(proposal["workspace_root"])
+    workspace_root_raw = proposal.get("workspace_root")
+    if not workspace_root_raw:
+        trace.finish(status="error", attributes={"error": "Proposal is missing workspace_root."})
+        raise RuntimeError("Proposal is missing workspace_root.")
+    workspace_root = Path(workspace_root_raw)
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     allowed_git_modes = ("manual", "branch", "main")
     if git_mode not in allowed_git_modes:

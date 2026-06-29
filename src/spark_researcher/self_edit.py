@@ -814,6 +814,15 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
     workspace_root = Path(proposal["workspace_root"])
+    # Validate workspace_root is a valid absolute path that exists as a directory
+    if not workspace_root.is_absolute():
+        raise RuntimeError(
+            f"workspace_root must be an absolute path, got: {workspace_root}"
+        )
+    if not workspace_root.is_dir():
+        raise RuntimeError(
+            f"workspace_root must be an existing directory, got: {workspace_root}"
+        )
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     allowed_git_modes = ("manual", "branch", "main")
     if git_mode not in allowed_git_modes:

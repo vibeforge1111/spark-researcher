@@ -339,7 +339,7 @@ def run_git_status(repo_root: Path) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def _git(repo_root: Path, *args: str, timeout: int = 30) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(repo_root), *args],
         capture_output=True,
@@ -347,7 +347,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
-        timeout=60,
+        timeout=timeout,
     )
 
 
@@ -610,10 +610,23 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-        write_text(stdout_path, process.stdout)
-        write_text(stderr_path, process.stderr)
-        status = "pending_review" if process.returncode == 0 else "failed"
+        try:
+            process = subprocess.run(
+                command,
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600  # 10 minutes for code editing
+            )
+            write_text(stdout_path, process.stdout)
+            write_text(stderr_path, process.stderr)
+            status = "pending_review" if process.returncode == 0 else "failed"
+        except subprocess.TimeoutExpired:
+            write_text(stdout_path, "")
+            write_text(stderr_path, f"Command timed out after 600s: {' '.join(command)}")
+            status = "timeout"
     else:
         write_text(stdout_path, json.dumps({"command": command, "dry_run": dry_run}, indent=2))
         write_text(stderr_path, "")

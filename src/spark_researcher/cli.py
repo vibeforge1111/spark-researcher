@@ -585,6 +585,14 @@ def _handle_self_edit(args: argparse.Namespace, *, config_path: Path) -> None:
 
 
 def main() -> None:
+    try:
+        _main()
+    except RuntimeError as exc:
+        print_json({"ok": False, "error": str(exc)})
+        raise SystemExit(1)
+
+
+def _main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     if not args.action:
@@ -754,8 +762,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except RuntimeError as exc:
-        print_json({"ok": False, "error": str(exc)})
-        raise SystemExit(1)
+    main()

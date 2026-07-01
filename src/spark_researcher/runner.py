@@ -283,7 +283,9 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
         replacement = spec.template.format(value=value)
         updated, count = re.subn(spec.pattern, replacement, text, count=1)
         if count != 1:
-            raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
+            raise RuntimeError(
+                f"Could not apply mutation {name!r} in {target_path}: pattern {spec.pattern!r} did not match any line in the file."
+            )
         target_path.write_text(updated, encoding="utf-8")
         applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root))})
     return applied

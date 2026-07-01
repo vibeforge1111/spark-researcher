@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import json
 from pathlib import Path
 
@@ -30,8 +31,9 @@ from .trial_queue import merged_candidate_trials
 from .trainers import run_all_trainers, trainer_status
 
 
-def print_json(payload: object) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
+def print_json(payload: object, *, file=None) -> None:
+    out = file if file is not None else sys.stdout
+    print(json.dumps(payload, indent=2, sort_keys=True), file=out)
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -160,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     advisory_build_parser.add_argument("--model", choices=["claude", "codex", "openclaw", "generic"], default="generic")
     advisory_build_parser.add_argument("--limit", type=int, default=4)
     advisory_build_parser.add_argument("--domain")
+    advisory_build_parser.add_argument("--output", "-o", metavar="FILE", default=None, help="write JSON output to FILE instead of stdout")
     advisory_adapters_parser = advisory_sub.add_parser("adapters")
     advisory_providers_parser = advisory_sub.add_parser("providers")
     advisory_execute_parser = advisory_sub.add_parser("execute")
@@ -390,7 +393,13 @@ def _handle_advisory(args: argparse.Namespace, *, config_path: Path, runtime_roo
     if args.advisory_command == "review":
         print_json(review_advisory_outcomes(runtime_root))
         return
-    print_json(build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain))
+    payload = build_advisory(config_path, args.task, model=args.model, limit=args.limit, domain=args.domain)
+    output_path = getattr(args, "output", None)
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as fh:
+            print_json(payload, file=fh)
+    else:
+        print_json(payload)
 
 
 def _handle_intent(args: argparse.Namespace, *, config_path: Path) -> None:

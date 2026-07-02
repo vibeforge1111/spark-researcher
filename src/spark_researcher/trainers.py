@@ -67,7 +67,15 @@ def write_state(path: Path, payload: dict[str, Any]) -> None:
 def count_examples(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        # The training-examples file may be rotated by an external producer
+        # while the trainer ticks. Treat a transient unreadable file as
+        # zero examples so trainer_should_run defers cleanly instead of
+        # aborting the whole `trainers run` pass.
+        return 0
+    return sum(1 for line in raw.splitlines() if line.strip())
 
 
 def trainer_state_path(runtime_root: Path, name: str) -> Path:

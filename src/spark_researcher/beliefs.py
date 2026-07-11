@@ -328,8 +328,11 @@ def build_beliefs(
             review_path = proposal_path.parent / "review.json"
             if not review_path.exists():
                 continue
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review = json.loads(review_path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+                review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                continue
             if review.get("decision") != "approve":
                 continue
             belief_id = _belief_id("self-edit", str(proposal.get("proposal_id")))

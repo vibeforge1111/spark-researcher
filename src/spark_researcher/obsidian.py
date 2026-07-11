@@ -429,6 +429,10 @@ def build_vault(
             page_path = str(item.get("path") or "").strip().replace("\\", "/")
             if not page_path:
                 continue
+            # Prevent path traversal: reject paths containing parent directory references
+            normalized_path = Path(page_path).as_posix()
+            if ".." in normalized_path.split("/"):
+                raise RuntimeError(f"Path traversal detected in chip-provided page path: {page_path}")
             write_text(output_root / page_path, str(item.get("content") or ""))
             domain_pages.append(page_path.removesuffix(".md"))
     copy_docs(repo_root, output_root / "06-References")

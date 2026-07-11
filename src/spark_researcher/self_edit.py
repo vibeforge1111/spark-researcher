@@ -813,7 +813,9 @@ def apply_proposal(
     if run_git_status(repo_root):
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
-    workspace_root = Path(proposal["workspace_root"])
+    workspace_root = _workspace_dir(proposal_id)
+    if not workspace_root.exists():
+        raise RuntimeError(f"Workspace directory for proposal {proposal_id} no longer exists at {workspace_root}.")
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     allowed_git_modes = ("manual", "branch", "main")
     if git_mode not in allowed_git_modes:

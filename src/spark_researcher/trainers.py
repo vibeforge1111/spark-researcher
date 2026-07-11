@@ -117,15 +117,43 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
         result["command"] = spec.compile_command
         result["status"] = "dry_run"
         return result
-    process = subprocess.run(
-        spec.compile_command,
-        cwd=str(project_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=600,
-    )
+    try:
+        process = subprocess.run(
+            spec.compile_command,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # A hung trainer compile must not abort `run_all_trainers` for every
+        # other trainer in the batch. Persist a `timed_out` state so the
+        # next pass can see the timeout cleanly, then return the partial
+        # result instead of re-raising.
+        timeout_reason = f"compile timed out after {exc.timeout}s"
+        write_state(
+            state_path,
+            {
+                **state,
+                "name": spec.name,
+                "example_count": example_count,
+                "last_seen_at": now_iso(),
+                "last_status": "timed_out",
+                "last_reason": timeout_reason,
+                "command": spec.compile_command,
+            },
+        )
+        result.update(
+            {
+                "status": "timed_out",
+                "last_status": "timed_out",
+                "last_reason": timeout_reason,
+                "command": spec.compile_command,
+            }
+        )
+        return result
     updated = {
         "name": spec.name,
         "example_count": example_count,

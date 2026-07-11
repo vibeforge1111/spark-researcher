@@ -322,6 +322,19 @@ def update_intent_policy(
     return config
 
 
+_VALID_EVAL_GOALS = frozenset({"minimize", "maximize"})
+
+
+def _validate_eval_goal(raw: str) -> str:
+    normalized = raw.strip().lower()
+    if normalized not in _VALID_EVAL_GOALS:
+        raise ValueError(
+            f"eval_goal must be 'minimize' or 'maximize', got {raw!r}. "
+            f"Check your spark-researcher.project.json."
+        )
+    return normalized
+
+
 def load_config(path: Path) -> ProjectConfig:
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -400,7 +413,7 @@ def load_config(path: Path) -> ProjectConfig:
         project_name=str(payload["project_name"]),
         project_root=str(payload.get("project_root", ".")),
         eval_metric=str(payload["eval_metric"]),
-        eval_goal=str(payload.get("eval_goal", "minimize")),
+        eval_goal=_validate_eval_goal(str(payload.get("eval_goal", "minimize"))),
         commands=commands,
         metrics=metrics,
         workspace_excludes=[str(item) for item in payload.get("workspace_excludes", [])],

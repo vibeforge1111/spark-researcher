@@ -37,8 +37,17 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        # `trace_status` checks `path.exists()` before calling this helper, but a
+        # concurrent trace rotation (or the index referencing a trace file that
+        # was cleaned up between snapshot and read) can still trip a
+        # FileNotFoundError/PermissionError here. Treat as no rows so the
+        # research-signal summary keeps building from the rest of the index.
+        return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in raw.splitlines():
         if not line.strip():
             continue
         try:

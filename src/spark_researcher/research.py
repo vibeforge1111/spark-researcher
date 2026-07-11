@@ -18,6 +18,21 @@ from .safe_url import UnsafeURL, assert_safe_url, safe_urlopen
 from .tracing import start_trace
 from .verifier import execute_with_verifier
 
+
+# Pre-compile literal patterns used in the web-results extractor. Both
+# extractor patterns include IGNORECASE | DOTALL which makes their compile
+# cost non-trivial. _bounded_web_results runs on every research advisory.
+_DDG_LINK_RE = re.compile(
+    r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+    re.IGNORECASE | re.DOTALL,
+)
+_DDG_SNIPPET_RE = re.compile(
+    r'result__snippet[^>]*>(.*?)</[^>]+>',
+    re.IGNORECASE | re.DOTALL,
+)
+_HTML_TAG_RE = re.compile(r"<.*?>")
+
+
 INVISIBLE_UNICODE_CHARS = {
     "\u200b": "ZERO WIDTH SPACE",
     "\u200c": "ZERO WIDTH NON-JOINER",
@@ -56,15 +71,15 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
             page = response.read().decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
-    links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
-    snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)
+    links = _DDG_LINK_RE.findall(page)
+    snippets = _DDG_SNIPPET_RE.findall(page)
     results: list[dict[str, str]] = []
     for index, link in enumerate(links[:limit]):
         href, title = link
-        clean_title = re.sub(r"<.*?>", "", unescape(title)).strip()
+        clean_title = _HTML_TAG_RE.sub("", unescape(title)).strip()
         clean_snippet = ""
         if index < len(snippets):
-            clean_snippet = re.sub(r"<.*?>", "", unescape(snippets[index])).strip()
+            clean_snippet = _HTML_TAG_RE.sub("", unescape(snippets[index])).strip()
         if clean_title:
             clean_url = _clean_result_url(href)
             results.append(

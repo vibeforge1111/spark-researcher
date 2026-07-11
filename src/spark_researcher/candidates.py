@@ -99,7 +99,14 @@ def _mark_stale_continuous_status(runtime_root: Path) -> dict[str, Any]:
         return payload
     if str(current_pass.get("status") or "").strip().lower() != "running":
         return payload
-    writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
+    raw_pid = current_pass.get("writer_pid") or payload.get("writer_pid") or 0
+    try:
+        writer_pid = int(raw_pid)
+    except (TypeError, ValueError):
+        # A hand-edited or corrupted continuous_status.json (or a writer that
+        # wrote a non-numeric pid) must not crash the stale-detector. Treat as
+        # `unknown writer` and fall through to the stale-mark path.
+        writer_pid = 0
     if writer_pid and _process_alive(writer_pid):
         return payload
     stale_at = _now_iso()

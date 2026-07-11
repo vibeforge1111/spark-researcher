@@ -369,8 +369,31 @@ def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
         return
 
 
+# Environment variable prefixes/keys that must NOT leak to chip hook subprocesses.
+_SENSITIVE_ENV_PREFIXES: tuple[str, ...] = (
+    "OPENAI_", "ANTHROPIC_", "GOOGLE_", "AZURE_", "AWS_", "GCP_",
+    "HF_", "HUGGING_", "COHERE_", "MISTRAL_", "GROQ_", "TOGETHER_",
+    "DEEPSEEK_", "FIREWORKS_", "REPLICATE_", "OLLAMA_", "XAI_",
+    "LLM_", "AI_", "ML_", "API_KEY", "SECRET", "TOKEN",
+    "PASSWORD", "CREDENTIAL", "AUTH_",
+)
+_SENSITIVE_ENV_KEYS: frozenset[str] = frozenset({
+    "API_KEY", "SECRET_KEY", "ACCESS_TOKEN", "AUTH_TOKEN",
+    "DATABASE_URL", "REDIS_URL", "MONGO_URI",
+})
+
+
+def _is_sensitive_env_key(key: str) -> bool:
+    """Return True if *key* looks like a secret that should not reach hooks."""
+    upper = key.upper()
+    return (
+        any(upper.startswith(prefix) for prefix in _SENSITIVE_ENV_PREFIXES)
+        or upper in _SENSITIVE_ENV_KEYS
+    )
+
+
 def _build_hook_env(context: ChipContext) -> dict[str, str]:
-    env = os.environ.copy()
+    env = {k: v for k, v in os.environ.items() if not _is_sensitive_env_key(k)}
     pythonpath_parts: list[str] = []
     spark_src = Path(__file__).resolve().parents[1]
     chip_src = context.chip_root / "src"

@@ -836,8 +836,14 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
     applied = []
+    mutable_targets = proposal.get("mutable_targets", [])
     for change in proposal.get("allowed_changes", []):
         rel = change["path"]
+        if not is_allowed_path(rel, mutable_targets):
+            raise RuntimeError(f"Change path {rel} is not in declared mutable targets.")
+        resolved_target = (repo_root / rel).resolve()
+        if not str(resolved_target).startswith(str(repo_root.resolve()) + os.sep) and resolved_target != repo_root.resolve():
+            raise RuntimeError(f"Change path escapes repo root: {rel}")
         source = workspace_root / rel
         target = repo_root / rel
         target.parent.mkdir(parents=True, exist_ok=True)

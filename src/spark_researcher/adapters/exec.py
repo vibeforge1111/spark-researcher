@@ -316,11 +316,13 @@ def execute_advisory(
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]
-    if response_path.exists():
+    try:
         try:
             response_payload = json.loads(response_path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             response_payload = {"raw_response": response_path.read_text(encoding="utf-8", errors="replace")}
+    except FileNotFoundError:
+        pass
     else:
         response_payload = {"raw_response": result.stdout.strip()}
     trace.finish(status="ok" if result.returncode == 0 else "error", attributes={"returncode": result.returncode, "response_path": str(response_path)})

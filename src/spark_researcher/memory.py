@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import shutil
 from collections import defaultdict
@@ -16,6 +17,8 @@ from .paths import beliefs_root, memory_root, self_edit_root
 from .runner import locked_file, read_jsonl
 from .ruvector import run_search as run_ruvector_search
 from .ruvector import ruvector_status
+
+logger = logging.getLogger(__name__)
 
 
 MAX_QUERY_LENGTH = 500
@@ -532,11 +535,15 @@ def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str
     path = _episodes_path(runtime_root)
     if not path.exists():
         return []
-    rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            logger.warning("Skipping corrupt JSONL line in %s", path)
+            continue
     return list(reversed(rows[-limit:]))
 
 

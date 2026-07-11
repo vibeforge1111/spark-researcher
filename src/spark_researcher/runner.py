@@ -160,7 +160,9 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     finally:
         os.close(handle)
         try:
-            lock_path.unlink()
+            content = lock_path.read_text(encoding="ascii", errors="ignore").strip()
+            if content == str(os.getpid()):
+                lock_path.unlink()
         except FileNotFoundError:
             pass
 

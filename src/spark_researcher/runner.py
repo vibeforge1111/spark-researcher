@@ -245,10 +245,16 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
 
 def parse_metric_value(kind: str, raw: str) -> float | int | str:
     if kind == "int":
-        return int(float(raw))
+        val = float(raw)
+        if not __import__("math").isfinite(val):
+            raise ValueError(f"Non-finite value for int metric: {raw!r}")
+        return int(val)
     if kind == "str":
         return raw
-    return float(raw)
+    val = float(raw)
+    if not __import__("math").isfinite(val):
+        raise ValueError(f"Non-finite value for float metric: {raw!r}")
+    return val
 
 
 def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:

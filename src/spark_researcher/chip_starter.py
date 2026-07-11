@@ -18,6 +18,16 @@ def _package_name(chip_name: str) -> str:
     return _slug(chip_name).replace(".", "_").replace("-", "_")
 
 
+_SAFE_PACKAGE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
+
+
+def _assert_safe_package_name(package_name: str) -> None:
+    if not _SAFE_PACKAGE_NAME_RE.fullmatch(package_name):
+        raise ValueError(
+            f"Unsafe package_name rejected before manifest generation: {package_name!r}"
+        )
+
+
 def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
     candidate = _slug(chip_name or "") or _slug(domain)
     if candidate == "chip":
@@ -133,6 +143,7 @@ def _pyproject(chip_name: str, description: str) -> str:
 
 
 def _generic_manifest(chip_name: str, domain: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -289,6 +300,7 @@ def _generic_cli(package_name: str, domain: str, metric_name: str, goal: str) ->
 
 
 def _crypto_manifest(chip_name: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -604,6 +616,7 @@ def _crypto_bridge() -> str:
 
 
 def _xcontent_manifest(chip_name: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",

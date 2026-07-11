@@ -137,10 +137,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(candidates_suggest)
     candidates_suggest.add_argument("--command", dest="project_command", required=True)
     candidates_suggest.add_argument("--limit", type=int, default=3)
+    candidates_suggest.add_argument("--output")
     candidates_apply = candidates_sub.add_parser("apply")
     add_config_argument(candidates_apply)
     candidates_apply.add_argument("--command", dest="project_command", required=True)
     candidates_apply.add_argument("--limit", type=int, default=3)
+    candidates_apply.add_argument("--output")
 
     packets_parser = sub.add_parser("packets")
     packets_sub = packets_parser.add_subparsers(dest="packets_command")

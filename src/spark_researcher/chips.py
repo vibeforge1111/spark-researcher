@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import os
 import re
 import subprocess
@@ -417,7 +418,7 @@ def invoke_chip_hook(
     command = _command_parts(commands[hook])
     hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
     hook_root.mkdir(parents=True, exist_ok=True)
-    stamp = _now_slug()
+    stamp = f"{_now_slug()}-{secrets.token_hex(4)}"
     input_path = hook_root / f"{stamp}.input.json"
     output_path = hook_root / f"{stamp}.output.json"
     log_path = hook_root / f"{stamp}.log"

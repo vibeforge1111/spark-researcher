@@ -279,6 +279,9 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
             )
         spec = lookup[name]
         target_path = (workspace_root / spec.file).resolve()
+        # Verify the resolved path is within workspace_root to prevent path traversal
+        if os.path.commonpath([str(target_path), str(workspace_root)]) != str(workspace_root):
+            raise RuntimeError(f"Path traversal detected: {spec.file} resolves outside workspace_root")
         text = target_path.read_text(encoding="utf-8-sig")
         replacement = spec.template.format(value=value)
         updated, count = re.subn(spec.pattern, replacement, text, count=1)

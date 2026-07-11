@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict
 from dataclasses import dataclass, field
@@ -322,6 +323,9 @@ def update_intent_policy(
     return config
 
 
+_logger = logging.getLogger("spark_researcher.config")
+
+
 def load_config(path: Path) -> ProjectConfig:
     try:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -445,6 +449,35 @@ def load_config(path: Path) -> ProjectConfig:
             blocked_command_fragments=[str(item) for item in guardrail_payload.get("blocked_command_fragments", [])],
         ),
     )
+    _log_active_defaults(payload, config, path)
+    return config
+
+
+def _log_active_defaults(payload: dict, config: "ProjectConfig", path: "Path") -> None:
+    """Emit a DEBUG line for each optional key that was absent from the config file."""
+    defaults_used: list[str] = []
+    if "eval_goal" not in payload:
+        defaults_used.append(f"eval_goal={config.eval_goal!r}")
+    if "project_root" not in payload:
+        defaults_used.append(f"project_root={config.project_root!r}")
+    mem = payload.get("memory", {})
+    if "backend" not in mem:
+        defaults_used.append(f"memory.backend={config.memory.backend!r}")
+    gr = payload.get("guardrails", {})
+    for field_name, value in (
+        ("max_loop_iterations", config.guardrails.max_loop_iterations),
+        ("consecutive_discard_limit", config.guardrails.consecutive_discard_limit),
+        ("near_best_tolerance", config.guardrails.near_best_tolerance),
+    ):
+        if field_name not in gr:
+            defaults_used.append(f"guardrails.{field_name}={value!r}")
+    if defaults_used:
+        _logger.debug(
+            "spark-researcher config loaded from %s — using defaults for: %s. "
+            "Set these keys in your project config to customize.",
+            path,
+            ", ".join(defaults_used),
+        )
 
 
 def resolve_project_root(config_path: Path, config: ProjectConfig) -> Path:

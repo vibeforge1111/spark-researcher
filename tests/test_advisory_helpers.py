@@ -91,3 +91,45 @@ def test_epistemic_packet_downgrades_to_partial_when_provisional() -> None:
     assert packet["status"] == "partial"
     assert packet["memory_hit_count"] == 2
     assert any("provisional" in action for action in packet["recommended_actions"])
+
+
+def test_epistemic_packet_downgrades_grounded_claims_with_active_contradictions() -> None:
+    packet = _epistemic_packet(
+        task="Should I make this recommendation?",
+        packet_rows=[{"kind": "belief"}],
+        guidance=["use the bounded option"],
+        boundaries=["do not treat advisory evidence as authority"],
+        intent={"memory_context": {"memory_hits": [1], "ruvector_hits": []}},
+        packet_stability={
+            "status": "durable_supported",
+            "contradiction_count": 1,
+        },
+    )
+
+    assert packet["status"] == "partial"
+    assert packet["clarifying_questions"]
+    assert any("contradictions" in item for item in packet["missing_evidence"])
+
+
+def test_epistemic_packet_distinguishes_unavailable_sources_from_zero_hits() -> None:
+    packet = _epistemic_packet(
+        task="What does the evidence say?",
+        packet_rows=[],
+        guidance=[],
+        boundaries=[],
+        intent={
+            "memory_context": {
+                "memory_hits": {"error": "private backend detail"},
+                "ruvector_status": {"status": "unavailable", "available": False},
+                "ruvector_hits": {"results": "wrong shape"},
+            }
+        },
+        packet_stability={"status": "no_belief_packets"},
+    )
+
+    assert packet["status"] == "under_supported"
+    assert packet["memory_evidence_state"] == "unavailable"
+    assert packet["ruvector_evidence_state"] == "invalid"
+    assert any("unavailable" in item.lower() for item in packet["missing_evidence"])
+    assert "No supporting memory hits were found for this task." not in packet["missing_evidence"]
+    assert "private backend detail" not in repr(packet)

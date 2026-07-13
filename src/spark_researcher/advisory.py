@@ -74,15 +74,19 @@ def _packet_stability(packet_rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _result_count(payload: Any) -> int:
+def _result_evidence(payload: Any) -> tuple[int, str]:
     if isinstance(payload, list):
-        return len(payload)
+        return len(payload), "available"
     if isinstance(payload, dict):
         if isinstance(payload.get("results"), list):
-            return len(payload["results"])
+            return len(payload["results"]), "available"
         if "error" in payload:
-            return 0
-    return 0
+            return 0, "unavailable"
+    return 0, "invalid"
+
+
+def _result_count(payload: Any) -> int:
+    return _result_evidence(payload)[0]
 
 
 def _epistemic_packet(
@@ -95,8 +99,15 @@ def _epistemic_packet(
     packet_stability: dict[str, Any],
 ) -> dict[str, Any]:
     memory_context = intent.get("memory_context", {}) if isinstance(intent, dict) else {}
-    memory_hits = _result_count(memory_context.get("memory_hits", []))
-    ruvector_hits = _result_count(memory_context.get("ruvector_hits", []))
+    memory_hits, memory_evidence_state = _result_evidence(memory_context.get("memory_hits", []))
+    ruvector_hits, ruvector_evidence_state = _result_evidence(memory_context.get("ruvector_hits", []))
+    ruvector_status = memory_context.get("ruvector_status", {})
+    if (
+        ruvector_evidence_state == "available"
+        and isinstance(ruvector_status, dict)
+        and str(ruvector_status.get("status") or "") == "disabled"
+    ):
+        ruvector_evidence_state = "disabled"
     packet_count = len(packet_rows)
     if packet_count >= 1 and guidance and boundaries:
         status = "grounded"
@@ -104,18 +115,24 @@ def _epistemic_packet(
         status = "partial"
     else:
         status = "under_supported"
-    if status == "grounded" and str(packet_stability.get("status") or "") == "provisional_only":
+    has_active_contradictions = int(packet_stability.get("contradiction_count") or 0) > 0
+    if status == "grounded" and (
+        str(packet_stability.get("status") or "") == "provisional_only"
+        or has_active_contradictions
+    ):
         status = "partial"
     missing = []
     if packet_count == 0:
         missing.append("No directly relevant packets were selected.")
-    if memory_hits <= 0 and ruvector_hits <= 0:
+    if memory_evidence_state in {"unavailable", "invalid"} or ruvector_evidence_state in {"unavailable", "invalid"}:
+        missing.append("Supporting memory evidence was unavailable or invalid, so zero hits cannot be assumed.")
+    elif memory_hits <= 0 and ruvector_hits <= 0:
         missing.append("No supporting memory hits were found for this task.")
     if not boundaries:
         missing.append("No explicit boundary guidance was available, so claims should stay narrow.")
     if str(packet_stability.get("status") or "") == "provisional_only":
         missing.append("Selected belief packets are provisional, so competing or lightly replicated lessons may still exist.")
-    if int(packet_stability.get("contradiction_count") or 0) > 0:
+    if has_active_contradictions:
         missing.append("Some selected belief packets still carry active contradictions.")
     recommended = {
         "grounded": [
@@ -146,6 +163,8 @@ def _epistemic_packet(
         "packet_count": packet_count,
         "memory_hit_count": memory_hits,
         "ruvector_hit_count": ruvector_hits,
+        "memory_evidence_state": memory_evidence_state,
+        "ruvector_evidence_state": ruvector_evidence_state,
         "missing_evidence": missing,
         "recommended_actions": recommended,
         "clarifying_questions": questions,
@@ -206,6 +225,8 @@ def build_advisory(config_path: Path, task: str, *, model: str = "generic", limi
                 "packet_count": epistemic["packet_count"],
                 "memory_hit_count": epistemic["memory_hit_count"],
                 "ruvector_hit_count": epistemic["ruvector_hit_count"],
+                "memory_evidence_state": epistemic["memory_evidence_state"],
+                "ruvector_evidence_state": epistemic["ruvector_evidence_state"],
                 "priority_count": len(failure_priorities.get("priorities", [])),
                 "packet_stability": packet_stability.get("status"),
                 "durable_belief_count": packet_stability.get("durable_belief_count", 0),

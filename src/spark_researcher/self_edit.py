@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import copy
+import hashlib
 import json
 import os
 import shlex
@@ -66,7 +67,9 @@ def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _workspace_dir(proposal_id: str) -> Path:
-    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / proposal_id / "workspace"
+    safe_id = hashlib.sha256(proposal_id.encode()).hexdigest()[:16]
+    private_root = Path(tempfile.mkdtemp(prefix=f"spark-researcher-self-edit-{safe_id}-"))
+    return private_root / "workspace"
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -386,9 +389,36 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
     )
 
 
+def _canonical_relative_path(path_text: str, *, allow_trailing_separator: bool = False) -> str | None:
+    normalized = str(path_text or "").replace("\\", "/")
+    if allow_trailing_separator:
+        normalized = normalized.rstrip("/")
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or (len(normalized) >= 2 and normalized[1] == ":")
+        or "\x00" in normalized
+    ):
+        return None
+    parts = normalized.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    return "/".join(parts)
+
+
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
-    normalized = path_text.replace("\\", "/")
-    return any(normalized == target or normalized.startswith(target.rstrip("/") + "/") for target in mutable_targets)
+    canonical_path = _canonical_relative_path(path_text)
+    if canonical_path is None:
+        return False
+    canonical_targets = {
+        target
+        for item in mutable_targets
+        if (target := _canonical_relative_path(item, allow_trailing_separator=True)) is not None
+    }
+    return any(
+        canonical_path == target or canonical_path.startswith(target + "/")
+        for target in canonical_targets
+    )
 
 
 def file_inventory(root: Path) -> dict[str, bytes]:

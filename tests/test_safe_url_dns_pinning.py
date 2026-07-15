@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import ipaddress
+import socket
 from typing import Any
+from urllib.request import Request
 
 import pytest
 
 from spark_researcher.safe_url import (
     _PinnedHTTPConnection,
     _PinnedHTTPSConnection,
+    _SafeRedirectHandler,
+    _validated_request_addresses,
+    UnsafeURL,
 )
 
 
@@ -83,3 +88,38 @@ def test_pinned_connection_fails_closed_when_every_public_route_fails() -> None:
     connection._create_connection = fail
     with pytest.raises(OSError, match="unreachable"):
         connection.connect()
+
+
+def test_authoritative_resolution_rejects_a_rebound_private_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answers = iter(("93.184.216.34", "127.0.0.1"))
+
+    def resolve(*_args: Any, **_kwargs: Any):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (next(answers), 80))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    with pytest.raises(UnsafeURL, match="non-public address"):
+        _validated_request_addresses("http://research.example/report")
+
+
+def test_redirect_handler_rejects_private_literal_even_when_dns_is_public(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 80))
+        ],
+    )
+    request = Request("http://research.example/report")
+    with pytest.raises(UnsafeURL, match="non-public address"):
+        _SafeRedirectHandler().redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "http://169.254.169.254/latest/meta-data",
+        )

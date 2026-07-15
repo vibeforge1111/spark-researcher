@@ -198,6 +198,43 @@ class AdapterExecTests(unittest.TestCase):
             self.assertEqual(result["response"], {"raw_response": "provider ok"})
             self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
 
+    def test_execute_advisory_times_out_with_bounded_config_and_error_trace(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {"SPARK_RESEARCHER_SUBPROCESS_TIMEOUT_SECONDS": "9"}, clear=False):
+                with patch(
+                    "spark_researcher.adapters.exec.subprocess.run",
+                    side_effect=subprocess.TimeoutExpired(cmd=["codex"], timeout=9),
+                ) as run_mock:
+                    with self.assertRaisesRegex(RuntimeError, "timed out after 9 seconds"):
+                        execute_advisory(
+                            runtime_root,
+                            advisory=advisory,
+                            model="codex",
+                            command_override=["codex", "exec", "--json-out", "{response_path}"],
+                            dry_run=False,
+                            governor_decision=_governor_decision(),
+                        )
+            self.assertEqual(run_mock.call_args.kwargs["timeout"], 9.0)
+
+    def test_execute_advisory_rejects_nonfinite_timeout_before_spawn(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {"SPARK_RESEARCHER_SUBPROCESS_TIMEOUT_SECONDS": "nan"}, clear=False):
+                with patch("spark_researcher.adapters.exec.subprocess.run") as run_mock:
+                    with self.assertRaisesRegex(RuntimeError, "subprocess timeout configuration is invalid"):
+                        execute_advisory(
+                            runtime_root,
+                            advisory=advisory,
+                            model="codex",
+                            command_override=["codex", "exec", "--json-out", "{response_path}"],
+                            dry_run=False,
+                            governor_decision=_governor_decision(),
+                        )
+            run_mock.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

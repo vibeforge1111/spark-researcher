@@ -183,3 +183,28 @@ def test_build_vault_writes_only_safe_pages_from_mixed_packet(
     assert not (runtime_root / "escape.md").exists()
     assert not (output_root / "C:" / "outside.md").exists()
     assert result["domain_page_count"] == 2
+
+
+def test_fallback_writer_rechecks_parent_containment_and_writes_atomically(tmp_path: Path) -> None:
+    root = tmp_path / "vault"
+    root.mkdir()
+
+    written = obsidian._write_vault_page_fallback(root, ("nested", "page.md"), "safe")
+
+    assert written == root / "nested" / "page.md"
+    assert written.read_text(encoding="utf-8") == "safe\n"
+    assert not list((root / "nested").glob(".*.tmp"))
+
+    if os.name == "posix":
+        outside = tmp_path / "outside-fallback"
+        outside.mkdir()
+        (root / "linked-fallback").symlink_to(outside, target_is_directory=True)
+        assert (
+            obsidian._write_vault_page_fallback(
+                root,
+                ("linked-fallback", "escape.md"),
+                "escaped",
+            )
+            is None
+        )
+        assert list(outside.iterdir()) == []

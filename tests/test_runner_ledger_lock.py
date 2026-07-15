@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from spark_researcher.runner import append_jsonl, locked_file, read_jsonl
@@ -26,6 +27,17 @@ def test_locked_file_times_out_when_lock_is_held(tmp_path: Path) -> None:
     except TimeoutError as exc:
         assert "runs.jsonl.lock" in str(exc)
         assert "owner=held-by-test" in str(exc)
+
+
+def test_locked_file_release_does_not_remove_same_pid_replacement(tmp_path: Path) -> None:
+    path = tmp_path / "ledger" / "runs.jsonl"
+    lock_path = path.with_name(path.name + ".lock")
+
+    with locked_file(path):
+        lock_path.unlink()
+        lock_path.write_text(str(os.getpid()), encoding="ascii")
+
+    assert lock_path.read_text(encoding="ascii") == str(os.getpid())
 
 
 def test_read_jsonl_skips_malformed_rows(tmp_path: Path) -> None:

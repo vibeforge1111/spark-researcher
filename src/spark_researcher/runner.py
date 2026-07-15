@@ -18,7 +18,7 @@ from .chips import invoke_chip_hook
 from .collective import write_spark_swarm_collective_payload
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
 from .failures import record_failure
-from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
+from .paths import IGNORED_NAMES, ledger_path, resolve_owned_path, resolve_runtime_root, runs_root
 from .tracing import start_trace
 
 
@@ -236,14 +236,14 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
                 "No mutable parameters are defined; add entries under `mutable_parameters` in the project config."
             )
         spec = lookup[name]
-        target_path = (workspace_root / spec.file).resolve()
+        target_path = resolve_owned_path(workspace_root, spec.file)
         text = target_path.read_text(encoding="utf-8-sig")
         replacement = spec.template.format(value=value)
         updated, count = re.subn(spec.pattern, replacement, text, count=1)
         if count != 1:
             raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
         target_path.write_text(updated, encoding="utf-8")
-        applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root))})
+        applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root.resolve()))})
     return applied
 
 

@@ -15,7 +15,14 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
+from .paths import (
+    IGNORED_NAMES,
+    canonical_identifier,
+    canonical_relative_path,
+    resolve_owned_path,
+    resolve_runtime_root,
+    self_edit_root,
+)
 from .tracing import start_trace
 
 
@@ -63,13 +70,35 @@ def _iso_now() -> str:
 
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
-    return self_edit_root(runtime_root) / proposal_id
+    return resolve_owned_path(self_edit_root(runtime_root), canonical_identifier(proposal_id))
 
 
 def _workspace_dir(proposal_id: str) -> Path:
-    safe_id = hashlib.sha256(proposal_id.encode()).hexdigest()[:16]
+    safe_id = hashlib.sha256(canonical_identifier(proposal_id).encode()).hexdigest()[:16]
     private_root = Path(tempfile.mkdtemp(prefix=f"spark-researcher-self-edit-{safe_id}-"))
     return private_root / "workspace"
+
+
+def _validated_workspace_root(proposal_id: str, stored_path: object) -> Path:
+    identifier = canonical_identifier(proposal_id)
+    if not isinstance(stored_path, str) or not stored_path or not Path(stored_path).is_absolute():
+        raise RuntimeError("Proposal workspace authority is invalid")
+    try:
+        workspace = Path(stored_path).resolve(strict=True)
+        temp_root = Path(tempfile.gettempdir()).resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeError("Proposal workspace authority is invalid") from exc
+    expected_prefix = f"spark-researcher-self-edit-{hashlib.sha256(identifier.encode()).hexdigest()[:16]}-"
+    private_root = workspace.parent
+    if (
+        workspace.name != "workspace"
+        or not workspace.is_dir()
+        or private_root.parent != temp_root
+        or not private_root.name.startswith(expected_prefix)
+        or private_root.stat().st_mode & 0o077
+    ):
+        raise RuntimeError("Proposal workspace authority is invalid")
+    return workspace
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -389,31 +418,14 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
     )
 
 
-def _canonical_relative_path(path_text: str, *, allow_trailing_separator: bool = False) -> str | None:
-    normalized = str(path_text or "").replace("\\", "/")
-    if allow_trailing_separator:
-        normalized = normalized.rstrip("/")
-    if (
-        not normalized
-        or normalized.startswith("/")
-        or (len(normalized) >= 2 and normalized[1] == ":")
-        or "\x00" in normalized
-    ):
-        return None
-    parts = normalized.split("/")
-    if any(part in {"", ".", ".."} for part in parts):
-        return None
-    return "/".join(parts)
-
-
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
-    canonical_path = _canonical_relative_path(path_text)
+    canonical_path = canonical_relative_path(path_text)
     if canonical_path is None:
         return False
     canonical_targets = {
         target
         for item in mutable_targets
-        if (target := _canonical_relative_path(item, allow_trailing_separator=True)) is not None
+        if (target := canonical_relative_path(item, allow_trailing_separator=True)) is not None
     }
     return any(
         canonical_path == target or canonical_path.startswith(target + "/")
@@ -752,7 +764,7 @@ def apply_proposal(
     if run_git_status(repo_root):
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
-    workspace_root = Path(proposal["workspace_root"])
+    workspace_root = _validated_workspace_root(proposal_id, proposal.get("workspace_root"))
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     if git_mode not in {"manual", "branch", "main"}:
         raise RuntimeError(f"Unsupported self-edit git mode: {git_mode}")
@@ -772,10 +784,13 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
     applied = []
+    mutable_targets = proposal.get("mutable_targets", [])
     for change in proposal.get("allowed_changes", []):
-        rel = change["path"]
-        source = workspace_root / rel
-        target = repo_root / rel
+        rel = canonical_relative_path(change.get("path"))
+        if rel is None or not is_allowed_path(rel, mutable_targets):
+            raise RuntimeError("Proposal change path is outside declared mutable targets")
+        source = resolve_owned_path(workspace_root, rel)
+        target = resolve_owned_path(repo_root, rel)
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
             if target.exists():

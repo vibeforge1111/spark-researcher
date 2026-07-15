@@ -22,7 +22,8 @@ from spark_researcher.self_edit import (
 def test_proposal_id_is_one_nonreflecting_identifier(tmp_path: Path, proposal_id: str) -> None:
     with pytest.raises(ValueError) as error:
         _proposal_dir(tmp_path, proposal_id)
-    assert proposal_id not in str(error.value)
+    if proposal_id:
+        assert proposal_id not in str(error.value)
 
 
 def test_valid_proposal_id_stays_inside_self_edit_root(tmp_path: Path) -> None:

@@ -22,6 +22,7 @@ from spark_researcher.self_edit import (
     _apply_result_ledger_path,
     _proposal_path,
     _review_path,
+    _workspace_dir,
     apply_proposal,
 )
 
@@ -104,7 +105,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
     )
     target = repo_root / "README.md"
     target.write_text("old\n", encoding="utf-8")
-    workspace_root = repo_root / "proposal-workspace"
+    workspace_root = _workspace_dir(proposal_id)
     workspace_root.mkdir()
     (workspace_root / "README.md").write_text("new\n", encoding="utf-8")
     proposal = {
@@ -113,6 +114,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
         "change_count": 1,
         "blocked_changes": [],
         "allowed_changes": [{"path": "README.md", "status": "modified"}],
+        "mutable_targets": ["README.md"],
         "workspace_root": str(workspace_root),
     }
     proposal_path = _proposal_path(repo_root, proposal_id)

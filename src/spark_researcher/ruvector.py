@@ -10,7 +10,10 @@ from typing import Any
 
 DEFAULT_COMMAND = "npx ruvector"
 MAX_QUERY_LENGTH = 500
-RESERVED_COMMAND_TOKENS = {"brain", "search", "--json"}
+
+
+def _executable_name(value: str) -> str:
+    return value.replace("\\", "/").rsplit("/", 1)[-1].lower()
 
 
 def _resolve_command() -> list[str]:
@@ -18,9 +21,15 @@ def _resolve_command() -> list[str]:
     resolved = shlex.split(command)
     if not resolved:
         raise RuntimeError("RuVector command is empty.")
-    reserved = RESERVED_COMMAND_TOKENS.intersection(token.lower() for token in resolved[1:])
-    if reserved:
-        raise RuntimeError("SPARK_RUVECTOR_COMMAND must be only the launcher prefix. Spark appends search subcommands.")
+    executable = _executable_name(resolved[0])
+    direct_launcher = len(resolved) == 1 and executable in {"ruvector", "ruvector.cmd"}
+    npx_launcher = (
+        len(resolved) == 2
+        and executable in {"npx", "npx.cmd"}
+        and resolved[1].lower() == "ruvector"
+    )
+    if not direct_launcher and not npx_launcher:
+        raise RuntimeError("RuVector launcher configuration is invalid.")
     return resolved
 
 
@@ -61,7 +70,7 @@ def ruvector_status() -> dict[str, Any]:
 
 def run_search(query: str, *, timeout_seconds: int = 60) -> dict[str, Any]:
     normalized_query = _normalize_query(query)
-    command = [*_resolve_command(), "brain", "search", normalized_query, "--json"]
+    command = [*_resolve_command(), "brain", "--json", "search", "--", normalized_query]
     executable = shutil.which(command[0])
     if executable is None:
         raise RuntimeError(

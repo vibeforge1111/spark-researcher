@@ -395,7 +395,7 @@ def _checkout_branch(repo_root: Path, branch_name: str, *, create: bool) -> None
 
 
 def _commit_paths(repo_root: Path, paths: list[str], message: str) -> str:
-    _git_output(repo_root, "add", *paths)
+    _git_output(repo_root, "add", "--", *paths)
     result = _git(repo_root, "commit", "-m", message)
     if result.returncode != 0:
         stderr = result.stderr.strip()

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import shutil
 import stat
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from spark_researcher.self_edit import _workspace_dir, is_allowed_path
+from spark_researcher import self_edit
+from spark_researcher.self_edit import _workspace_dir, expand_command, is_allowed_path
 
 
 @pytest.mark.parametrize(
@@ -45,3 +48,42 @@ def test_workspace_dir_is_private_and_unique_for_the_same_proposal() -> None:
     finally:
         shutil.rmtree(first.parent, ignore_errors=True)
         shutil.rmtree(second.parent, ignore_errors=True)
+
+
+def test_commit_paths_terminates_git_options_before_owned_paths(monkeypatch, tmp_path: Path) -> None:
+    output_calls: list[tuple[str, ...]] = []
+
+    def fake_git_output(repo_root: Path, *args: str) -> str:
+        assert repo_root == tmp_path
+        output_calls.append(args)
+        return "abc123"
+
+    monkeypatch.setattr(self_edit, "_git_output", fake_git_output)
+    monkeypatch.setattr(
+        self_edit,
+        "_git",
+        lambda repo_root, *args: SimpleNamespace(returncode=0, stderr="", stdout=""),
+    )
+
+    assert self_edit._commit_paths(tmp_path, ["--intent.py"], "Apply reviewed proposal") == "abc123"
+    assert output_calls[0] == ("add", "--", "--intent.py")
+
+
+def test_expand_command_keeps_metacharacter_paths_inside_their_original_argv_tokens(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace ; $(touch nope)"
+    request = tmp_path / "request & notes.md"
+    last_message = tmp_path / "last | message.txt"
+
+    command = expand_command(
+        ["runner", "--workspace={workspace}", "Read {request}", "{last_message}"],
+        workspace_root=workspace,
+        request_path=request,
+        last_message_path=last_message,
+    )
+
+    assert command == [
+        "runner",
+        f"--workspace={workspace}",
+        f"Read {request}",
+        str(last_message),
+    ]

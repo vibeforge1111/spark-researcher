@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import secrets
 import shutil
-from pathlib import Path
+import stat
+import tempfile
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .authority import memory_authority_refs, require_memory_write_authority
@@ -20,6 +24,169 @@ from .trial_queue import pending_queue_count
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def _vault_page_parts(raw_path: object) -> tuple[str, ...] | None:
+    original = str(raw_path or "").strip()
+    if not original or "\x00" in original:
+        return None
+    windows_path = PureWindowsPath(original)
+    normalized = original.replace("\\", "/")
+    posix_path = PurePosixPath(normalized)
+    if windows_path.drive or windows_path.is_absolute() or posix_path.is_absolute():
+        return None
+    parts = posix_path.parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return None
+    return parts
+
+
+def _open_vault_child_dir(parent_fd: int, part: str) -> int | None:
+    try:
+        os.mkdir(part, mode=0o700, dir_fd=parent_fd)
+    except FileExistsError:
+        pass
+    try:
+        metadata = os.stat(part, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISDIR(metadata.st_mode):
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(part, flags, dir_fd=parent_fd)
+    except OSError:
+        return None
+
+
+def _write_vault_page_posix(output_root: Path, parts: tuple[str, ...], content: str) -> Path | None:
+    root_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_fd = os.open(output_root, root_flags)
+    parent_fd = root_fd
+    temp_name: str | None = None
+    try:
+        for part in parts[:-1]:
+            child_fd = _open_vault_child_dir(parent_fd, part)
+            if child_fd is None:
+                return None
+            if parent_fd != root_fd:
+                os.close(parent_fd)
+            parent_fd = child_fd
+
+        leaf = parts[-1]
+        try:
+            leaf_metadata = os.stat(leaf, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            leaf_metadata = None
+        if leaf_metadata is not None and stat.S_ISDIR(leaf_metadata.st_mode):
+            return None
+
+        payload = (content.rstrip() + "\n").encode("utf-8")
+        for _ in range(8):
+            candidate = f".{leaf}.{secrets.token_hex(8)}.tmp"
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                temp_fd = os.open(candidate, flags, 0o600, dir_fd=parent_fd)
+            except FileExistsError:
+                continue
+            temp_name = candidate
+            break
+        else:
+            raise RuntimeError("Unable to allocate a private vault page staging file.")
+
+        with os.fdopen(temp_fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, leaf, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        temp_name = None
+        os.fsync(parent_fd)
+        return output_root.joinpath(*parts)
+    finally:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        if parent_fd != root_fd:
+            os.close(parent_fd)
+        os.close(root_fd)
+
+
+def _write_vault_page_fallback(output_root: Path, parts: tuple[str, ...], content: str) -> Path | None:
+    root_resolved = output_root.resolve(strict=True)
+    parent = output_root
+    for part in parts[:-1]:
+        parent = parent / part
+        if parent.is_symlink():
+            return None
+        parent.mkdir(mode=0o700, exist_ok=True)
+        if not parent.resolve(strict=True).is_relative_to(root_resolved):
+            return None
+    if parent.is_symlink() or not parent.resolve(strict=True).is_relative_to(root_resolved):
+        return None
+    target = parent / parts[-1]
+    if target.exists() and target.is_dir():
+        return None
+    payload = content.rstrip() + "\n"
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            dir=parent,
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if parent.is_symlink() or not parent.resolve(strict=True).is_relative_to(root_resolved):
+            return None
+        os.replace(temp_path, target)
+        temp_path = None
+        return target
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def write_vault_page(output_root: Path, raw_path: object, content: str) -> Path | None:
+    parts = _vault_page_parts(raw_path)
+    if parts is None:
+        return None
+    if output_root.is_symlink():
+        return None
+    output_root.mkdir(parents=True, exist_ok=True)
+    if os.name == "posix" and os.supports_dir_fd:
+        return _write_vault_page_posix(output_root, parts, content)
+    return _write_vault_page_fallback(output_root, parts, content)
+
+
+def _assert_vault_tree_no_symlinks(output_root: Path) -> None:
+    if output_root.is_symlink():
+        raise RuntimeError("Vault output root must be a real directory, not a symbolic link.")
+    for path in output_root.rglob("*"):
+        if path.is_symlink():
+            raise RuntimeError("Vault output contains a symbolic link and cannot be updated safely.")
+
+
+def _prepare_vault_root(runtime_root: Path) -> Path:
+    output_root = vault_root(runtime_root)
+    if output_root.is_symlink():
+        raise RuntimeError("Vault output root must be a real directory, not a symbolic link.")
+    output_root.mkdir(parents=True, exist_ok=True)
+    runtime_resolved = runtime_root.resolve(strict=True)
+    output_resolved = output_root.resolve(strict=True)
+    if not output_resolved.is_relative_to(runtime_resolved):
+        raise RuntimeError("Vault output root must stay inside the Researcher runtime root.")
+    _assert_vault_tree_no_symlinks(output_root)
+    return output_root
 
 
 def copy_docs(repo_root: Path, output_root: Path) -> list[str]:
@@ -382,6 +549,7 @@ def build_vault(
 ) -> dict[str, object]:
     effective_config_path = config_path or (repo_root / "spark-researcher.project.json")
     require_memory_write_authority(governor_decision, binding_refs=vault_authority_refs(repo_root, runtime_root, effective_config_path))
+    output_root = _prepare_vault_root(runtime_root)
     rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
     memory_manifest = sync_memory(
         repo_root,
@@ -392,7 +560,6 @@ def build_vault(
     )
     belief_manifest = build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
     packet_manifest = packet_status(effective_config_path)
-    output_root = vault_root(runtime_root)
     summary = ledger_summary(runtime_root, goal=config.eval_goal)
     traces = trace_status(runtime_root)
     frontier_queue_count = pending_queue_count(effective_config_path, rows)
@@ -425,12 +592,17 @@ def build_vault(
             },
             config=config,
         )
+        _assert_vault_tree_no_symlinks(output_root)
         for item in packet.get("pages", []):
-            page_path = str(item.get("path") or "").strip().replace("\\", "/")
-            if not page_path:
+            written_path = write_vault_page(
+                output_root,
+                item.get("path"),
+                str(item.get("content") or ""),
+            )
+            if written_path is None:
                 continue
-            write_text(output_root / page_path, str(item.get("content") or ""))
-            domain_pages.append(page_path.removesuffix(".md"))
+            domain_pages.append(written_path.relative_to(output_root).as_posix().removesuffix(".md"))
+    _assert_vault_tree_no_symlinks(output_root)
     copy_docs(repo_root, output_root / "06-References")
     copy_runtime_beliefs(runtime_root, output_root / "06-References" / "beliefs")
     write_text(

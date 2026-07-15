@@ -23,6 +23,7 @@ from .paths import (
     resolve_runtime_root,
     self_edit_root,
 )
+from .subprocess_policy import subprocess_timeout_seconds
 from .tracing import start_trace
 
 
@@ -350,25 +351,35 @@ def backend_profiles() -> list[dict[str, Any]]:
 
 
 def run_git_status(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    timeout_seconds = subprocess_timeout_seconds(30)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Git command timed out after {timeout_seconds:g} seconds.") from None
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(repo_root), *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    timeout_seconds = subprocess_timeout_seconds(30)
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Git command timed out after {timeout_seconds:g} seconds.") from None
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
@@ -606,10 +617,25 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace")
-        write_text(stdout_path, process.stdout)
-        write_text(stderr_path, process.stderr)
-        status = "pending_review" if process.returncode == 0 else "failed"
+        timeout_seconds = subprocess_timeout_seconds(600)
+        try:
+            process = subprocess.run(
+                command,
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            write_text(stdout_path, "")
+            write_text(stderr_path, f"Command timed out after {timeout_seconds:g} seconds.")
+            status = "failed"
+        else:
+            write_text(stdout_path, process.stdout)
+            write_text(stderr_path, process.stderr)
+            status = "pending_review" if process.returncode == 0 else "failed"
     else:
         write_text(stdout_path, json.dumps({"command": command, "dry_run": dry_run}, indent=2))
         write_text(stderr_path, "")

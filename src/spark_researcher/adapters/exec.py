@@ -12,6 +12,7 @@ from typing import Any
 
 from ..authority import require_advisory_execution_authority
 from ..paths import advisory_root
+from ..subprocess_policy import subprocess_timeout_seconds
 from ..tracing import start_trace
 
 
@@ -241,8 +242,23 @@ def execute_advisory(
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
-    with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    timeout_seconds = subprocess_timeout_seconds(300)
+    try:
+        with trace.span("subprocess", attributes={"command": expanded, "timeout_seconds": timeout_seconds}):
+            result = subprocess.run(
+                expanded,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+    except subprocess.TimeoutExpired:
+        message = f"Advisory execution timed out after {timeout_seconds:g} seconds."
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text(message, encoding="utf-8")
+        trace.finish(status="error", attributes={"error": "subprocess_timeout", "timeout_seconds": timeout_seconds})
+        raise RuntimeError(message) from None
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]

@@ -1087,6 +1087,8 @@ def _run_command(
         detail = (error.stderr or error.stdout or "").strip()
         message = detail or f"Command failed: {' '.join(command)}"
         raise RuntimeError(message) from error
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Command timed out after {COLLECTIVE_COMMAND_TIMEOUT_SECONDS} seconds.") from None
 
 
 def _git_output(repo_root: Path, *args: str) -> str:

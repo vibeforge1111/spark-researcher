@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from datetime import UTC, datetime
 from html import escape, unescape
 from pathlib import Path
@@ -32,10 +33,10 @@ INVISIBLE_UNICODE_CHARS = {
 }
 STORED_PROMPT_INJECTION_PATTERNS = (
     ("instruction-override", re.compile(r"\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+instructions\b", re.I)),
-    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b.*\b(override|replace|ignore)\b", re.I)),
+    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b.*\b(override|replace|ignore)\b", re.I | re.S)),
     ("hidden-html", re.compile(r"<!--|<\s*(?:div|span)[^>]*(?:display\s*:\s*none|visibility\s*:\s*hidden)", re.I)),
-    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b.*\b(\.env|secret|token|api[_-]?key|password)\b", re.I)),
-    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b.*(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I)),
+    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b.*\b(\.env|secret|token|api[_-]?key|password)\b", re.I | re.S)),
+    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b.*(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I | re.S)),
     ("private-key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.I)),
 )
 
@@ -116,12 +117,23 @@ def _domain_from_url(url: str) -> str:
     return netloc
 
 
+def _unicode_format_chars(text: str) -> list[tuple[str, str]]:
+    chars: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for char in text:
+        if char in seen or unicodedata.category(char) != "Cf":
+            continue
+        seen.add(char)
+        name = INVISIBLE_UNICODE_CHARS.get(char) or unicodedata.name(char, "UNICODE FORMAT CHARACTER")
+        chars.append((char, name))
+    return chars
+
+
 def scan_untrusted_research_text(value: Any) -> list[str]:
     text = str(value or "")
     findings: list[str] = []
-    for char, name in INVISIBLE_UNICODE_CHARS.items():
-        if char in text:
-            findings.append(f"invisible-unicode: U+{ord(char):04X} {name}")
+    for char, name in _unicode_format_chars(text):
+        findings.append(f"invisible-unicode: U+{ord(char):04X} {name}")
     for category, pattern in STORED_PROMPT_INJECTION_PATTERNS:
         if pattern.search(text):
             findings.append(category)
@@ -130,7 +142,7 @@ def scan_untrusted_research_text(value: Any) -> list[str]:
 
 def sanitize_untrusted_research_text(value: Any) -> str:
     text = str(value or "")
-    for char, name in INVISIBLE_UNICODE_CHARS.items():
+    for char, name in _unicode_format_chars(text):
         text = text.replace(char, f"[blocked invisible unicode U+{ord(char):04X} {name}]")
     for category, pattern in STORED_PROMPT_INJECTION_PATTERNS:
         if pattern.search(text):

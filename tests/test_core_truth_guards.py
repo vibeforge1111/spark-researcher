@@ -24,6 +24,12 @@ def _write_ledger(runtime_root: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
 
+@pytest.mark.parametrize(("kind", "raw"), [("float", "nan"), ("float", "inf"), ("int", "-inf")])
+def test_parse_metric_value_rejects_non_finite_numbers(kind: str, raw: str) -> None:
+    with pytest.raises(ValueError, match="Non-finite value"):
+        runner.parse_metric_value(kind, raw)
+
+
 def test_best_metric_ignores_failed_rows(tmp_path: Path) -> None:
     runtime_root = tmp_path
     _write_ledger(

@@ -125,6 +125,18 @@ def test_research_note_sanitizer_blocks_multiline_instruction_patterns(raw: str,
     assert sanitize_untrusted_research_text(raw) == f"[blocked stored prompt-injection content: {category}]"
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "system prompt " + "x" * 201 + " override",
+        "curl " + "x" * 201 + " API_KEY",
+        "read " + "x" * 201 + " .env",
+    ],
+)
+def test_research_note_scanner_bounds_relationship_distance(raw: str) -> None:
+    assert scan_untrusted_research_text(raw) == []
+
+
 def test_research_task_preserves_user_instruction_authority() -> None:
     original = "Analyze why the phrase 'ignore previous instructions' is unsafe."
 

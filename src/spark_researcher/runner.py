@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import math
 import os
 import re
 import secrets
@@ -304,10 +305,16 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
 
 def parse_metric_value(kind: str, raw: str) -> float | int | str:
     if kind == "int":
-        return int(float(raw))
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(f"Non-finite value for int metric: {raw!r}")
+        return int(value)
     if kind == "str":
         return raw
-    return float(raw)
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError(f"Non-finite value for float metric: {raw!r}")
+    return value
 
 
 def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:

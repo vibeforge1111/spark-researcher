@@ -45,6 +45,20 @@ def test_autoloop_rejects_non_positive_max_passes() -> None:
         parser.parse_args(["autoloop", "--command", "train", "--continuous", "--max-passes", "0"])
 
 
+@pytest.mark.parametrize("command", ["suggest", "apply"])
+@pytest.mark.parametrize("limit", ["0", "-1"])
+def test_candidates_reject_non_positive_limits(tmp_path: Path, command: str, limit: str) -> None:
+    result = run_cli(
+        tmp_path,
+        ["candidates", command, "--command", "train", "--limit", limit],
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "argument --limit: value must be a positive integer" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_loop_cli_enables_operator_progress(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config_path = tmp_path / "spark-researcher.project.json"
     config_path.write_text("{}", encoding="utf-8")

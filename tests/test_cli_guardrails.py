@@ -105,6 +105,38 @@ def test_run_rejects_unknown_candidate_id_before_baseline_fallback(
     assert called_run_once is False
 
 
+def test_unknown_candidate_cli_names_available_ids_without_running_baseline(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    init_result = run_cli(
+        tmp_path,
+        ["init", "--path", str(project), "--preset", "toy", "--project-name", "demo"],
+    )
+    assert init_result.returncode == 0
+
+    result = run_cli(
+        project,
+        [
+            "run",
+            "--config",
+            "spark-researcher.project.json",
+            "--command",
+            "train",
+            "--candidate-id",
+            "definitely-not-real",
+            "--dry-run",
+        ],
+    )
+
+    combined_output = result.stdout + result.stderr
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "Candidate id 'definitely-not-real' was not found" in result.stderr
+    assert "Known candidate ids: baseline" in result.stderr
+    assert "Traceback" not in combined_output
+    assert "test_score" not in combined_output
+
+
 @pytest.mark.parametrize(
     ("args", "expected_config_path"),
     [

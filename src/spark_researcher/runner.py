@@ -338,11 +338,25 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
             )
         spec = lookup[name]
         target_path = resolve_owned_path(workspace_root, spec.file)
-        text = target_path.read_text(encoding="utf-8-sig")
-        replacement = spec.template.format(value=value)
-        updated, count = re.subn(spec.pattern, replacement, text, count=1)
+        try:
+            text = target_path.read_text(encoding="utf-8-sig")
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Mutable parameter {name!r} targets {spec.file!r}, but that file is missing from the workspace. "
+                "Check the mutable_parameters entry in the project config."
+            ) from exc
+        replacement = spec.template.replace("{value}", value)
+        try:
+            updated, count = re.subn(spec.pattern, lambda _match: replacement, text, count=1)
+        except re.error as exc:
+            raise RuntimeError(
+                f"Mutable parameter {name!r} uses invalid regex pattern {spec.pattern!r} in the project config: {exc}."
+            ) from exc
         if count != 1:
-            raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
+            raise RuntimeError(
+                f"Could not apply mutable parameter {name!r} to {spec.file!r}: "
+                f"pattern {spec.pattern!r} did not match."
+            )
         target_path.write_text(updated, encoding="utf-8")
         applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root.resolve()))})
     return applied

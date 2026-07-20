@@ -325,6 +325,42 @@ def update_intent_policy(
 _VALID_EVAL_GOALS = frozenset({"minimize", "maximize"})
 
 
+class ConfigLoadError(ValueError):
+    """Raised when a project configuration has an invalid required shape."""
+
+
+def _require_config_key(payload: dict[str, Any], key: str, path: Path) -> Any:
+    if key not in payload:
+        raise ConfigLoadError(
+            f"Config error: key {key!r} is required in {public_config_path(path)}. "
+            "Add it to spark-researcher.project.json."
+        )
+    return payload[key]
+
+
+def _require_config_entry(
+    entry: object,
+    *,
+    section: str,
+    index: int,
+    required_fields: tuple[str, ...],
+    path: Path,
+) -> dict[str, Any]:
+    location = f"{section}[{index}]"
+    if not isinstance(entry, dict):
+        raise ConfigLoadError(
+            f"Config error: {location} must be a JSON object in {public_config_path(path)}, "
+            f"got {type(entry).__name__}."
+        )
+    for field_name in required_fields:
+        if field_name not in entry:
+            raise ConfigLoadError(
+                f"Config error: {location} is missing required field {field_name!r} "
+                f"in {public_config_path(path)}."
+            )
+    return entry
+
+
 def _validate_eval_goal(raw: str) -> str:
     normalized = raw.strip().lower()
     if normalized not in _VALID_EVAL_GOALS:
@@ -347,6 +383,11 @@ def load_config(path: Path) -> ProjectConfig:
     except OSError as exc:
         detail = exc.strerror or exc.__class__.__name__
         raise SystemExit(f"Failed to read config file {public_config_path(path)}: {detail}") from exc
+    if not isinstance(payload, dict):
+        raise ConfigLoadError(
+            f"Config error: {public_config_path(path)} must contain a JSON object, "
+            f"got {type(payload).__name__}."
+        )
     commands = {
         name: CommandSpec(
             args=list(spec["args"]),
@@ -354,10 +395,10 @@ def load_config(path: Path) -> ProjectConfig:
             kind=str(spec.get("kind", "train-once")),
             log_name=str(spec.get("log_name", f"{name}.log")),
         )
-        for name, spec in payload["commands"].items()
+        for name, spec in _require_config_key(payload, "commands", path).items()
     }
     metrics = {}
-    for name, spec in payload["metrics"].items():
+    for name, spec in _require_config_key(payload, "metrics", path).items():
         pattern_str = str(spec["pattern"])
         compiled = re.compile(pattern_str)
         if not compiled.groups:
@@ -365,18 +406,26 @@ def load_config(path: Path) -> ProjectConfig:
                 f"Metric '{name}' pattern must contain at least one capture group: {pattern_str}"
             )
         metrics[name] = MetricSpec(pattern=pattern_str, kind=str(spec.get("kind", "float")))
-    mutable_parameters = [
-        MutationSpec(
-            name=str(item["name"]),
-            file=str(item["file"]),
-            pattern=str(item["pattern"]),
-            template=str(item["template"]),
-            description=str(item.get("description", "")),
-            value_step=str(item.get("value_step", "")),
-            value_range=[str(part) for part in item.get("value_range", [])],
+    mutable_parameters = []
+    for index, raw_item in enumerate(payload.get("mutable_parameters", [])):
+        item = _require_config_entry(
+            raw_item,
+            section="mutable_parameters",
+            index=index,
+            required_fields=("name", "file", "pattern", "template"),
+            path=path,
         )
-        for item in payload.get("mutable_parameters", [])
-    ]
+        mutable_parameters.append(
+            MutationSpec(
+                name=str(item["name"]),
+                file=str(item["file"]),
+                pattern=str(item["pattern"]),
+                template=str(item["template"]),
+                description=str(item.get("description", "")),
+                value_step=str(item.get("value_step", "")),
+                value_range=[str(part) for part in item.get("value_range", [])],
+            )
+        )
     candidate_trials = [
         CandidateTrial(
             candidate_id=str(item["candidate_id"]),
@@ -393,26 +442,34 @@ def load_config(path: Path) -> ProjectConfig:
         )
         for item in payload.get("candidate_trials", [])
     ]
-    trainers = [
-        TrainerSpec(
-            name=str(item["name"]),
-            examples_path=str(item["examples_path"]),
-            compile_command=[str(part) for part in item.get("compile_command", [])],
-            min_examples=_safe_int(item.get("min_examples", 20), 20),
-            recompile_every=_safe_int(item.get("recompile_every", 10), 10),
-            max_examples=_safe_int(item.get("max_examples", 96), 96),
+    trainers = []
+    for index, raw_item in enumerate(payload.get("trainers", [])):
+        item = _require_config_entry(
+            raw_item,
+            section="trainers",
+            index=index,
+            required_fields=("name", "examples_path"),
+            path=path,
         )
-        for item in payload.get("trainers", [])
-    ]
+        trainers.append(
+            TrainerSpec(
+                name=str(item["name"]),
+                examples_path=str(item["examples_path"]),
+                compile_command=[str(part) for part in item.get("compile_command", [])],
+                min_examples=_safe_int(item.get("min_examples", 20), 20),
+                recompile_every=_safe_int(item.get("recompile_every", 10), 10),
+                max_examples=_safe_int(item.get("max_examples", 96), 96),
+            )
+        )
     self_edit_payload = payload.get("self_edit", {})
     memory_payload = payload.get("memory", {})
     guardrail_payload = payload.get("guardrails", {})
     chip_payload = payload.get("chip", {})
     intent_payload = payload.get("intent", {})
     return ProjectConfig(
-        project_name=str(payload["project_name"]),
+        project_name=str(_require_config_key(payload, "project_name", path)),
         project_root=str(payload.get("project_root", ".")),
-        eval_metric=str(payload["eval_metric"]),
+        eval_metric=str(_require_config_key(payload, "eval_metric", path)),
         eval_goal=_validate_eval_goal(str(payload.get("eval_goal", "minimize"))),
         commands=commands,
         metrics=metrics,

@@ -15,7 +15,7 @@ from .adapters import adapter_request
 from .authority import memory_authority_refs, require_advisory_execution_authority, require_memory_write_authority
 from .memory import episode_memory_authority_refs, record_episode, working_memory_authority_refs, write_working_memory
 from .paths import advisory_root
-from .safe_url import safe_urlopen
+from .safe_url import read_bounded_response, safe_urlopen
 from .tracing import start_trace
 from .verifier import execute_with_verifier
 
@@ -54,7 +54,7 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
+            page = read_bounded_response(response).decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
     links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)

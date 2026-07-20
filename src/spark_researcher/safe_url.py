@@ -24,6 +24,19 @@ class UnsafeURL(ValueError):
     """Raised when an outbound URL can target local or non-public networks."""
 
 
+class ResponseTooLarge(ValueError):
+    """Raised when a guarded response exceeds its bounded read budget."""
+
+
+def read_bounded_response(response: Any, *, max_bytes: int = 2 * 1024 * 1024) -> bytes:
+    if max_bytes < 0:
+        raise ValueError("max_bytes must be non-negative")
+    payload = response.read(max_bytes + 1)
+    if len(payload) > max_bytes:
+        raise ResponseTooLarge("Web response exceeded the safe size limit")
+    return payload
+
+
 def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     try:
         addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()

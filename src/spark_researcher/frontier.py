@@ -18,7 +18,7 @@ from .config import load_config
 from .failures import surprise_status
 from .intent import build_intent_brief
 from .paths import resolve_runtime_root
-from .safe_url import safe_urlopen
+from .safe_url import read_bounded_response, safe_urlopen
 from .tracing import start_trace
 from .trial_queue import merged_candidate_trials
 
@@ -101,7 +101,7 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
+            page = read_bounded_response(response).decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)

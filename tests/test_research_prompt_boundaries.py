@@ -25,8 +25,8 @@ class _FakeResponse:
     def __exit__(self, *args: object) -> None:
         self.closed = True
 
-    def read(self) -> bytes:
-        return self.body
+    def read(self, size: int = -1) -> bytes:
+        return self.body if size < 0 else self.body[:size]
 
 
 def test_research_task_fences_and_escapes_web_notes() -> None:
@@ -179,4 +179,20 @@ def test_frontier_web_notes_closes_http_response(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("spark_researcher.frontier.safe_urlopen", lambda *args, **kwargs: response)
 
     assert frontier._web_notes("latest docs") == ["Example note"]
+    assert response.closed is True
+
+
+def test_web_research_rejects_oversized_response_and_closes_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = _FakeResponse(b"x" * (2 * 1024 * 1024 + 1))
+    monkeypatch.setattr("spark_researcher.research.safe_urlopen", lambda *args, **kwargs: response)
+
+    assert _bounded_web_results("latest docs") == []
+    assert response.closed is True
+
+
+def test_frontier_web_notes_rejects_oversized_response_and_closes_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = _FakeResponse(b"x" * (2 * 1024 * 1024 + 1))
+    monkeypatch.setattr("spark_researcher.frontier.safe_urlopen", lambda *args, **kwargs: response)
+
+    assert frontier._web_notes("latest docs") == []
     assert response.closed is True

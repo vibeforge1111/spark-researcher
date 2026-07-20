@@ -97,6 +97,74 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _read_lock_ownership(lock_path: Path) -> bytes | None:
+    try:
+        ownership = lock_path.read_bytes()
+    except OSError:
+        return None
+    return ownership or None
+
+
+def _lock_owner_alive(ownership: bytes) -> bool | None:
+    """Return process liveness, or None when the owner record is not trustworthy."""
+    try:
+        pid = int(ownership.split(b":", 1)[0].decode("ascii"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
+    return True
+
+
+def _unlink_lock_if_unchanged(lock_path: Path, expected_ownership: bytes) -> bool:
+    current_ownership = _read_lock_ownership(lock_path)
+    if current_ownership is None or not secrets.compare_digest(current_ownership, expected_ownership):
+        return False
+    try:
+        lock_path.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def _try_reclaim_stale_lock(lock_path: Path, recovery_ownership: bytes) -> bool:
+    """Remove one unchanged dead-owner lock while serializing competing reapers."""
+    observed_ownership = _read_lock_ownership(lock_path)
+    if observed_ownership is None or _lock_owner_alive(observed_ownership) is not False:
+        return False
+
+    recovery_path = lock_path.with_name(lock_path.name + ".reclaim")
+    try:
+        recovery_handle = os.open(str(recovery_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        recovery_owner = _read_lock_ownership(recovery_path)
+        if recovery_owner is not None and _lock_owner_alive(recovery_owner) is False:
+            _unlink_lock_if_unchanged(recovery_path, recovery_owner)
+        return False
+    except OSError:
+        return False
+
+    try:
+        if os.write(recovery_handle, recovery_ownership) != len(recovery_ownership):
+            return False
+        return _unlink_lock_if_unchanged(lock_path, observed_ownership)
+    except OSError:
+        return False
+    finally:
+        os.close(recovery_handle)
+        current_recovery_owner = _read_lock_ownership(recovery_path)
+        if current_recovery_owner is not None:
+            _unlink_lock_if_unchanged(recovery_path, current_recovery_owner)
+
+
 @contextmanager
 def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     ensure_parent(path)
@@ -104,11 +172,17 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     deadline = time.monotonic() + timeout_seconds
     handle: int | None = None
     ownership = f"{os.getpid()}:{secrets.token_hex(16)}".encode("ascii")
+    recovery_checked = False
     while handle is None:
         try:
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            if time.monotonic() >= deadline:
+            deadline_reached = time.monotonic() >= deadline
+            if not recovery_checked or deadline_reached:
+                recovery_checked = True
+                if _try_reclaim_stale_lock(lock_path, ownership):
+                    continue
+            if deadline_reached:
                 owner = None
                 try:
                     owner_record = lock_path.read_text(encoding="utf-8", errors="ignore").strip()

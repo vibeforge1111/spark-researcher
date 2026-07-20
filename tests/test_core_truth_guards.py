@@ -11,7 +11,7 @@ from spark_researcher import obsidian
 from spark_researcher.obsidian import vault_authority_refs
 from spark_researcher import candidates, frontier, runner, trainers, trial_queue
 from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
-from spark_researcher.outcomes import load_advisory_outcomes
+from spark_researcher.outcomes import load_advisory_outcomes, log_advisory_outcome
 from spark_researcher.paths import ledger_path, trainers_root
 from spark_researcher.trainers import read_state, write_state
 from spark_researcher.tracing import start_trace, trace_status
@@ -167,6 +167,30 @@ def test_advisory_outcomes_skip_malformed_jsonl_rows(tmp_path: Path) -> None:
     rows = load_advisory_outcomes(tmp_path)
 
     assert [row["status"] for row in rows] == ["ok", "fail"]
+
+
+def test_advisory_outcome_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    locked_paths: list[Path] = []
+
+    @contextmanager
+    def fake_lock(path: Path):
+        locked_paths.append(path)
+        yield
+
+    monkeypatch.setattr("spark_researcher.runner.locked_file", fake_lock)
+
+    result = log_advisory_outcome(
+        tmp_path,
+        task="compare sources",
+        model="researcher",
+        status="ok",
+        packet_ids=["packet-a"],
+    )
+
+    expected_path = tmp_path / "artifacts" / "advisory" / "outcomes.jsonl"
+    assert locked_paths == [expected_path]
+    assert result["path"] == str(expected_path)
+    assert load_advisory_outcomes(tmp_path)[0]["packet_ids"] == ["packet-a"]
 
 
 def test_trace_status_skips_malformed_jsonl_rows(tmp_path: Path) -> None:

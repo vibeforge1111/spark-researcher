@@ -23,6 +23,8 @@ def log_advisory_outcome(
     notes: str = "",
     domain: str = "generic",
 ) -> dict[str, object]:
+    from .runner import locked_file
+
     root = advisory_root(runtime_root)
     root.mkdir(parents=True, exist_ok=True)
     path = root / "outcomes.jsonl"
@@ -36,8 +38,9 @@ def log_advisory_outcome(
         "score": score,
         "notes": notes,
     }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
     return {"path": str(path), "recorded": True, "payload": payload}
 
 

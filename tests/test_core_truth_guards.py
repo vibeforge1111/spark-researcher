@@ -9,7 +9,7 @@ import pytest
 from memory_governor import memory_governor_decision
 from spark_researcher import obsidian
 from spark_researcher.obsidian import vault_authority_refs
-from spark_researcher import candidates, frontier, runner, trainers, trial_queue
+from spark_researcher import candidates, failures, frontier, runner, trainers, trial_queue
 from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
 from spark_researcher.outcomes import load_advisory_outcomes, log_advisory_outcome
 from spark_researcher.paths import ledger_path, trainers_root
@@ -191,6 +191,23 @@ def test_advisory_outcome_appends_use_locked_file(tmp_path: Path, monkeypatch: p
     assert locked_paths == [expected_path]
     assert result["path"] == str(expected_path)
     assert load_advisory_outcomes(tmp_path)[0]["packet_ids"] == ["packet-a"]
+
+
+def test_failure_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    locked_paths: list[Path] = []
+
+    @contextmanager
+    def fake_lock(path: Path):
+        locked_paths.append(path)
+        yield
+
+    monkeypatch.setattr("spark_researcher.runner.locked_file", fake_lock)
+    path = tmp_path / "artifacts" / "failures" / "registry.jsonl"
+
+    failures._append_jsonl(path, {"failure_type": "bounded-test"})
+
+    assert locked_paths == [path]
+    assert json.loads(path.read_text(encoding="utf-8")) == {"failure_type": "bounded-test"}
 
 
 def test_trace_status_skips_malformed_jsonl_rows(tmp_path: Path) -> None:

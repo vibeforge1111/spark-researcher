@@ -419,3 +419,40 @@ def test_load_config_falls_back_for_invalid_optional_numeric_values(tmp_path: Pa
     assert config.guardrails.max_loop_iterations == 8
     assert config.guardrails.consecutive_discard_limit == 3
     assert config.guardrails.near_best_tolerance == 0.03
+
+
+def test_load_config_normalizes_valid_eval_goal(tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "demo",
+                "eval_metric": "score",
+                "eval_goal": " MAXIMIZE ",
+                "commands": {"research": {"args": ["python", "-c", "print('ok')"]}},
+                "metrics": {"score": {"pattern": "score=(?P<value>\\d+)"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).eval_goal == "maximize"
+
+
+def test_load_config_rejects_invalid_eval_goal(tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "demo",
+                "eval_metric": "score",
+                "eval_goal": "sideways",
+                "commands": {"research": {"args": ["python", "-c", "print('ok')"]}},
+                "metrics": {"score": {"pattern": "score=(?P<value>\\d+)"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="eval_goal must be 'minimize' or 'maximize'"):
+        load_config(config_path)

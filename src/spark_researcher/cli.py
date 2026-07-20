@@ -638,6 +638,7 @@ def main() -> None:
                 dry_run=args.dry_run,
                 limit=args.limit,
                 governor_decision=_load_governor_decision(args.governor_decision),
+                emit_progress=True,
             )
         )
         return

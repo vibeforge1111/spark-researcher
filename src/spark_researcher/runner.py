@@ -7,6 +7,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -755,6 +756,7 @@ def run_loop(
     dry_run: bool = False,
     limit: int | None = None,
     governor_decision: dict[str, Any] | None = None,
+    emit_progress: bool = False,
 ) -> dict[str, Any]:
     config = load_config(config_path)
     requested_limit = limit or config.guardrails.max_loop_iterations
@@ -763,7 +765,9 @@ def run_loop(
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
-    for trial in pending_trials[:max_iterations]:
+    planned_trials = pending_trials[:max_iterations]
+    planned_count = len(planned_trials)
+    for index, trial in enumerate(planned_trials, start=1):
         record = run_once(
             config_path,
             command_name,
@@ -773,6 +777,17 @@ def run_loop(
             authority_args_path=authority_args_path,
         )
         results.append(record)
+        if emit_progress:
+            try:
+                candidate_id = json.dumps(str(trial.candidate_id), ensure_ascii=True)[1:-1]
+                verdict = json.dumps(str(record.get("verdict")), ensure_ascii=True)[1:-1]
+                print(
+                    f"[{index}/{planned_count}] candidate={candidate_id} verdict={verdict}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except OSError:
+                pass
         if record["verdict"] == "improved":
             consecutive_discards = 0
         elif row_counts_as_discard(record):

@@ -34,6 +34,28 @@ def test_autoloop_rejects_non_positive_max_passes() -> None:
         parser.parse_args(["autoloop", "--command", "train", "--continuous", "--max-passes", "0"])
 
 
+def test_loop_cli_enables_operator_progress(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text("{}", encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def fake_run_loop(*args: object, **kwargs: object) -> dict[str, object]:
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["spark-researcher", "loop", "--config", str(config_path), "--command", "train"],
+    )
+    monkeypatch.setattr(cli, "run_loop", fake_run_loop)
+    monkeypatch.setattr(cli, "print_json", lambda _payload: None)
+
+    cli.main()
+
+    assert seen["emit_progress"] is True
+
+
 def test_run_rejects_unknown_candidate_id_before_baseline_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

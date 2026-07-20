@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import subprocess
 from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
 
-from spark_researcher.chips import chip_validation, invoke_chip_hook, validate_manifest
+from spark_researcher.chips import ChipContext, _build_hook_env, chip_validation, invoke_chip_hook, validate_manifest
 from spark_researcher.config import ChipSpec, CommandSpec, MetricSpec, ProjectConfig, save_config
 
 
@@ -203,6 +205,50 @@ def _write_src_layout_chip_fixture(chip_root: Path, *, response_payload: dict) -
         ),
     )
     return config_path
+
+
+def test_chip_hook_environment_is_minimal_allowlist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    chip_root = tmp_path / "chip"
+    (chip_root / "src").mkdir(parents=True)
+    context = ChipContext(
+        repo_root=tmp_path,
+        runtime_root=tmp_path / "runtime",
+        chip_root=chip_root,
+        manifest_path=chip_root / "spark-chip.json",
+        manifest={},
+    )
+    monkeypatch.setenv("PATH", "/safe/bin")
+    monkeypatch.setenv("HOME", "/safe/home")
+    monkeypatch.setenv("PYTHONPATH", "/safe/harness")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+    monkeypatch.setenv("GITHUB_TOKEN", "github-secret")
+    monkeypatch.setenv("MY_API_KEY", "suffix-secret")
+    monkeypatch.setenv("CUSTOM_INTERNAL_NOTE", "private-context")
+
+    env = _build_hook_env(context)
+
+    assert env["PATH"] == "/safe/bin"
+    assert env["HOME"] == "/safe/home"
+    assert "/safe/harness" in env["PYTHONPATH"]
+    assert "OPENAI_API_KEY" not in env
+    assert "GITHUB_TOKEN" not in env
+    assert "MY_API_KEY" not in env
+    assert "CUSTOM_INTERNAL_NOTE" not in env
+
+
+def test_chip_hook_invocations_use_private_unique_directories(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(tmp_path / "chip", response_payload={"documents": []})
+    monkeypatch.setattr("spark_researcher.chips._now_slug", lambda: "fixed-stamp")
+
+    first = invoke_chip_hook(config_path, "packets", {}, dry_run=True)
+    second = invoke_chip_hook(config_path, "packets", {}, dry_run=True)
+
+    first_root = Path(first["input_path"]).parent
+    second_root = Path(second["input_path"]).parent
+    assert first_root != second_root
+    assert Path(first["output_path"]).parent == first_root
+    assert stat.S_IMODE(first_root.stat().st_mode) & 0o077 == 0
+    assert os.path.commonpath([first_root, second_root]) == str(first_root.parent)
 
 
 def test_invoke_chip_hook_rejects_invalid_packet_documents(tmp_path: Path) -> None:

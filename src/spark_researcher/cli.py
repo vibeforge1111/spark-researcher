@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .adapters import adapter_status, execute_advisory, execution_public_summary, execution_status
@@ -31,7 +32,10 @@ from .trainers import run_all_trainers, trainer_status
 
 
 def print_json(payload: object) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    if sys.stdout.isatty():
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    print(json.dumps(payload, separators=(",", ":"), sort_keys=True))
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:

@@ -114,6 +114,26 @@ def test_under_supported_non_web_task_stays_needs_verification(tmp_path: Path) -
     assert packet["clarifying_questions"] == ["What tradeoff matters most?"]
 
 
+def test_under_supported_web_task_uses_distinct_issue_signal_for_research(tmp_path: Path) -> None:
+    advisory = {
+        "task": "Summarize the product documentation",
+        "task_type": "analysis",
+        "domain": "generic",
+        "intent": {"resource_modes": ["web"]},
+        "epistemic_status": {
+            "status": "under_supported",
+            "missing_evidence": ["The documentation excerpt is incomplete."],
+            "issues": ["A current official source is required."],
+            "clarifying_questions": [],
+        },
+    }
+
+    packet = execute_with_verifier(tmp_path, advisory=advisory, model="generic", governor_decision=_governor_decision())
+
+    assert packet["status"] == "research_needed"
+    assert packet["reason"] == "fresh_support_required"
+
+
 def test_execute_with_verifier_threads_governor_to_provider_calls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     decision = _governor_decision()
     calls: list[dict | None] = []

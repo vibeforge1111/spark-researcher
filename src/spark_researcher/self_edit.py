@@ -880,26 +880,32 @@ def apply_proposal(
     if git_mode in {"branch", "main"} and should_push and not _remote_exists(repo_root):
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
-    applied = []
+    applied: list[str] = []
+    originals: dict[str, bytes | None] = {}
     mutable_targets = proposal.get("mutable_targets", [])
-    for change in proposal.get("allowed_changes", []):
-        rel = canonical_relative_path(change.get("path"))
-        if rel is None or not is_allowed_path(rel, mutable_targets):
-            raise RuntimeError("Proposal change path is outside declared mutable targets")
-        source = resolve_owned_path(workspace_root, rel)
-        target = resolve_owned_path(repo_root, rel)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if change["status"] == "deleted":
-            target.unlink(missing_ok=True)
-        else:
-            shutil.copyfile(source, target)
-        applied.append(rel)
-    proposal["status"] = "applied"
-    proposal["applied_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
     commit_sha = None
     pushed = False
     commit_message = None
     try:
+        for change in proposal.get("allowed_changes", []):
+            rel = canonical_relative_path(change.get("path"))
+            if rel is None or not is_allowed_path(rel, mutable_targets):
+                raise RuntimeError("Proposal change path is outside declared mutable targets")
+            source = resolve_owned_path(workspace_root, rel)
+            target = resolve_owned_path(repo_root, rel)
+            if rel not in originals:
+                try:
+                    originals[rel] = target.read_bytes()
+                except FileNotFoundError:
+                    originals[rel] = None
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if change["status"] == "deleted":
+                target.unlink(missing_ok=True)
+            else:
+                shutil.copyfile(source, target)
+            applied.append(rel)
+        proposal["status"] = "applied"
+        proposal["applied_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
         if git_mode in {"branch", "main"}:
             commit_message = str(
                 commit_message_override
@@ -911,6 +917,24 @@ def apply_proposal(
                 _push_branch(repo_root, _current_branch(repo_root))
                 pushed = True
     except Exception as exc:
+        rollback_attempted = commit_sha is None and bool(originals)
+        rollback_complete = True
+        if rollback_attempted:
+            for rel, original in originals.items():
+                target = resolve_owned_path(repo_root, rel)
+                try:
+                    if original is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(original)
+                except OSError:
+                    rollback_complete = False
+            if git_mode in {"branch", "main"} and applied:
+                inside_worktree = _git(repo_root, "rev-parse", "--is-inside-work-tree")
+                if inside_worktree.returncode == 0:
+                    unstage = _git(repo_root, "reset", "--mixed", "HEAD", "--", *applied)
+                    rollback_complete = rollback_complete and unstage.returncode == 0
         result_ledger = _finalize_self_edit_apply_ledger(
             pre_execution_ledger,
             status="failure",
@@ -924,6 +948,8 @@ def apply_proposal(
         proposal["git_branch"] = _current_branch(repo_root)
         proposal["git_commit_sha"] = commit_sha
         proposal["git_pushed"] = pushed
+        proposal["rollback_attempted"] = rollback_attempted
+        proposal["rollback_complete"] = rollback_complete
         proposal["apply_trace_id"] = trace.trace_id
         proposal["apply_trace_path"] = str(trace.path)
         proposal["apply_error"] = str(exc)

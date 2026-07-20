@@ -248,6 +248,85 @@ def test_apply_proposal_records_push_failure_state(monkeypatch: pytest.MonkeyPat
     assert ledger["result"]["status"] == "failure"
 
 
+def test_apply_proposal_restores_files_when_commit_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-commit-failure"
+    repo_root = tmp_path / "repo"
+    config_path, target = _write_self_edit_fixture(repo_root, proposal_id)
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.name", "Self Edit Test"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "self-edit@example.invalid"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "README.md"], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=repo_root, check=True)
+
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+
+    def fail_commit(_repo_root: Path, _paths: list[str], _message: str) -> str:
+        subprocess.run(["git", "add", "--", *_paths], cwd=_repo_root, check=True)
+        raise RuntimeError("commit rejected")
+
+    monkeypatch.setattr("spark_researcher.self_edit._commit_paths", fail_commit)
+
+    with pytest.raises(RuntimeError, match="commit rejected"):
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=False,
+            governor_decision=_governor_decision(proposal_id),
+        )
+
+    assert target.read_text(encoding="utf-8") == "old\n"
+    proposal = json.loads(_proposal_path(repo_root, proposal_id).read_text(encoding="utf-8"))
+    assert proposal["status"] == "apply_failed"
+    assert proposal["rollback_attempted"] is True
+    assert proposal["rollback_complete"] is True
+    assert subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--", "README.md"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout == ""
+    assert subprocess.run(
+        ["git", "diff", "--name-only", "--", "README.md"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout == ""
+
+
+def test_apply_proposal_removes_new_files_when_commit_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-new-file-commit-failure"
+    repo_root = tmp_path / "repo"
+    config_path, _target = _write_self_edit_fixture(repo_root, proposal_id)
+    proposal_path = _proposal_path(repo_root, proposal_id)
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["allowed_changes"] = [{"path": "NEW.md", "status": "added"}]
+    proposal["mutable_targets"] = ["NEW.md"]
+    proposal_path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
+    (Path(proposal["workspace_root"]) / "NEW.md").write_text("new\n", encoding="utf-8")
+
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+    monkeypatch.setattr(
+        "spark_researcher.self_edit._commit_paths",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("commit rejected")),
+    )
+
+    with pytest.raises(RuntimeError, match="commit rejected"):
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=False,
+            governor_decision=_governor_decision(proposal_id),
+        )
+
+    assert not (repo_root / "NEW.md").exists()
+
+
 def test_apply_proposal_requires_governor_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     proposal_id = "proposal-3"
     config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)

@@ -49,7 +49,11 @@ def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
     if not path.exists():
         return []
     rows: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError("Advisory outcome evidence is unavailable.") from exc
+    for line in lines:
         if not line.strip():
             continue
         try:

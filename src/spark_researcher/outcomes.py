@@ -87,11 +87,25 @@ def review_advisory_outcomes(runtime_root: Path) -> dict[str, object]:
         avg_score = round(mean(scores), 3) if scores else None
         ok = int(record["ok"])
         fail = int(record["fail"])
+        mixed = int(record["mixed"])
         if avg_score is not None and avg_score >= 0.75 and ok > fail:
             recommendation = "keep"
+            recommendation_reason = "high_score_ok_dominant"
         elif avg_score is not None and avg_score < 0.45:
             recommendation = "drop"
+            recommendation_reason = "low_score"
+        elif mixed > ok and mixed > fail:
+            recommendation = "rewrite"
+            recommendation_reason = "mixed_dominant"
         else:
             recommendation = "rewrite"
-        reviewed.append({**record, "average_score": avg_score, "recommendation": recommendation})
+            recommendation_reason = "insufficient_signal"
+        reviewed.append(
+            {
+                **record,
+                "average_score": avg_score,
+                "recommendation": recommendation,
+                "recommendation_reason": recommendation_reason,
+            }
+        )
     return {"outcome_count": len(rows), "packet_reviews": reviewed}

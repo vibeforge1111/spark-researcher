@@ -11,7 +11,7 @@ from spark_researcher import obsidian
 from spark_researcher.obsidian import vault_authority_refs
 from spark_researcher import candidates, failures, frontier, runner, trainers, trial_queue
 from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
-from spark_researcher.outcomes import load_advisory_outcomes, log_advisory_outcome
+from spark_researcher.outcomes import load_advisory_outcomes, log_advisory_outcome, review_advisory_outcomes
 from spark_researcher.paths import ledger_path, trainers_root
 from spark_researcher.trainers import read_state, write_state
 from spark_researcher.tracing import start_trace, trace_status
@@ -230,6 +230,51 @@ def test_advisory_outcome_appends_use_locked_file(tmp_path: Path, monkeypatch: p
     assert locked_paths == [expected_path]
     assert result["path"] == str(expected_path)
     assert load_advisory_outcomes(tmp_path)[0]["packet_ids"] == ["packet-a"]
+
+
+def test_advisory_review_distinguishes_mixed_dominant_without_breaking_rewrite_value(tmp_path: Path) -> None:
+    for _ in range(3):
+        log_advisory_outcome(
+            tmp_path,
+            task="mixed evidence",
+            model="researcher",
+            status="mixed",
+            packet_ids=["packet-mixed"],
+        )
+    log_advisory_outcome(
+        tmp_path,
+        task="sparse evidence",
+        model="researcher",
+        status="ok",
+        packet_ids=["packet-sparse"],
+    )
+
+    reviews = {
+        row["packet_id"]: row
+        for row in review_advisory_outcomes(tmp_path)["packet_reviews"]
+    }
+
+    assert reviews["packet-mixed"]["recommendation"] == "rewrite"
+    assert reviews["packet-mixed"]["recommendation_reason"] == "mixed_dominant"
+    assert reviews["packet-sparse"]["recommendation"] == "rewrite"
+    assert reviews["packet-sparse"]["recommendation_reason"] == "insufficient_signal"
+
+
+def test_advisory_review_keeps_score_precedence_over_mixed_signal(tmp_path: Path) -> None:
+    for status in ["mixed", "mixed", "ok"]:
+        log_advisory_outcome(
+            tmp_path,
+            task="scored evidence",
+            model="researcher",
+            status=status,
+            packet_ids=["packet-scored"],
+            score=0.2,
+        )
+
+    review = review_advisory_outcomes(tmp_path)["packet_reviews"][0]
+
+    assert review["recommendation"] == "drop"
+    assert review["recommendation_reason"] == "low_score"
 
 
 def test_failure_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

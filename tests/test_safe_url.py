@@ -15,6 +15,31 @@ def test_assert_safe_url_rejects_non_http_schemes() -> None:
         assert_safe_url("gopher://example.com")
 
 
+def test_unsafe_url_errors_give_safe_recovery_guidance_without_echoing_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_resolution(*args, **kwargs):
+        raise OSError("resolver leaked internal detail")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    cases = [
+        ("ftp://secret-scheme.internal/private-token", "use http or https"),
+        ("https:///private-token", "use an absolute http or https URL"),
+        ("http://secret-host.localhost/private-token", "use a publicly reachable host"),
+        ("https://secret-host.internal/private-token", "use a publicly reachable host"),
+    ]
+    for url, guidance in cases:
+        with pytest.raises(UnsafeURL) as raised:
+            assert_safe_url(url)
+
+        message = str(raised.value)
+        assert guidance in message
+        assert "secret" not in message
+        assert "private-token" not in message
+        assert "resolver leaked internal detail" not in message
+
+
 def test_assert_safe_url_rejects_private_ip_literals() -> None:
     for url in [
         "http://127.0.0.1/status",

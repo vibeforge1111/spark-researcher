@@ -47,7 +47,9 @@ def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ip
             addresses.add(ipaddress.ip_address(raw_address))
         return addresses
     except (OSError, ValueError) as exc:
-        raise UnsafeURL("URL host could not be resolved safely") from exc
+        raise UnsafeURL(
+            "URL host could not be resolved safely; use a publicly reachable host"
+        ) from exc
 
 
 def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -83,19 +85,21 @@ def _resolve_safe_addresses(
     else:
         addresses = {literal}
     if not addresses or any(not _is_public_ip(address) for address in addresses):
-        raise UnsafeURL("URL host resolves to a non-public address")
+        raise UnsafeURL(
+            "URL host resolves to a non-public address; use a publicly reachable host"
+        )
     return addresses
 
 
 def assert_safe_url(url: str) -> None:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        raise UnsafeURL("URL scheme is not allowed")
+        raise UnsafeURL("URL scheme is not allowed; use http or https")
     if not parsed.hostname:
-        raise UnsafeURL("URL host is required")
+        raise UnsafeURL("URL host is required; use an absolute http or https URL")
     hostname = parsed.hostname.rstrip(".").lower()
     if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
-        raise UnsafeURL("URL host is local")
+        raise UnsafeURL("URL host is local; use a publicly reachable host")
     _resolve_safe_addresses(hostname, parsed.port)
 
 
@@ -181,7 +185,9 @@ def _validated_request_addresses(
     else:
         addresses = {literal}
     if not addresses or any(not _is_public_ip(address) for address in addresses):
-        raise UnsafeURL("URL host resolves to a non-public address")
+        raise UnsafeURL(
+            "URL host resolves to a non-public address; use a publicly reachable host"
+        )
     return tuple(sorted(addresses, key=lambda address: (address.version, int(address))))
 
 

@@ -64,9 +64,10 @@ def resolve_repo_root(config_path: Path | None = None) -> Path:
 
 
 def resolve_runtime_root(config_path: Path | None = None) -> Path:
-    override = os.environ.get("SPARK_RESEARCHER_HOME")
-    if override:
-        return Path(override).resolve()
+    for env_name in ("SPARK_RESEARCHER_HOME", "SPARK_RESEARCHER_ROOT"):
+        override = (os.environ.get(env_name) or "").strip()
+        if override:
+            return Path(override).resolve()
     return resolve_repo_root(config_path)
 
 

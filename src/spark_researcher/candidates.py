@@ -59,16 +59,18 @@ def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> Non
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
-    path = _continuous_status_path(runtime_root)
-    if not path.exists():
-        return {}
+def _read_continuous_status(path: Path) -> dict[str, Any]:
     try:
-        with locked_file(path):
-            payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _load_continuous_status(runtime_root: Path) -> dict[str, Any]:
+    path = _continuous_status_path(runtime_root)
+    with locked_file(path):
+        return _read_continuous_status(path)
 
 
 def _process_alive(pid: int) -> bool:
@@ -93,23 +95,25 @@ def _process_alive(pid: int) -> bool:
 
 
 def _mark_stale_continuous_status(runtime_root: Path) -> dict[str, Any]:
-    payload = _load_continuous_status(runtime_root)
-    current_pass = payload.get("current_pass", {})
-    if not isinstance(current_pass, dict):
+    path = _continuous_status_path(runtime_root)
+    with locked_file(path):
+        payload = _read_continuous_status(path)
+        current_pass = payload.get("current_pass", {})
+        if not isinstance(current_pass, dict):
+            return payload
+        if str(current_pass.get("status") or "").strip().lower() != "running":
+            return payload
+        writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
+        if writer_pid and _process_alive(writer_pid):
+            return payload
+        stale_at = _now_iso()
+        current_pass["status"] = "stale"
+        current_pass["stale_detected_at"] = stale_at
+        current_pass["stale_reason"] = "writer_process_missing"
+        payload["updated_at"] = stale_at
+        payload["current_pass"] = current_pass
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return payload
-    if str(current_pass.get("status") or "").strip().lower() != "running":
-        return payload
-    writer_pid = int(current_pass.get("writer_pid") or payload.get("writer_pid") or 0)
-    if writer_pid and _process_alive(writer_pid):
-        return payload
-    stale_at = _now_iso()
-    current_pass["status"] = "stale"
-    current_pass["stale_detected_at"] = stale_at
-    current_pass["stale_reason"] = "writer_process_missing"
-    payload["updated_at"] = stale_at
-    payload["current_pass"] = current_pass
-    _write_continuous_status(runtime_root, payload)
-    return payload
 
 
 def _doctrine_only_mode() -> bool:

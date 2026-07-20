@@ -140,6 +140,7 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
     docs_root = _documents_root(runtime_root)
+    episode_state = _episode_memory_state(runtime_root)
     return {
         "backend": "local",
         "document_count": 0,
@@ -151,7 +152,9 @@ def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
         "self_edit_documents": [],
         "chip_documents": [],
         "working_memory": load_working_memory(runtime_root),
-        "episode_count": len(load_episode_memory(runtime_root)),
+        "episode_count": len(episode_state["rows"]),
+        "episode_state": episode_state["status"],
+        "episode_invalid_line_count": episode_state["invalid_line_count"],
     }
 
 
@@ -528,16 +531,43 @@ def record_episode(
     return payload
 
 
-def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+def _episode_memory_state(runtime_root: Path, *, limit: int = 12) -> dict[str, Any]:
     path = _episodes_path(runtime_root)
     if not path.exists():
-        return []
-    rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    return list(reversed(rows[-limit:]))
+        return {
+            "status": "empty",
+            "valid_line_count": 0,
+            "invalid_line_count": 0,
+            "rows": [],
+        }
+    rows: list[dict[str, Any]] = []
+    invalid_line_count = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            invalid_line_count += 1
+            continue
+        if not isinstance(parsed, dict):
+            invalid_line_count += 1
+            continue
+        rows.append(parsed)
+    if invalid_line_count:
+        status = "partial" if rows else "invalid"
+    else:
+        status = "ready" if rows else "empty"
+    return {
+        "status": status,
+        "valid_line_count": len(rows),
+        "invalid_line_count": invalid_line_count,
+        "rows": list(reversed(rows[-limit:])),
+    }
+
+
+def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+    return list(_episode_memory_state(runtime_root, limit=limit)["rows"])
 
 
 def _is_better(candidate: float, current: float | None, goal: str) -> bool:
@@ -647,7 +677,8 @@ def sync_memory(
         kind_counts["working"] += 1
         tier_counts[working_tier] += 1
 
-    episodes = load_episode_memory(runtime_root)
+    episode_state = _episode_memory_state(runtime_root)
+    episodes = episode_state["rows"]
     if episodes:
         target = docs_root / "episode-memory.md"
         used_paths.add(str(target))
@@ -726,6 +757,8 @@ def sync_memory(
         "chip_documents": chip_documents,
         "working_memory": working,
         "episode_count": len(episodes),
+        "episode_state": episode_state["status"],
+        "episode_invalid_line_count": episode_state["invalid_line_count"],
     }
     write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
     return manifest
@@ -786,6 +819,8 @@ def memory_status(
         status["local_documents_root"] = manifest["documents_root"]
         status["local_document_count"] = manifest["document_count"]
         status["local_kinds"] = manifest.get("kinds", {})
+        status["local_episode_state"] = manifest.get("episode_state", "empty")
+        status["local_episode_invalid_line_count"] = int(manifest.get("episode_invalid_line_count", 0))
         status["local_storage_backend"] = "local"
         status["default_role"] = "retrieval"
         return status
@@ -795,6 +830,8 @@ def memory_status(
         "documents_root": manifest["documents_root"],
         "document_count": manifest["document_count"],
         "kinds": manifest.get("kinds", {}),
+        "episode_state": manifest.get("episode_state", "empty"),
+        "episode_invalid_line_count": int(manifest.get("episode_invalid_line_count", 0)),
         "manifest_present": manifest_path.exists(),
         "notes": [
             "Local memory remains Spark's canonical storage layer.",

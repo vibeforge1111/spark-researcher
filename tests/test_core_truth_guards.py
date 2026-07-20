@@ -9,7 +9,7 @@ import pytest
 from memory_governor import memory_governor_decision
 from spark_researcher import obsidian
 from spark_researcher.obsidian import vault_authority_refs
-from spark_researcher import candidates, runner, trainers, trial_queue
+from spark_researcher import candidates, frontier, runner, trainers, trial_queue
 from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
 from spark_researcher.outcomes import load_advisory_outcomes
 from spark_researcher.paths import ledger_path, trainers_root
@@ -89,6 +89,51 @@ def test_candidate_primitive_selection_ignores_failed_rows() -> None:
 def test_candidate_ids_do_not_collapse_decimal_values() -> None:
     assert candidates._candidate_id({"learning_rate": "1.5"}) != candidates._candidate_id({"learning_rate": "15"})
     assert candidates._candidate_id({"learning_rate": "1.5"}) != candidates._candidate_id({"learning_rate": "1_dot_5"})
+
+
+def test_frontier_ranking_sorts_the_full_candidate_set_before_truncating() -> None:
+    rows = [
+        {
+            "command_name": "research",
+            "candidate_id": f"candidate-{metric}",
+            "metric_value": metric,
+            "applied_mutations": [{"name": "depth", "value": str(metric)}],
+        }
+        for metric in (100, 90, 80, 2, 1)
+    ]
+
+    ranked = frontier._best_frontier_rows(rows, "research", "maximize", limit=3)
+
+    assert [row["candidate_id"] for row in ranked] == ["candidate-100", "candidate-90", "candidate-80"]
+
+
+def test_frontier_ranking_puts_invalid_metrics_last_for_both_goal_directions() -> None:
+    rows = [
+        {
+            "command_name": "research",
+            "candidate_id": "invalid",
+            "metric_value": "not-a-number",
+            "applied_mutations": [{"name": "depth", "value": "invalid"}],
+        },
+        {
+            "command_name": "research",
+            "candidate_id": "high",
+            "metric_value": 8,
+            "applied_mutations": [{"name": "depth", "value": "high"}],
+        },
+        {
+            "command_name": "research",
+            "candidate_id": "low",
+            "metric_value": 2,
+            "applied_mutations": [{"name": "depth", "value": "low"}],
+        },
+    ]
+
+    maximize = frontier._best_frontier_rows(rows, "research", "maximize", limit=3)
+    minimize = frontier._best_frontier_rows(rows, "research", "minimize", limit=3)
+
+    assert [row["candidate_id"] for row in maximize] == ["high", "low", "invalid"]
+    assert [row["candidate_id"] for row in minimize] == ["low", "high", "invalid"]
 
 
 def test_failed_and_unknown_rows_count_as_discards() -> None:

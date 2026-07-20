@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from html import unescape
 from pathlib import Path
@@ -42,6 +43,31 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         if isinstance(payload, dict):
             return payload
     return None
+
+
+def _frontier_metric_sort_key(row: dict[str, Any], eval_goal: str) -> tuple[int, float]:
+    try:
+        metric = float(row.get("metric_value"))
+    except (TypeError, ValueError):
+        return (1, 0.0)
+    if not math.isfinite(metric):
+        return (1, 0.0)
+    return (0, -metric if eval_goal == "maximize" else metric)
+
+
+def _best_frontier_rows(
+    rows: list[dict[str, Any]],
+    command_name: str,
+    eval_goal: str,
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    candidates = [
+        row
+        for row in rows
+        if row.get("command_name") == command_name and row.get("applied_mutations")
+    ]
+    return sorted(candidates, key=lambda row: _frontier_metric_sort_key(row, eval_goal))[:limit]
 
 
 def _match_open_field(block: str, field_name: str, pattern: str) -> str:
@@ -127,8 +153,7 @@ def frontier_suggest(
         for row in rows
         if row.get("command_name") == command_name
     }
-    best_rows = [row for row in rows if row.get("command_name") == command_name and row.get("applied_mutations")][-3:]
-    best_rows = sorted(best_rows, key=lambda item: float(item.get("metric_value", 0.0) or 0.0), reverse=config.eval_goal == "maximize")[:3]
+    best_rows = _best_frontier_rows(rows, command_name, config.eval_goal)
     winner_text = [
         {"candidate_id": row.get("candidate_id"), "metric_value": row.get("metric_value"), "verdict": row.get("verdict"), "mutations": {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}}
         for row in best_rows

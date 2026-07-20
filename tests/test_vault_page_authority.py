@@ -23,6 +23,32 @@ def _config() -> ProjectConfig:
     )
 
 
+def test_copy_runtime_beliefs_tolerates_concurrent_stale_file_deletion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_root = tmp_path / "runtime"
+    source = runtime_root / "artifacts" / "beliefs"
+    source.mkdir(parents=True)
+    (source / "current.md").write_text("current\n", encoding="utf-8")
+    output_root = tmp_path / "vault-beliefs"
+    output_root.mkdir()
+    stale = output_root / "stale.md"
+    stale.write_text("stale\n", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def racing_unlink(path: Path, *args: object, **kwargs: object) -> None:
+        if path == stale:
+            original_unlink(path)
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", racing_unlink)
+
+    written = obsidian.copy_runtime_beliefs(runtime_root, output_root)
+
+    assert written == [str(output_root / "current.md")]
+    assert not stale.exists()
+
+
 def _build(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

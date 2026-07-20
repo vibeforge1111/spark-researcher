@@ -259,6 +259,37 @@ def test_apply_proposal_requires_governor_before_copy(monkeypatch: pytest.Monkey
     assert target.read_text(encoding="utf-8") == "old\n"
 
 
+def test_apply_proposal_tolerates_concurrent_target_deletion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-delete-race"
+    repo_root = tmp_path / "repo"
+    config_path, target = _write_self_edit_fixture(repo_root, proposal_id)
+    proposal_path = _proposal_path(repo_root, proposal_id)
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["allowed_changes"] = [{"path": "README.md", "status": "deleted"}]
+    proposal_path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
+    target.unlink()
+
+    original_exists = Path.exists
+
+    def racing_exists(path: Path) -> bool:
+        return True if path == target else original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", racing_exists)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+
+    result = apply_proposal(
+        config_path,
+        proposal_id,
+        git_mode_override="manual",
+        push_override=False,
+        governor_decision=_governor_decision(proposal_id),
+    )
+
+    assert result["applied_files"] == ["README.md"]
+    assert json.loads(proposal_path.read_text(encoding="utf-8"))["status"] == "applied"
+
+
 def test_apply_proposal_rejects_governor_for_another_proposal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     proposal_id = "proposal-4"
     config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)

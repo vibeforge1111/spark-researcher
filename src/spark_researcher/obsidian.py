@@ -211,7 +211,7 @@ def copy_runtime_beliefs(runtime_root: Path, output_root: Path) -> list[str]:
         return written
     for path in output_root.glob("*"):
         if path.is_file():
-            path.unlink()
+            path.unlink(missing_ok=True)
     for path in sorted(source.glob("*")):
         if not path.is_file():
             continue

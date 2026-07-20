@@ -20,6 +20,7 @@ from .collective import write_spark_swarm_collective_payload
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
 from .failures import record_failure
 from .paths import IGNORED_NAMES, ledger_path, resolve_owned_path, resolve_runtime_root, runs_root
+from .subprocess_policy import subprocess_timeout_seconds
 from .tracing import start_trace
 
 
@@ -277,7 +278,21 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
         preview = {"cwd": str(cwd), "command": command}
         log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
         return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    timeout_seconds = subprocess_timeout_seconds(300)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        message = f"Command timed out after {timeout_seconds:g} seconds."
+        log_path.write_text(f"[stderr]\n{message}\n", encoding="utf-8")
+        return CommandResult(returncode=-1, stdout="", stderr=message, command=command, cwd=str(cwd))
     log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
     return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 

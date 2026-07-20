@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 import ctypes
 from dataclasses import asdict
@@ -56,7 +57,31 @@ def _write_continuous_status(runtime_root: Path, payload: dict[str, Any]) -> Non
     path = _continuous_status_path(runtime_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     with locked_file(path):
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _atomic_write_continuous_status(path, payload)
+
+
+def _atomic_write_continuous_status(path: Path, payload: dict[str, Any]) -> None:
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    tmp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            tmp_name = handle.name
+            handle.write(serialized)
+        os.replace(tmp_name, path)
+    except Exception:
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+        raise
 
 
 def _read_continuous_status(path: Path) -> dict[str, Any]:
@@ -112,7 +137,7 @@ def _mark_stale_continuous_status(runtime_root: Path) -> dict[str, Any]:
         current_pass["stale_reason"] = "writer_process_missing"
         payload["updated_at"] = stale_at
         payload["current_pass"] = current_pass
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _atomic_write_continuous_status(path, payload)
         return payload
 
 

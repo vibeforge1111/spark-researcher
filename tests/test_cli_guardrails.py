@@ -183,6 +183,33 @@ def test_missing_relative_secret_like_config_path_is_redacted(tmp_path: Path) ->
     assert "sk-live-secret" not in combined_output
 
 
+def test_invalid_external_config_is_actionable_without_traceback_or_path_leak(tmp_path: Path) -> None:
+    private_parent = tmp_path.parent / "private-home-token-secret"
+    private_parent.mkdir()
+    private_config = private_parent / "sk-live-secret-project.json"
+    private_config.write_text("{not valid json}\n", encoding="utf-8")
+
+    result = run_cli(
+        tmp_path,
+        [
+            "summary",
+            "--config",
+            str(private_config),
+        ],
+    )
+
+    combined_output = result.stdout + result.stderr
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "Failed to parse config file <external-config>" in result.stderr
+    assert "invalid JSON at line 1, column 2" in result.stderr
+    assert "Traceback" not in combined_output
+    assert "private-home-token-secret" not in combined_output
+    assert "sk-live-secret" not in combined_output
+    assert str(private_config) not in combined_output
+
+
 @pytest.mark.parametrize(
     "args",
     [

@@ -41,6 +41,14 @@ def _ledger_path(runtime_root: Path) -> Path:
     return runtime_root / "artifacts" / "ledger" / "runs.jsonl"
 
 
+def _read_json_object(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def beliefs_authority_refs(repo_root: Path, runtime_root: Path) -> tuple[str, ...]:
     output_root = _beliefs_root(runtime_root)
     return memory_authority_refs(
@@ -323,13 +331,21 @@ def build_beliefs(
         if signature not in promoted_run_signatures:
             skipped_runs += 1
     self_edit_root = _self_edit_root(runtime_root)
+    invalid_self_edit_proposals = 0
+    invalid_self_edit_reviews = 0
     if self_edit_root.exists():
         for proposal_path in sorted(self_edit_root.glob("*/proposal.json")):
             review_path = proposal_path.parent / "review.json"
             if not review_path.exists():
                 continue
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review = json.loads(review_path.read_text(encoding="utf-8"))
+            proposal = _read_json_object(proposal_path)
+            if proposal is None:
+                invalid_self_edit_proposals += 1
+                continue
+            review = _read_json_object(review_path)
+            if review is None:
+                invalid_self_edit_reviews += 1
+                continue
             if review.get("decision") != "approve":
                 continue
             belief_id = _belief_id("self-edit", str(proposal.get("proposal_id")))
@@ -370,6 +386,9 @@ def build_beliefs(
         "belief_count": len(written),
         "beliefs": written,
         "skipped_improved_runs": skipped_runs,
+        "invalid_self_edit_proposal_count": invalid_self_edit_proposals,
+        "invalid_self_edit_review_count": invalid_self_edit_reviews,
+        "invalid_self_edit_artifact_count": invalid_self_edit_proposals + invalid_self_edit_reviews,
         "durable_belief_count": durable_count,
         "provisional_belief_count": provisional_count,
         "contradiction_count": sum(len(group.get("contradictions", [])) for group in promoted_groups),

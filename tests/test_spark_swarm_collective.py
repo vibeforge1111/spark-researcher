@@ -123,6 +123,44 @@ def test_absorb_without_collective_index_fails_without_local_path_leak(tmp_path:
     assert str(tmp_path) not in captured.err
 
 
+@pytest.mark.parametrize("entry_order", [("alpha", "beta"), ("beta", "alpha")])
+def test_absorb_uses_stable_id_tiebreaker_when_created_at_matches(
+    tmp_path: Path,
+    monkeypatch,
+    entry_order: tuple[str, str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    runtime_root = tmp_path / "runtime"
+    repo_root.mkdir()
+    entries = {
+        insight_id: {
+            "id": insight_id,
+            "repo": "vibeforge1111/example",
+            "verdict": "improved",
+            "createdAt": "2026-06-06T12:00:00Z",
+        }
+        for insight_id in entry_order
+    }
+    monkeypatch.setattr(
+        collective_module,
+        "_load_collective_index",
+        lambda _repo_root: (
+            repo_root / "collective.json",
+            {"capsuleLibrary": [entries[insight_id] for insight_id in entry_order]},
+        ),
+    )
+
+    payload = absorb(
+        repo_root,
+        runtime_root,
+        source_repo="vibeforge1111/example",
+        limit=1,
+        bundle_only=True,
+    )
+
+    assert payload["insights"][0]["insight_id"] == "beta"
+
+
 def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

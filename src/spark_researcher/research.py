@@ -177,12 +177,15 @@ def _write_research_artifact(
     payload: dict[str, Any],
     *,
     governor_decision: dict[str, Any] | None = None,
-) -> Path:
+) -> Path | None:
     root = advisory_root(runtime_root) / "research"
     require_memory_write_authority(governor_decision, binding_refs=research_artifact_authority_refs(runtime_root))
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{_now_slug()}.json"
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{_now_slug()}.json"
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return None
     return path
 
 
@@ -370,7 +373,7 @@ def execute_with_research(
     artifact_path = None
     if memory_authority:
         artifact_path = _write_research_artifact(runtime_root, research, governor_decision=memory_governor_decision)
-        research["artifact_path"] = str(artifact_path)
+        research["artifact_path"] = str(artifact_path) if artifact_path is not None else None
     else:
         research["artifact_path"] = None
     if not results:

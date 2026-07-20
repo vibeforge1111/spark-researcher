@@ -26,6 +26,9 @@ from .subprocess_policy import subprocess_timeout_seconds
 from .tracing import start_trace
 
 
+MAX_JSONL_READ_BYTES = 50 * 1024 * 1024
+
+
 @dataclass
 class CommandResult:
     returncode: int
@@ -85,10 +88,22 @@ def ensure_parent(path: Path) -> None:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            offset = max(0, size - MAX_JSONL_READ_BYTES)
+            stream.seek(offset)
+            raw = stream.read(MAX_JSONL_READ_BYTES)
+    except OSError:
         return []
+    if offset:
+        newline = raw.find(b"\n")
+        if newline < 0:
+            return []
+        raw = raw[newline + 1 :]
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in raw.decode("utf-8", errors="replace").splitlines():
         if not line.strip():
             continue
         try:

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import spark_researcher.runner as runner_module
 from spark_researcher.runner import append_jsonl, locked_file, read_jsonl
 
 
@@ -123,3 +124,33 @@ def test_read_jsonl_skips_malformed_rows(tmp_path: Path) -> None:
     path.write_text('{"run_id":"one"}\nnot-json\n{"run_id":"two"}\n', encoding="utf-8")
 
     assert [row["run_id"] for row in read_jsonl(path)] == ["one", "two"]
+
+
+def test_read_jsonl_uses_only_complete_rows_from_a_bounded_tail(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "ledger" / "runs.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        '{"run_id":"discarded-long-prefix"}\n'
+        '{"run_id":"tail-one"}\n'
+        '{"run_id":"tail-two"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner_module, "MAX_JSONL_READ_BYTES", 52)
+    monkeypatch.setattr(Path, "read_text", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unbounded read")))
+
+    assert [row["run_id"] for row in read_jsonl(path)] == ["tail-one", "tail-two"]
+
+
+def test_read_jsonl_returns_empty_when_file_disappears(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / "runs.jsonl"
+    path.write_text('{"run_id":"one"}\n', encoding="utf-8")
+    original_open = Path.open
+
+    def disappearing_open(candidate: Path, *args: object, **kwargs: object):
+        if candidate == path:
+            raise FileNotFoundError("rotated")
+        return original_open(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", disappearing_open)
+
+    assert read_jsonl(path) == []

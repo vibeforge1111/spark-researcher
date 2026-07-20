@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -1164,6 +1165,13 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
 
 
+def _source_repo_path_key(source_repo: str) -> str:
+    raw = str(source_repo).strip()
+    slug = _slugify(raw)[:80]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"{slug}-{digest}"
+
+
 def _ensure_clean_worktree(repo_root: Path) -> None:
     status = _git_output(repo_root, "status", "--porcelain")
     if status.strip():
@@ -1215,7 +1223,7 @@ def _write_absorb_review_files(
     source_repo: str,
     payload: dict[str, Any],
 ) -> dict[str, Path]:
-    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{source_repo.replace('/', '--')}"
+    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{_source_repo_path_key(source_repo)}"
     review_root.mkdir(parents=True, exist_ok=True)
 
     absorbed_path = review_root / "absorbed-insights.json"
@@ -1326,7 +1334,7 @@ def absorb(
     if not absorbed:
         raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")
 
-    absorb_root = runtime_root / "artifacts" / "collective-absorb" / source_repo.replace("/", "--")
+    absorb_root = runtime_root / "artifacts" / "collective-absorb" / _source_repo_path_key(source_repo)
     absorb_root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     bundle_path = absorb_root / f"{stamp}-absorb.json"

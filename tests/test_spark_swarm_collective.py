@@ -12,6 +12,7 @@ import spark_researcher.collective as collective_module
 from runner_governor import run_governor_decision
 from spark_researcher.collective import (
     _parse_frontmatter,
+    _source_repo_path_key,
     absorb,
     build_spark_swarm_collective_payload,
     collective_readiness,
@@ -159,6 +160,17 @@ def test_absorb_uses_stable_id_tiebreaker_when_created_at_matches(
     )
 
     assert payload["insights"][0]["insight_id"] == "beta"
+
+
+def test_source_repo_path_key_is_contained_and_collision_resistant() -> None:
+    traversal = _source_repo_path_key("../../private/token")
+    lookalike = _source_repo_path_key("private-token")
+
+    assert "/" not in traversal
+    assert "\\" not in traversal
+    assert ".." not in traversal
+    assert traversal != lookalike
+    assert traversal.startswith("private-token-")
 
 
 def test_absorb_cli_without_collective_index_returns_bounded_error(tmp_path: Path) -> None:

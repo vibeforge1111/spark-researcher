@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from spark_researcher.chips import ChipContext, _build_hook_env, chip_validation, invoke_chip_hook, validate_manifest
+from spark_researcher.chips import ChipContext, _build_hook_env, chip_validation, invoke_chip_hook, load_chip_context, validate_manifest
 from spark_researcher.config import ChipSpec, CommandSpec, MetricSpec, ProjectConfig, save_config
 
 
@@ -65,6 +65,40 @@ def test_missing_chip_manifest_error_omits_private_path(tmp_path: Path) -> None:
     assert "Chip manifest not found" in message
     assert str(tmp_path) not in message
     assert "private-secret-manifest.json" not in message
+
+
+def test_invalid_chip_manifest_json_returns_public_safe_error(tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(tmp_path / "private-token-chip", response_payload={"documents": []})
+    (config_path.parent / "spark-chip.json").write_text("private-sentinel{", encoding="utf-8")
+
+    with pytest.raises(RuntimeError) as error:
+        load_chip_context(config_path)
+
+    message = str(error.value)
+    assert message == "Chip manifest could not be read as valid JSON."
+    assert "private-sentinel" not in message
+    assert str(tmp_path) not in message
+
+
+def test_chip_manifest_read_error_returns_public_safe_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(tmp_path / "private-token-chip", response_payload={"documents": []})
+    manifest_path = config_path.parent / "spark-chip.json"
+    original_read_text = Path.read_text
+
+    def denied_read(candidate: Path, *args: object, **kwargs: object) -> str:
+        if candidate == manifest_path:
+            raise OSError("private-sentinel")
+        return original_read_text(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied_read)
+
+    with pytest.raises(RuntimeError) as error:
+        load_chip_context(config_path)
+
+    message = str(error.value)
+    assert message == "Chip manifest could not be read as valid JSON."
+    assert "private-sentinel" not in message
+    assert str(tmp_path) not in message
 
 
 def test_validate_manifest_rejects_misplaced_frontier_keys(tmp_path: Path) -> None:
@@ -329,6 +363,55 @@ def test_invoke_chip_hook_missing_output_error_omits_private_path(monkeypatch: p
     assert "did not produce an output file" in message
     assert str(tmp_path) not in message
     assert "private-token-chip" not in message
+
+
+def test_invoke_chip_hook_invalid_json_response_returns_public_safe_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config_path = _write_chip_fixture(tmp_path / "private-token-chip", response_payload={"documents": []})
+
+    def invalid_output(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        Path(command[-1]).write_text("private-sentinel{", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", invalid_output)
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(config_path, "packets", {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")})
+
+    message = str(error.value)
+    assert message == "Chip hook `packets` returned an unreadable or invalid JSON response."
+    assert "private-sentinel" not in message
+    assert str(tmp_path) not in message
+
+
+def test_invoke_chip_hook_response_read_error_returns_public_safe_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config_path = _write_chip_fixture(tmp_path / "private-token-chip", response_payload={"documents": []})
+    original_read_text = Path.read_text
+
+    def valid_output(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        Path(command[-1]).write_text('{"documents": []}', encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def denied_output_read(candidate: Path, *args: object, **kwargs: object) -> str:
+        if candidate.name == "output.json":
+            raise OSError("private-sentinel")
+        return original_read_text(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", valid_output)
+    monkeypatch.setattr(Path, "read_text", denied_output_read)
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(config_path, "packets", {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")})
+
+    message = str(error.value)
+    assert message == "Chip hook `packets` returned an unreadable or invalid JSON response."
+    assert "private-sentinel" not in message
+    assert str(tmp_path) not in message
 
 
 def test_invoke_chip_hook_supports_src_layout_module_commands(tmp_path: Path) -> None:

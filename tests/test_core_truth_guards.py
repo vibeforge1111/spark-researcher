@@ -24,6 +24,39 @@ def _write_ledger(runtime_root: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
 
+def test_count_examples_treats_file_rotation_as_temporarily_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "examples.jsonl"
+    path.write_text('{"example": 1}\n', encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def rotated_read_text(candidate: Path, *args: object, **kwargs: object) -> str:
+        if candidate == path:
+            raise FileNotFoundError(path)
+        return original_read_text(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", rotated_read_text)
+
+    assert trainers.count_examples(path) == 0
+
+
+def test_count_examples_does_not_hide_permission_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "examples.jsonl"
+    path.write_text('{"example": 1}\n', encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def denied_read_text(candidate: Path, *args: object, **kwargs: object) -> str:
+        if candidate == path:
+            raise PermissionError(path)
+        return original_read_text(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied_read_text)
+
+    with pytest.raises(PermissionError):
+        trainers.count_examples(path)
+
+
 @pytest.mark.parametrize(("kind", "raw"), [("float", "nan"), ("float", "inf"), ("int", "-inf")])
 def test_parse_metric_value_rejects_non_finite_numbers(kind: str, raw: str) -> None:
     with pytest.raises(ValueError, match="Non-finite value"):

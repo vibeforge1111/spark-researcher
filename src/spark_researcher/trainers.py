@@ -97,7 +97,11 @@ def _timeout_excerpt(value: str | bytes | None) -> str:
 def count_examples(path: Path) -> int:
     if not path.exists():
         return 0
-    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return 0
+    return sum(1 for line in text.splitlines() if line.strip())
 
 
 def trainer_state_path(runtime_root: Path, name: str) -> Path:

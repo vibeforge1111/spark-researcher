@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from . import __version__
+
 from .adapters import adapter_status, execute_advisory, execution_public_summary, execution_status
 from .advisory import build_advisory
 from .beliefs import build_beliefs
@@ -98,6 +100,7 @@ def _load_governor_decision(path: str | None) -> dict | None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
+    parser.add_argument("--version", action="version", version=f"spark-researcher {__version__}")
     sub = parser.add_subparsers(dest="action")
 
     init_parser = sub.add_parser("init")
@@ -307,8 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_policy_parser = self_edit_sub.add_parser("policy")
     add_config_argument(self_edit_policy_parser)
     self_edit_policy_parser.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_policy_parser.add_argument("--push", action="store_true")
-    self_edit_policy_parser.add_argument("--no-push", action="store_true")
+    policy_push_group = self_edit_policy_parser.add_mutually_exclusive_group()
+    policy_push_group.add_argument("--push", action="store_true")
+    policy_push_group.add_argument("--no-push", action="store_true")
     self_edit_policy_parser.add_argument("--branch-prefix")
     self_edit_policy_parser.add_argument("--main-branch")
     self_edit_policy_parser.add_argument("--commit-message-template")
@@ -326,8 +330,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(self_edit_apply)
     self_edit_apply.add_argument("--proposal-id", required=True)
     self_edit_apply.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_apply.add_argument("--push", action="store_true")
-    self_edit_apply.add_argument("--no-push", action="store_true")
+    apply_push_group = self_edit_apply.add_mutually_exclusive_group()
+    apply_push_group.add_argument("--push", action="store_true")
+    apply_push_group.add_argument("--no-push", action="store_true")
     self_edit_apply.add_argument("--branch-name")
     self_edit_apply.add_argument("--commit-message")
     self_edit_apply.add_argument("--governor-decision", required=True)

@@ -5,7 +5,7 @@ from urllib.request import Request
 
 import pytest
 
-from spark_researcher.safe_url import UnsafeURL, assert_safe_url, safe_urlopen
+from spark_researcher.safe_url import ResponseTooLarge, UnsafeURL, assert_safe_url, read_bounded_response, safe_urlopen
 
 
 def test_assert_safe_url_rejects_non_http_schemes() -> None:
@@ -65,3 +65,19 @@ def test_safe_urlopen_validates_before_fetch(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(UnsafeURL):
         safe_urlopen(Request("http://127.0.0.1/status"), timeout=1)
+
+
+def test_read_bounded_response_uses_a_sentinel_byte() -> None:
+    class Response:
+        requested_size = 0
+
+        def read(self, size: int) -> bytes:
+            self.requested_size = size
+            return b"x" * size
+
+    response = Response()
+
+    with pytest.raises(ResponseTooLarge, match="safe size limit"):
+        read_bounded_response(response, max_bytes=8)
+
+    assert response.requested_size == 9

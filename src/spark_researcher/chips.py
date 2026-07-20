@@ -57,10 +57,10 @@ def load_chip_context(config_path: Path, config: ProjectConfig | None = None) ->
         return None
     manifest_path = chip_root / str(loaded.chip.manifest or "spark-chip.json")
     if not manifest_path.exists():
-        raise RuntimeError("Chip manifest not found")
+        raise RuntimeError("Chip manifest not found.")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     if not isinstance(manifest, dict):
-        raise RuntimeError("Chip manifest must be a JSON object")
+        raise RuntimeError("Chip manifest must be a JSON object.")
     return ChipContext(
         repo_root=config_path.parent.resolve(),
         runtime_root=resolve_runtime_root(config_path),
@@ -474,7 +474,7 @@ def invoke_chip_hook(
     if result.returncode != 0:
         raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():
-        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
+        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file.")
     response = json.loads(output_path.read_text(encoding="utf-8-sig"))
     if not isinstance(response, dict):
         raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")

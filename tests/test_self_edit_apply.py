@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ for HARNESS_CORE_SRC in (
         break
 
 from spark_harness_core import HarnessKernel, evidence_ref
+from spark_researcher import self_edit
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
 from spark_researcher.self_edit import (
     SELF_EDIT_APPLY_CAPABILITY_ID,
@@ -22,6 +24,7 @@ from spark_researcher.self_edit import (
     _apply_result_ledger_path,
     _proposal_path,
     _review_path,
+    _workspace_dir,
     apply_proposal,
     proposal_public_summary,
 )
@@ -105,7 +108,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
     )
     target = repo_root / "README.md"
     target.write_text("old\n", encoding="utf-8")
-    workspace_root = repo_root / "proposal-workspace"
+    workspace_root = _workspace_dir(proposal_id)
     workspace_root.mkdir()
     (workspace_root / "README.md").write_text("new\n", encoding="utf-8")
     proposal = {
@@ -114,6 +117,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
         "change_count": 1,
         "blocked_changes": [],
         "allowed_changes": [{"path": "README.md", "status": "modified"}],
+        "mutable_targets": ["README.md"],
         "workspace_root": str(workspace_root),
     }
     proposal_path = _proposal_path(repo_root, proposal_id)
@@ -165,6 +169,23 @@ def test_proposal_public_summary_omits_prompt_diffs_and_raw_agent_text() -> None
     assert "SECRET_DIFF_SENTINEL" not in encoded
     assert "SECRET_BLOCKED_DIFF_SENTINEL" not in encoded
     assert "SECRET_HOME" not in encoded
+
+
+def test_git_output_error_omits_raw_stderr(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_detail = f"fatal: cannot read {tmp_path / 'private-token-secret'}"
+    monkeypatch.setattr(
+        self_edit,
+        "_git",
+        lambda _repo_root, *_args: subprocess.CompletedProcess(["git", "status"], 1, "", private_detail),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        self_edit._git_output(tmp_path, "status", "--porcelain")
+
+    message = str(error.value)
+    assert "git status failed" in message
+    assert private_detail not in message
+    assert str(tmp_path) not in message
 
 
 def test_apply_proposal_checks_remote_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

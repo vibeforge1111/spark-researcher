@@ -2,7 +2,7 @@
 
 Exercises the real ``run_trainer`` path (not a re-implemented dict) to confirm
 that absolute filesystem paths emitted on a failing trainer's stderr are
-redacted before being persisted into the trainer state / result.
+redacted before private persistence and omitted from the public result.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from spark_researcher.config import TrainerSpec
-from spark_researcher.trainers import _redact_stderr_excerpt, run_trainer
+from spark_researcher.trainers import _redact_stderr_excerpt, read_state, run_trainer, trainer_state_path
 
 
 def test_redact_stderr_excerpt_strips_absolute_paths() -> None:
@@ -48,7 +48,7 @@ def test_run_trainer_redacts_paths_from_failing_stderr(tmp_path: Path) -> None:
     result = run_trainer(spec, project_root, runtime_root)
 
     assert result["last_status"] == "failed"
-    # The excerpt is retained (observability) but the absolute path is gone.
-    assert "stderr_excerpt" in result
-    assert secret not in result["stderr_excerpt"]
-    assert "<path>" in result["stderr_excerpt"]
+    assert "stderr_excerpt" not in result
+    private_state = read_state(trainer_state_path(runtime_root, "probe"))
+    assert secret not in private_state["stderr_excerpt"]
+    assert "<path>" in private_state["stderr_excerpt"]

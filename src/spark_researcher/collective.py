@@ -166,8 +166,13 @@ def _evolution_path_id(specialization_key: str, command_name: str) -> str:
     return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
 
 
+def _public_run_ref(record: dict[str, Any], kind: str) -> str:
+    """Return a stable metadata reference without exposing private local paths."""
+    run_id = _slug(str(record.get("run_id") or "latest"))
+    return f"spark-run:{run_id}:{_slug(kind)}"
+
+
 def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
-    run_id = str(record.get("run_id") or "latest")
     refs = []
     for kind, label, path_key in (
         ("run_trace", "Run directory", "run_dir"),
@@ -179,10 +184,10 @@ def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         refs.append(
             {
-                "id": f"{run_id}:{path_key}",
+                "id": _public_run_ref(record, path_key.removesuffix("_path").removesuffix("_dir")),
                 "kind": kind,
-                "label": label,
-                "path": str(path_value),
+                "label": f"Private local {label.lower()}",
+                "path": None,
                 "url": None,
                 "hash": None,
             }
@@ -569,7 +574,7 @@ def build_spark_swarm_collective_payload(
                 "contradiction": None,
                 "confidence": 0.8 if evidence_lane == "benchmark_evidence" else 0.65,
                 "evidenceLane": evidence_lane,
-                "sourceRefs": [str(record.get("run_dir") or "")] if record.get("run_dir") else [],
+                "sourceRefs": [_public_run_ref(record, "run")] if record.get("run_dir") else [],
                 "status": (
                     "benchmark_supported"
                     if evidence_lane == "benchmark_evidence"
@@ -607,7 +612,7 @@ def build_spark_swarm_collective_payload(
                 "targetId": insight_id if insights else path_id,
                 "severity": "critical" if status != "ok" else "warn",
                 "summary": summary,
-                "sourceRef": str(record.get("log_path") or "") or None,
+                "sourceRef": _public_run_ref(record, "log") if record.get("log_path") else None,
                 "createdAt": emitted_at,
             }
         )
@@ -738,7 +743,11 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "baseline_value": run.get("baseline_value"),
         "verdict": verdict,
         "run_id": run.get("run_id"),
-        "artifact_paths": [run.get("run_dir"), run.get("log_path")],
+        "artifact_refs": [
+            _public_run_ref(run, kind)
+            for kind, key in (("run", "run_dir"), ("log", "log_path"))
+            if run.get(key)
+        ],
     }
     markdown = "\n".join(
         [
@@ -1104,6 +1113,8 @@ def _run_command(
         detail = (error.stderr or error.stdout or "").strip()
         message = detail or f"Command failed: {' '.join(command)}"
         raise RuntimeError(message) from error
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Command timed out after {COLLECTIVE_COMMAND_TIMEOUT_SECONDS} seconds.") from None
 
 
 def _git_output(repo_root: Path, *args: str) -> str:

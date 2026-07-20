@@ -23,6 +23,23 @@ def _redact_stderr_excerpt(stderr: str, *, limit: int = 400) -> str:
 
 from .config import TrainerSpec, load_config, resolve_project_root
 from .paths import resolve_runtime_root, trainers_root
+from .subprocess_policy import subprocess_timeout_seconds
+
+
+PUBLIC_TRAINER_FIELDS = (
+    "trainer",
+    "name",
+    "example_count",
+    "compiled_example_count",
+    "compile_count",
+    "should_run",
+    "reason",
+    "dry_run",
+    "status",
+    "last_seen_at",
+    "last_status",
+    "last_reason",
+)
 
 
 def now_iso() -> str:
@@ -62,6 +79,19 @@ def write_state(path: Path, payload: dict[str, Any]) -> None:
             except OSError:
                 pass
         raise
+
+
+def public_trainer_state(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project private trainer state into metadata safe for CLI and relay output."""
+    return {field: payload[field] for field in PUBLIC_TRAINER_FIELDS if field in payload}
+
+
+def _timeout_excerpt(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")[:400]
+    return value[:400]
 
 
 def count_examples(path: Path) -> int:
@@ -112,20 +142,40 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
                 "last_reason": reason,
             },
         )
-        return result
+        return public_trainer_state(result)
     if dry_run:
         result["command"] = spec.compile_command
         result["status"] = "dry_run"
-        return result
-    process = subprocess.run(
-        spec.compile_command,
-        cwd=str(project_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=600,
-    )
+        return public_trainer_state(result)
+    timeout_seconds = subprocess_timeout_seconds(600)
+    try:
+        process = subprocess.run(
+            spec.compile_command,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        timeout_reason = f"Trainer compile timed out after {timeout_seconds:g} seconds."
+        updated = {
+            "name": spec.name,
+            "example_count": example_count,
+            "compiled_example_count": int(state.get("compiled_example_count", 0)),
+            "compile_count": int(state.get("compile_count", 0)),
+            "last_seen_at": now_iso(),
+            "last_status": "timed_out",
+            "last_reason": timeout_reason,
+            "stdout_excerpt": _timeout_excerpt(exc.stdout),
+            "stderr_excerpt": _timeout_excerpt(exc.stderr),
+            "command": spec.compile_command,
+        }
+        write_state(state_path, updated)
+        result.update(updated)
+        result["status"] = "timed_out"
+        return public_trainer_state(result)
     updated = {
         "name": spec.name,
         "example_count": example_count,
@@ -140,7 +190,7 @@ def run_trainer(spec: TrainerSpec, project_root: Path, runtime_root: Path, *, dr
     }
     write_state(state_path, updated)
     result.update(updated)
-    return result
+    return public_trainer_state(result)
 
 
 def run_all_trainers(config_path: Path, *, dry_run: bool = False) -> dict[str, Any]:
@@ -159,6 +209,6 @@ def trainer_status(config_path: Path) -> dict[str, Any]:
     rows = []
     for spec in config.trainers:
         state_path = trainer_state_path(runtime_root, spec.name)
-        rows.append(read_state(state_path) if state_path.exists() else {"name": spec.name, "last_status": "never_run"})
+        state = read_state(state_path) if state_path.exists() else {"name": spec.name, "last_status": "never_run"}
+        rows.append(public_trainer_state(state))
     return {"project_name": config.project_name, "trainers": rows}
-

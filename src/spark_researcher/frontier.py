@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from html import unescape
 from pathlib import Path
@@ -17,7 +18,7 @@ from .config import load_config
 from .failures import surprise_status
 from .intent import build_intent_brief
 from .paths import resolve_runtime_root
-from .safe_url import safe_urlopen
+from .safe_url import read_bounded_response, safe_urlopen
 from .tracing import start_trace
 from .trial_queue import merged_candidate_trials
 
@@ -42,6 +43,31 @@ def _parse_json(text: str) -> dict[str, Any] | None:
         if isinstance(payload, dict):
             return payload
     return None
+
+
+def _frontier_metric_sort_key(row: dict[str, Any], eval_goal: str) -> tuple[int, float]:
+    try:
+        metric = float(row.get("metric_value"))
+    except (TypeError, ValueError):
+        return (1, 0.0)
+    if not math.isfinite(metric):
+        return (1, 0.0)
+    return (0, -metric if eval_goal == "maximize" else metric)
+
+
+def _best_frontier_rows(
+    rows: list[dict[str, Any]],
+    command_name: str,
+    eval_goal: str,
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    candidates = [
+        row
+        for row in rows
+        if row.get("command_name") == command_name and row.get("applied_mutations")
+    ]
+    return sorted(candidates, key=lambda row: _frontier_metric_sort_key(row, eval_goal))[:limit]
 
 
 def _match_open_field(block: str, field_name: str, pattern: str) -> str:
@@ -76,11 +102,8 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
-    except (URLError, OSError, ValueError) as exc:
-        import logging
-
-        logging.warning("spark-researcher: web notes fetch failed for query %r: %s", query, exc)
+            page = read_bounded_response(response).decode("utf-8", errors="replace")
+    except (URLError, OSError, ValueError):
         return []
     titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
     notes = []
@@ -131,8 +154,7 @@ def frontier_suggest(
         for row in rows
         if row.get("command_name") == command_name
     }
-    best_rows = [row for row in rows if row.get("command_name") == command_name and row.get("applied_mutations")][-3:]
-    best_rows = sorted(best_rows, key=lambda item: float(item.get("metric_value", 0.0) or 0.0), reverse=config.eval_goal == "maximize")[:3]
+    best_rows = _best_frontier_rows(rows, command_name, config.eval_goal)
     winner_text = [
         {"candidate_id": row.get("candidate_id"), "metric_value": row.get("metric_value"), "verdict": row.get("verdict"), "mutations": {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}}
         for row in best_rows

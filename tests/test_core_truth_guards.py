@@ -9,9 +9,9 @@ import pytest
 from memory_governor import memory_governor_decision
 from spark_researcher import obsidian
 from spark_researcher.obsidian import vault_authority_refs
-from spark_researcher import candidates, runner, trainers, trial_queue
+from spark_researcher import candidates, failures, frontier, runner, trainers, trial_queue
 from spark_researcher.config import CandidateTrial, CommandSpec, MetricSpec, ProjectConfig, load_config
-from spark_researcher.outcomes import load_advisory_outcomes
+from spark_researcher.outcomes import load_advisory_outcomes, log_advisory_outcome
 from spark_researcher.paths import ledger_path, trainers_root
 from spark_researcher.trainers import read_state, write_state
 from spark_researcher.tracing import start_trace, trace_status
@@ -91,6 +91,51 @@ def test_candidate_ids_do_not_collapse_decimal_values() -> None:
     assert candidates._candidate_id({"learning_rate": "1.5"}) != candidates._candidate_id({"learning_rate": "1_dot_5"})
 
 
+def test_frontier_ranking_sorts_the_full_candidate_set_before_truncating() -> None:
+    rows = [
+        {
+            "command_name": "research",
+            "candidate_id": f"candidate-{metric}",
+            "metric_value": metric,
+            "applied_mutations": [{"name": "depth", "value": str(metric)}],
+        }
+        for metric in (100, 90, 80, 2, 1)
+    ]
+
+    ranked = frontier._best_frontier_rows(rows, "research", "maximize", limit=3)
+
+    assert [row["candidate_id"] for row in ranked] == ["candidate-100", "candidate-90", "candidate-80"]
+
+
+def test_frontier_ranking_puts_invalid_metrics_last_for_both_goal_directions() -> None:
+    rows = [
+        {
+            "command_name": "research",
+            "candidate_id": "invalid",
+            "metric_value": "not-a-number",
+            "applied_mutations": [{"name": "depth", "value": "invalid"}],
+        },
+        {
+            "command_name": "research",
+            "candidate_id": "high",
+            "metric_value": 8,
+            "applied_mutations": [{"name": "depth", "value": "high"}],
+        },
+        {
+            "command_name": "research",
+            "candidate_id": "low",
+            "metric_value": 2,
+            "applied_mutations": [{"name": "depth", "value": "low"}],
+        },
+    ]
+
+    maximize = frontier._best_frontier_rows(rows, "research", "maximize", limit=3)
+    minimize = frontier._best_frontier_rows(rows, "research", "minimize", limit=3)
+
+    assert [row["candidate_id"] for row in maximize] == ["high", "low", "invalid"]
+    assert [row["candidate_id"] for row in minimize] == ["low", "high", "invalid"]
+
+
 def test_failed_and_unknown_rows_count_as_discards() -> None:
     assert runner.row_counts_as_discard({"status": "failed", "verdict": "baseline"}) is True
     assert runner.row_counts_as_discard({"status": "ok", "verdict": "unknown"}) is True
@@ -122,6 +167,47 @@ def test_advisory_outcomes_skip_malformed_jsonl_rows(tmp_path: Path) -> None:
     rows = load_advisory_outcomes(tmp_path)
 
     assert [row["status"] for row in rows] == ["ok", "fail"]
+
+
+def test_advisory_outcome_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    locked_paths: list[Path] = []
+
+    @contextmanager
+    def fake_lock(path: Path):
+        locked_paths.append(path)
+        yield
+
+    monkeypatch.setattr("spark_researcher.runner.locked_file", fake_lock)
+
+    result = log_advisory_outcome(
+        tmp_path,
+        task="compare sources",
+        model="researcher",
+        status="ok",
+        packet_ids=["packet-a"],
+    )
+
+    expected_path = tmp_path / "artifacts" / "advisory" / "outcomes.jsonl"
+    assert locked_paths == [expected_path]
+    assert result["path"] == str(expected_path)
+    assert load_advisory_outcomes(tmp_path)[0]["packet_ids"] == ["packet-a"]
+
+
+def test_failure_appends_use_locked_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    locked_paths: list[Path] = []
+
+    @contextmanager
+    def fake_lock(path: Path):
+        locked_paths.append(path)
+        yield
+
+    monkeypatch.setattr("spark_researcher.runner.locked_file", fake_lock)
+    path = tmp_path / "artifacts" / "failures" / "registry.jsonl"
+
+    failures._append_jsonl(path, {"failure_type": "bounded-test"})
+
+    assert locked_paths == [path]
+    assert json.loads(path.read_text(encoding="utf-8")) == {"failure_type": "bounded-test"}
 
 
 def test_trace_status_skips_malformed_jsonl_rows(tmp_path: Path) -> None:
@@ -350,3 +436,40 @@ def test_load_config_falls_back_for_invalid_optional_numeric_values(tmp_path: Pa
     assert config.guardrails.max_loop_iterations == 8
     assert config.guardrails.consecutive_discard_limit == 3
     assert config.guardrails.near_best_tolerance == 0.03
+
+
+def test_load_config_normalizes_valid_eval_goal(tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "demo",
+                "eval_metric": "score",
+                "eval_goal": " MAXIMIZE ",
+                "commands": {"research": {"args": ["python", "-c", "print('ok')"]}},
+                "metrics": {"score": {"pattern": "score=(?P<value>\\d+)"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).eval_goal == "maximize"
+
+
+def test_load_config_rejects_invalid_eval_goal(tmp_path: Path) -> None:
+    config_path = tmp_path / "spark-researcher.project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "demo",
+                "eval_metric": "score",
+                "eval_goal": "sideways",
+                "commands": {"research": {"args": ["python", "-c", "print('ok')"]}},
+                "metrics": {"score": {"pattern": "score=(?P<value>\\d+)"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="eval_goal must be 'minimize' or 'maximize'"):
+        load_config(config_path)

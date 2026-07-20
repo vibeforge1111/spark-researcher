@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import copy
+import hashlib
 import json
 import os
 import shlex
@@ -14,7 +15,15 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .paths import IGNORED_NAMES, resolve_runtime_root, self_edit_root
+from .paths import (
+    IGNORED_NAMES,
+    canonical_identifier,
+    canonical_relative_path,
+    resolve_owned_path,
+    resolve_runtime_root,
+    self_edit_root,
+)
+from .subprocess_policy import subprocess_timeout_seconds
 from .tracing import start_trace
 
 
@@ -62,21 +71,35 @@ def _iso_now() -> str:
 
 
 def _proposal_dir(runtime_root: Path, proposal_id: str) -> Path:
-    if not proposal_id or "/" in proposal_id or "\\" in proposal_id or ".." in proposal_id:
-        raise ValueError(f"Invalid proposal_id: {proposal_id!r}")
-    resolved = (self_edit_root(runtime_root) / proposal_id).resolve()
-    root = self_edit_root(runtime_root).resolve()
-    if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
-        raise ValueError(f"proposal_id escapes root directory: {proposal_id!r}")
-    return resolved
+    return resolve_owned_path(self_edit_root(runtime_root), canonical_identifier(proposal_id))
 
 
 def _workspace_dir(proposal_id: str) -> Path:
-    # Use a hash of proposal_id for predictable lookup but add randomness
-    # to prevent symlink pre-creation attacks
-    import hashlib
-    safe_id = hashlib.sha256(proposal_id.encode()).hexdigest()[:16]
-    return Path(tempfile.gettempdir()) / "spark-researcher-self-edit" / safe_id / "workspace"
+    safe_id = hashlib.sha256(canonical_identifier(proposal_id).encode()).hexdigest()[:16]
+    private_root = Path(tempfile.mkdtemp(prefix=f"spark-researcher-self-edit-{safe_id}-"))
+    return private_root / "workspace"
+
+
+def _validated_workspace_root(proposal_id: str, stored_path: object) -> Path:
+    identifier = canonical_identifier(proposal_id)
+    if not isinstance(stored_path, str) or not stored_path or not Path(stored_path).is_absolute():
+        raise RuntimeError("Proposal workspace authority is invalid")
+    try:
+        workspace = Path(stored_path).resolve(strict=True)
+        temp_root = Path(tempfile.gettempdir()).resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeError("Proposal workspace authority is invalid") from exc
+    expected_prefix = f"spark-researcher-self-edit-{hashlib.sha256(identifier.encode()).hexdigest()[:16]}-"
+    private_root = workspace.parent
+    if (
+        workspace.name != "workspace"
+        or not workspace.is_dir()
+        or private_root.parent != temp_root
+        or not private_root.name.startswith(expected_prefix)
+        or private_root.stat().st_mode & 0o077
+    ):
+        raise RuntimeError("Proposal workspace authority is invalid")
+    return workspace
 
 
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
@@ -328,35 +351,43 @@ def backend_profiles() -> list[dict[str, Any]]:
 
 
 def run_git_status(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=30,
-    )
+    timeout_seconds = subprocess_timeout_seconds(30)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain", "--untracked-files=no"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Git command timed out after {timeout_seconds:g} seconds.") from None
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(repo_root), *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        timeout=60,
-    )
+    timeout_seconds = subprocess_timeout_seconds(30)
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Git command timed out after {timeout_seconds:g} seconds.") from None
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
     result = _git(repo_root, *args)
     if result.returncode != 0:
-        # Do not surface raw git stderr: it can embed absolute repo paths and
-        # other environment detail. Report only the failing subcommand.
-        raise RuntimeError(f"git {' '.join(args)} failed")
+        safe_operations = {"add", "branch", "checkout", "push", "rev-parse", "status", "symbolic-ref"}
+        operation = args[0] if args and args[0] in safe_operations else "command"
+        raise RuntimeError(f"git {operation} failed")
     return result.stdout.strip()
 
 
@@ -377,7 +408,7 @@ def _checkout_branch(repo_root: Path, branch_name: str, *, create: bool) -> None
 
 
 def _commit_paths(repo_root: Path, paths: list[str], message: str) -> str:
-    _git_output(repo_root, "add", *paths)
+    _git_output(repo_root, "add", "--", *paths)
     result = _git(repo_root, "commit", "-m", message)
     if result.returncode != 0:
         stderr = result.stderr.strip()
@@ -401,19 +432,18 @@ def copy_repo(repo_root: Path, workspace_root: Path) -> None:
 
 
 def is_allowed_path(path_text: str, mutable_targets: list[str]) -> bool:
-    normalized = path_text.replace("\\", "/")
-    # Resolve .. components to prevent path traversal
-    # e.g., "src/../../../etc" -> "../../etc" which won't match "src/"
-    parts = normalized.split("/")
-    resolved = []
-    for part in parts:
-        if part == "..":
-            if resolved:
-                resolved.pop()
-        elif part and part != ".":
-            resolved.append(part)
-    resolved_path = "/".join(resolved)
-    return any(resolved_path == target or resolved_path.startswith(target.rstrip("/") + "/") for target in mutable_targets)
+    canonical_path = canonical_relative_path(path_text)
+    if canonical_path is None:
+        return False
+    canonical_targets = {
+        target
+        for item in mutable_targets
+        if (target := canonical_relative_path(item, allow_trailing_separator=True)) is not None
+    }
+    return any(
+        canonical_path == target or canonical_path.startswith(target + "/")
+        for target in canonical_targets
+    )
 
 
 def file_inventory(root: Path) -> dict[str, bytes]:
@@ -610,10 +640,25 @@ def propose(
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"
     if command and not dry_run:
-        process = subprocess.run(command, cwd=str(workspace_root), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-        write_text(stdout_path, process.stdout)
-        write_text(stderr_path, process.stderr)
-        status = "pending_review" if process.returncode == 0 else "failed"
+        timeout_seconds = subprocess_timeout_seconds(600)
+        try:
+            process = subprocess.run(
+                command,
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            write_text(stdout_path, "")
+            write_text(stderr_path, f"Command timed out after {timeout_seconds:g} seconds.")
+            status = "failed"
+        else:
+            write_text(stdout_path, process.stdout)
+            write_text(stderr_path, process.stderr)
+            status = "pending_review" if process.returncode == 0 else "failed"
     else:
         write_text(stdout_path, json.dumps({"command": command, "dry_run": dry_run}, indent=2))
         write_text(stderr_path, "")
@@ -813,7 +858,7 @@ def apply_proposal(
     if run_git_status(repo_root):
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})
         raise RuntimeError("Git worktree must be clean before applying a self-edit proposal.")
-    workspace_root = Path(proposal["workspace_root"])
+    workspace_root = _validated_workspace_root(proposal_id, proposal.get("workspace_root"))
     git_mode = str(git_mode_override or config.self_edit.git_mode or "manual").strip().lower()
     allowed_git_modes = ("manual", "branch", "main")
     if git_mode not in allowed_git_modes:
@@ -836,10 +881,13 @@ def apply_proposal(
         trace.finish(status="error", attributes={"error": "Cannot auto-push because git remote 'origin' is not configured."})
         raise RuntimeError("Cannot auto-push because git remote 'origin' is not configured.")
     applied = []
+    mutable_targets = proposal.get("mutable_targets", [])
     for change in proposal.get("allowed_changes", []):
-        rel = change["path"]
-        source = workspace_root / rel
-        target = repo_root / rel
+        rel = canonical_relative_path(change.get("path"))
+        if rel is None or not is_allowed_path(rel, mutable_targets):
+            raise RuntimeError("Proposal change path is outside declared mutable targets")
+        source = resolve_owned_path(workspace_root, rel)
+        target = resolve_owned_path(repo_root, rel)
         target.parent.mkdir(parents=True, exist_ok=True)
         if change["status"] == "deleted":
             if target.exists():

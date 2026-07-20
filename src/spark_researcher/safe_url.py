@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import http.client
+import errno
+from http.client import HTTPConnection, HTTPSConnection
 import ipaddress
 import socket
 from typing import Any
 from urllib.error import URLError
 from urllib.parse import urlparse
-from urllib.request import HTTPHandler, HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import (
+    HTTPHandler,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 
 
 _ALLOWED_SCHEMES = {"http", "https"}
@@ -14,6 +22,19 @@ _ALLOWED_SCHEMES = {"http", "https"}
 
 class UnsafeURL(ValueError):
     """Raised when an outbound URL can target local or non-public networks."""
+
+
+class ResponseTooLarge(ValueError):
+    """Raised when a guarded response exceeds its bounded read budget."""
+
+
+def read_bounded_response(response: Any, *, max_bytes: int = 2 * 1024 * 1024) -> bytes:
+    if max_bytes < 0:
+        raise ValueError("max_bytes must be non-negative")
+    payload = response.read(max_bytes + 1)
+    if len(payload) > max_bytes:
+        raise ResponseTooLarge("Web response exceeded the safe size limit")
+    return payload
 
 
 def _host_ips(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -78,69 +99,6 @@ def assert_safe_url(url: str) -> None:
     _resolve_safe_addresses(hostname, parsed.port)
 
 
-# ---------------------------------------------------------------------------
-# Pinned-IP connection classes – prevent DNS rebinding by resolving once and
-# connecting to the validated IP directly.
-# ---------------------------------------------------------------------------
-
-class _PinnedHTTPConnection(http.client.HTTPConnection):
-    """HTTP connection that connects to a pinned IP address."""
-
-    def __init__(self, host: str, pinned_ip: str, **kwargs: Any) -> None:
-        self._pinned_ip = pinned_ip
-        super().__init__(host, **kwargs)
-
-    def connect(self) -> None:
-        self.sock = self._create_connection(
-            (self._pinned_ip, self.port), self.timeout, self.source_address,
-        )
-
-
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    """HTTPS connection that connects to a pinned IP address."""
-
-    def __init__(self, host: str, pinned_ip: str, **kwargs: Any) -> None:
-        self._pinned_ip = pinned_ip
-        super().__init__(host, **kwargs)
-
-    def connect(self) -> None:
-        sock = self._create_connection(
-            (self._pinned_ip, self.port), self.timeout, self.source_address,
-        )
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
-
-
-class _PinnedHTTPHandler(HTTPHandler):
-    """urllib HTTP handler that pins connections to *pinned_ip*."""
-
-    def __init__(self, pinned_ip: str) -> None:
-        super().__init__()
-        self._pinned_ip = pinned_ip
-
-    def http_open(self, req: Request) -> Any:  # type: ignore[override]
-        def _factory(host: str, **kwargs: Any) -> _PinnedHTTPConnection:
-            return _PinnedHTTPConnection(host, self._pinned_ip, **kwargs)
-
-        return self.do_open(_factory, req)
-
-
-class _PinnedHTTPSHandler(HTTPSHandler):
-    """urllib HTTPS handler that pins connections to *pinned_ip*."""
-
-    def __init__(self, pinned_ip: str) -> None:
-        super().__init__()
-        self._pinned_ip = pinned_ip
-
-    def https_open(self, req: Request) -> Any:  # type: ignore[override]
-        def _factory(host: str, **kwargs: Any) -> _PinnedHTTPSConnection:
-            return _PinnedHTTPSConnection(host, self._pinned_ip, **kwargs)
-
-        return self.do_open(
-            _factory, req,
-            context=self._context, check_hostname=self._check_hostname,
-        )
-
-
 class _SafeRedirectHandler(HTTPRedirectHandler):
     def redirect_request(
         self,
@@ -155,22 +113,107 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class _PinnedConnectionMixin:
+    _pinned_addresses: tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]
+
+    def __init__(
+        self,
+        host: str,
+        *,
+        pinned_addresses: tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...],
+        **kwargs: Any,
+    ) -> None:
+        if not pinned_addresses:
+            raise UnsafeURL("URL host has no validated public address")
+        self._pinned_addresses = pinned_addresses
+        super().__init__(host, **kwargs)
+
+    def _connect_pinned_socket(self) -> None:
+        if self._tunnel_host:
+            raise UnsafeURL("Proxy tunnels are not allowed for guarded requests")
+        last_error: OSError | None = None
+        for address in self._pinned_addresses:
+            try:
+                self.sock = self._create_connection(
+                    (str(address), self.port),
+                    self.timeout,
+                    self.source_address,
+                )
+            except OSError as exc:
+                last_error = exc
+                continue
+            break
+        else:
+            if last_error is not None:
+                raise last_error
+            raise UnsafeURL("URL host has no reachable validated public address")
+
+        try:
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError as exc:
+            if exc.errno != errno.ENOPROTOOPT:
+                self.sock.close()
+                self.sock = None
+                raise
+
+
+class _PinnedHTTPConnection(_PinnedConnectionMixin, HTTPConnection):
+    def connect(self) -> None:
+        self._connect_pinned_socket()
+
+
+class _PinnedHTTPSConnection(_PinnedConnectionMixin, HTTPSConnection):
+    def connect(self) -> None:
+        self._connect_pinned_socket()
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self.host)
+
+
+def _validated_request_addresses(
+    url: str,
+) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address, ...]:
+    assert_safe_url(url)
+    parsed = urlparse(str(url or "").strip())
+    hostname = (parsed.hostname or "").rstrip(".").lower()
+    try:
+        literal = ipaddress.ip_address(hostname)
+    except ValueError:
+        addresses = _host_ips(hostname, parsed.port)
+    else:
+        addresses = {literal}
+    if not addresses or any(not _is_public_ip(address) for address in addresses):
+        raise UnsafeURL("URL host resolves to a non-public address")
+    return tuple(sorted(addresses, key=lambda address: (address.version, int(address))))
+
+
+class _PinnedHTTPHandler(HTTPHandler):
+    def http_open(self, request: Request):
+        addresses = _validated_request_addresses(request.full_url)
+
+        def connection(host: str, **kwargs: Any) -> _PinnedHTTPConnection:
+            return _PinnedHTTPConnection(host, pinned_addresses=addresses, **kwargs)
+
+        return self.do_open(connection, request)
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, request: Request):
+        addresses = _validated_request_addresses(request.full_url)
+
+        def connection(host: str, **kwargs: Any) -> _PinnedHTTPSConnection:
+            return _PinnedHTTPSConnection(host, pinned_addresses=addresses, **kwargs)
+
+        return self.do_open(connection, request, context=self._context)
+
+
 def safe_urlopen(request: Request | str, *, timeout: float):
     url = request.full_url if isinstance(request, Request) else str(request)
     assert_safe_url(url)
-
-    # Pin the connection to the pre-resolved IP to prevent DNS rebinding.
-    parsed = urlparse(url)
-    hostname = parsed.hostname.rstrip(".").lower()
-    addresses = _resolve_safe_addresses(hostname, parsed.port)
-    pinned_ip = str(next(iter(addresses)))
-
-    handlers: list = [_SafeRedirectHandler]
-    if parsed.scheme == "https":
-        handlers.append(_PinnedHTTPSHandler(pinned_ip))
-    else:
-        handlers.append(_PinnedHTTPHandler(pinned_ip))
-    opener = build_opener(*handlers)
+    opener = build_opener(
+        ProxyHandler({}),
+        _SafeRedirectHandler,
+        _PinnedHTTPHandler,
+        _PinnedHTTPSHandler,
+    )
     try:
         return opener.open(request, timeout=timeout)
     except UnsafeURL:

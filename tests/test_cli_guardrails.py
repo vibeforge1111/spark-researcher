@@ -27,6 +27,17 @@ def run_cli(cwd: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_no_subcommand_prints_help_and_returns_usage_error(tmp_path: Path) -> None:
+    result = run_cli(tmp_path, [])
+
+    combined_output = result.stdout + result.stderr
+
+    assert result.returncode == 2
+    assert result.stderr == ""
+    assert "usage:" in result.stdout
+    assert "Traceback" not in combined_output
+
+
 def test_autoloop_rejects_non_positive_max_passes() -> None:
     parser = cli.build_parser()
 

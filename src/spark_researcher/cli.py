@@ -593,7 +593,7 @@ def main() -> None:
     args = parser.parse_args()
     if not args.action:
         parser.print_help()
-        return
+        raise SystemExit(2)
     if args.action == "init":
         print_json({"config_path": str(init_project(Path(args.path).resolve(), preset=args.preset, project_name=args.project_name))})
         return

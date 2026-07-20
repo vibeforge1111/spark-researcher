@@ -23,6 +23,14 @@ from .tracing import start_trace
 from .trial_queue import merged_candidate_trials
 
 
+_BLOCK_SPLIT_PATTERN = re.compile(r"\n\s*(?:#{2,}\s*|\d+\.\s+)")
+_TOKEN_PATTERN = re.compile(r"[a-z0-9:_-]+", re.IGNORECASE)
+_RATIONALE_PATTERN = re.compile(r"Rationale\s*:\s*(.*)")
+_HYPOTHESIS_PATTERN = re.compile(r"Hypothesis\s*:\s*(.*)")
+_DDG_TITLE_PATTERN = re.compile(r"result__a[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
+_HTML_TAG_PATTERN = re.compile(r"<.*?>")
+
+
 def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((str(key), str(value)) for key, value in mutations.items()))
 
@@ -74,7 +82,7 @@ def _match_open_field(block: str, field_name: str, pattern: str) -> str:
     field_match = re.search(rf"{re.escape(field_name)}\s*[:=]\s*`?([a-z0-9:_-]+)`?", block, flags=re.IGNORECASE)
     if field_match and re.fullmatch(pattern, field_match.group(1)):
         return field_match.group(1)
-    for token in re.findall(r"[a-z0-9:_-]+", block, flags=re.IGNORECASE):
+    for token in _TOKEN_PATTERN.findall(block):
         if re.fullmatch(pattern, token):
             return token
     return ""
@@ -82,7 +90,7 @@ def _match_open_field(block: str, field_name: str, pattern: str) -> str:
 
 def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str], field_patterns: dict[str, str]) -> dict[str, Any]:
     proposals = []
-    for block in [item.strip() for item in re.split(r"\n\s*(?:#{2,}\s*|\d+\.\s+)", text) if item.strip()]:
+    for block in [item.strip() for item in _BLOCK_SPLIT_PATTERN.split(text) if item.strip()]:
         mutations: dict[str, str] = {}
         for name, values in allowed.items():
             value = next((item for item in values if item in block), "")
@@ -92,8 +100,8 @@ def _parse_text(text: str, allowed: dict[str, list[str]], open_fields: set[str],
                 mutations[name] = value
         if not mutations:
             continue
-        rationale = re.search(r"Rationale\s*:\s*(.*)", block)
-        hypothesis = re.search(r"Hypothesis\s*:\s*(.*)", block)
+        rationale = _RATIONALE_PATTERN.search(block)
+        hypothesis = _HYPOTHESIS_PATTERN.search(block)
         _lines = block.splitlines()
         proposals.append({"candidate_summary": (_lines[0][:160] if _lines else ""), "hypothesis": hypothesis.group(1).strip() if hypothesis else "", "mutations": mutations, "why_now": [rationale.group(1).strip()] if rationale else []})
     return {"proposals": proposals}
@@ -105,10 +113,10 @@ def _web_notes(query: str, *, limit: int = 3) -> list[str]:
             page = read_bounded_response(response).decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
-    titles = re.findall(r'result__a[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
+    titles = _DDG_TITLE_PATTERN.findall(page)
     notes = []
     for title in titles[:limit]:
-        clean = re.sub(r"<.*?>", "", unescape(title)).strip()
+        clean = _HTML_TAG_PATTERN.sub("", unescape(title)).strip()
         if clean:
             notes.append(clean)
     return notes

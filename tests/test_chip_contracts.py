@@ -39,6 +39,32 @@ def test_chip_validation_unconfigured_output_omits_local_schema_path(tmp_path: P
     assert result["io_protocol"] == "spark-hook-io.v1"
 
 
+def test_missing_chip_manifest_error_omits_private_path(tmp_path: Path) -> None:
+    chip_root = tmp_path / "private-token-chip"
+    chip_root.mkdir()
+    config_path = chip_root / "spark-researcher.project.json"
+    save_config(
+        config_path,
+        ProjectConfig(
+            project_name="domain-chip-test",
+            project_root=".",
+            eval_metric="score",
+            eval_goal="maximize",
+            commands={"research": CommandSpec(args=["python", "-c", "print('noop')"])},
+            metrics={"score": MetricSpec(pattern=r"^score:\s+([0-9.]+)$")},
+            chip=ChipSpec(path=".", manifest="private-secret-manifest.json"),
+        ),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(config_path, "evaluate", {})
+
+    message = str(error.value)
+    assert "Chip manifest not found" in message
+    assert str(tmp_path) not in message
+    assert "private-secret-manifest.json" not in message
+
+
 def test_validate_manifest_rejects_misplaced_frontier_keys(tmp_path: Path) -> None:
     manifest = {
         "schema_version": "spark-chip.v1",
@@ -215,6 +241,7 @@ def test_invoke_chip_hook_accepts_well_formed_packet_documents(tmp_path: Path) -
     response = invoke_chip_hook(config_path, "packets", {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")})
 
     assert response["documents"][0]["title"] == "Benchmark packet"
+    assert "log_path" not in response
 
 
 def test_invoke_chip_hook_missing_hook_lists_defined_hooks(tmp_path: Path) -> None:
@@ -237,6 +264,25 @@ def test_invoke_chip_hook_missing_hook_lists_defined_hooks(tmp_path: Path) -> No
     message = str(error.value)
     assert "Chip hook `suggest` is not defined" in message
     assert "Defined hooks: `packets`." in message
+    assert str(tmp_path) not in message
+
+
+def test_invoke_chip_hook_missing_output_error_omits_private_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = _write_chip_fixture(tmp_path / "private-token-chip", response_payload={"documents": []})
+
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        invoke_chip_hook(config_path, "packets", {"ledger_rows": [], "outcomes": [], "documents_root": str(tmp_path / "docs")})
+
+    message = str(error.value)
+    assert "did not produce an output file" in message
+    assert str(tmp_path) not in message
+    assert "private-token-chip" not in message
 
 
 def test_invoke_chip_hook_supports_src_layout_module_commands(tmp_path: Path) -> None:

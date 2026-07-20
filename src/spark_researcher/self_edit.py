@@ -385,7 +385,9 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def _git_output(repo_root: Path, *args: str) -> str:
     result = _git(repo_root, *args)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} failed")
+        safe_operations = {"add", "branch", "checkout", "push", "rev-parse", "status", "symbolic-ref"}
+        operation = args[0] if args and args[0] in safe_operations else "command"
+        raise RuntimeError(f"Git {operation} failed.")
     return result.stdout.strip()
 
 

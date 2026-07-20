@@ -173,11 +173,15 @@ class AdapterExecTests(unittest.TestCase):
         self.assertTrue(codex["configured"])
 
     def test_expand_command_template_rejects_unknown_placeholders(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, r"\{malicious_path\}"):
+        with self.assertRaises(RuntimeError) as error:
             _expand_command_template(
                 ["codex", "exec", "--json-out", "{response_path}", "--extra", "{malicious_path}"],
                 {"response_path": "response.json"},
             )
+
+        message = str(error.exception)
+        self.assertIn("{malicious_path}", message)
+        self.assertIn("Allowed placeholders: {response_path}.", message)
 
     def test_expand_command_template_allows_known_placeholders_inside_args(self) -> None:
         command = _expand_command_template(
@@ -204,6 +208,20 @@ class AdapterExecTests(unittest.TestCase):
                     self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
                     self.assertEqual(Path(result["user_prompt_path"]).read_text(encoding="utf-8"), "user")
                     self.assertEqual(result["command"][0].lower(), "powershell")
+
+    def test_execute_advisory_missing_command_names_configuration_env(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(RuntimeError) as error:
+                    execute_advisory(runtime_root, advisory=advisory, model="claude", dry_run=True)
+
+            message = str(error.exception)
+            self.assertIn("No execution command configured for model `claude`.", message)
+            self.assertIn("SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND", message)
+            self.assertIn("--command", message)
+            self.assertFalse((runtime_root / "artifacts" / "advisory" / "requests").exists())
 
     def test_execute_advisory_requires_governor_before_subprocess_or_request_files(self) -> None:
         advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}

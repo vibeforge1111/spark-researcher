@@ -127,7 +127,11 @@ def _expand_command_template(command: list[str], replacements: dict[str, str]) -
         unknown = sorted({match.group(1) for match in _PLACEHOLDER_RE.finditer(part)} - allowed)
         if unknown:
             names = ", ".join(f"{{{name}}}" for name in unknown)
-            raise RuntimeError(f"Execution command uses unsupported template placeholder(s): {names}.")
+            allowed_names = ", ".join(f"{{{name}}}" for name in sorted(allowed)) or "none"
+            raise RuntimeError(
+                f"Execution command uses unsupported template placeholder(s): {names}. "
+                f"Allowed placeholders: {allowed_names}."
+            )
         next_part = str(part)
         for name, value in replacements.items():
             next_part = next_part.replace(f"{{{name}}}", value)
@@ -239,7 +243,11 @@ def execute_advisory(
 ) -> dict[str, Any]:
     command = _resolve_command(model, command_override)
     if not command:
-        raise RuntimeError(f"No execution command configured for model `{model}`.")
+        env_key = ENV_KEYS[model]
+        raise RuntimeError(
+            f"No execution command configured for model `{model}`. "
+            f"Set {env_key} to the executable command line or pass --command."
+        )
     authority = None if dry_run else require_advisory_execution_authority(governor_decision)
     trace = start_trace(
         runtime_root,

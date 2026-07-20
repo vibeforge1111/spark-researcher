@@ -258,6 +258,80 @@ class AdapterExecTests(unittest.TestCase):
             self.assertEqual(result["response"], {"raw_response": "provider ok"})
             self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
 
+    def test_execute_advisory_response_disappearance_falls_back_to_stdout(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        governor_decision = _governor_decision()
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            completed = subprocess.CompletedProcess(args=["codex"], returncode=0, stdout="provider ok", stderr="")
+            with patch("spark_researcher.adapters.exec.subprocess.run", return_value=completed):
+                with patch.object(Path, "exists", return_value=True):
+                    result = execute_advisory(
+                        runtime_root,
+                        advisory=advisory,
+                        model="codex",
+                        command_override=["codex", "exec", "--json-out", "{response_path}"],
+                        dry_run=False,
+                        governor_decision=governor_decision,
+                    )
+
+            self.assertEqual(result["response"], {"raw_response": "provider ok"})
+
+    def test_execute_advisory_invalid_response_bytes_are_replaced(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+
+        def write_invalid_response(command, **_kwargs):
+            response_arg = next(item for item in command if item.endswith(".response.json"))
+            Path(response_arg).write_bytes(b"\xffnot-json")
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="ignored", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("spark_researcher.adapters.exec.subprocess.run", side_effect=write_invalid_response):
+                result = execute_advisory(
+                    Path(tmp),
+                    advisory=advisory,
+                    model="codex",
+                    command_override=["codex", "exec", "--json-out", "{response_path}"],
+                    dry_run=False,
+                    governor_decision=_governor_decision(),
+                )
+
+            self.assertEqual(result["response"], {"raw_response": "�not-json"})
+
+    def test_execute_advisory_invalid_json_reads_response_once(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        original_read_text = Path.read_text
+        response_reads = 0
+
+        def one_response_read(path: Path, *args, **kwargs):
+            nonlocal response_reads
+            if path.name.endswith(".response.json"):
+                response_reads += 1
+                if response_reads > 1:
+                    raise FileNotFoundError(path)
+                return "not-json"
+            return original_read_text(path, *args, **kwargs)
+
+        def write_invalid_response(command, **_kwargs):
+            response_arg = next(item for item in command if item.endswith(".response.json"))
+            Path(response_arg).write_text("not-json", encoding="utf-8")
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="ignored", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("spark_researcher.adapters.exec.subprocess.run", side_effect=write_invalid_response):
+                with patch.object(Path, "read_text", autospec=True, side_effect=one_response_read):
+                    result = execute_advisory(
+                        Path(tmp),
+                        advisory=advisory,
+                        model="codex",
+                        command_override=["codex", "exec", "--json-out", "{response_path}"],
+                        dry_run=False,
+                        governor_decision=_governor_decision(),
+                    )
+
+            self.assertEqual(response_reads, 1)
+            self.assertEqual(result["response"], {"raw_response": "not-json"})
+
     def test_execute_advisory_short_circuits_on_empty_prompts(self) -> None:
         # Both prompts blank/whitespace: the adapter must skip the subprocess
         # entirely and report the skip rather than invoking the provider on an

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from textwrap import dedent
 
@@ -299,15 +301,43 @@ def _write_toy_files(target_dir: Path) -> None:
     )
 
 
+def _atomic_write_text(path: Path, content: str) -> None:
+    temporary = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = handle.name
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        if temporary:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+        raise
+
+
 def init_project(target_dir: Path, *, preset: str, project_name: str) -> Path:
+    from .runner import locked_file
+
     target_dir.mkdir(parents=True, exist_ok=True)
     config_path = target_dir / "spark-researcher.project.json"
-    if config_path.exists():
-        raise FileExistsError(f"Config already exists: {config_path}")
-    payload = build_preset(preset, project_name, ".")
-    config_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    if preset.strip().lower() == "toy":
-        _write_toy_files(target_dir)
-    readme_path = target_dir / "SPARK_RESEARCHER_PRESET.md"
-    readme_path.write_text(_preset_readme(preset, project_name), encoding="utf-8")
+    with locked_file(config_path):
+        if config_path.exists():
+            raise FileExistsError(f"Config already exists: {config_path}")
+        payload = build_preset(preset, project_name, ".")
+        if preset.strip().lower() == "toy":
+            _write_toy_files(target_dir)
+        readme_path = target_dir / "SPARK_RESEARCHER_PRESET.md"
+        readme_path.write_text(_preset_readme(preset, project_name), encoding="utf-8")
+        _atomic_write_text(config_path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return config_path

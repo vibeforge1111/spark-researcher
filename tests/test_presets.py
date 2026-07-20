@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+
+import spark_researcher.presets as presets
 from spark_researcher.presets import init_project, preset_names
 
 
@@ -36,3 +41,43 @@ def test_init_toy_project_writes_runnable_files(tmp_path: Path) -> None:
     preset_notes = (target / "SPARK_RESEARCHER_PRESET.md").read_text(encoding="utf-8")
     assert "runnable immediately" in preset_notes
     assert "spark-researcher autoloop --command train" in preset_notes
+
+
+def test_init_project_does_not_publish_config_when_atomic_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "interrupted"
+
+    def fail_replace(_source: str, _target: Path) -> None:
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(presets.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated replace failure"):
+        init_project(target, preset="research", project_name="interrupted")
+
+    assert not (target / "spark-researcher.project.json").exists()
+    assert list(target.glob(".spark-researcher.project.json.*.tmp")) == []
+
+
+def test_concurrent_init_publishes_one_consistent_project(tmp_path: Path) -> None:
+    target = tmp_path / "concurrent"
+    ready = threading.Barrier(2)
+
+    def initialize(project_name: str) -> tuple[str, str]:
+        ready.wait()
+        try:
+            init_project(target, preset="research", project_name=project_name)
+        except FileExistsError:
+            return "exists", project_name
+        return "created", project_name
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(initialize, ["project-a", "project-b"]))
+
+    assert sorted(status for status, _ in results) == ["created", "exists"]
+    winner = next(name for status, name in results if status == "created")
+    config = json.loads((target / "spark-researcher.project.json").read_text(encoding="utf-8"))
+    readme = (target / "SPARK_RESEARCHER_PRESET.md").read_text(encoding="utf-8")
+    assert config["project_name"] == winner
+    assert winner in readme

@@ -242,6 +242,78 @@ def test_write_spark_swarm_collective_payload_from_latest(tmp_path: Path) -> Non
     assert payload["outcomes"][0]["context"]["scorecard"]["components"][0]["key"] == "outcome_score"
 
 
+def test_collective_payload_projects_private_run_evidence_as_metadata(tmp_path: Path) -> None:
+    repo_root = tmp_path / "private-token-repo"
+    repo_root.mkdir()
+    _write_manifest(repo_root)
+    config = load_config(_write_config(repo_root))
+    private_log = repo_root / "artifacts" / "runs" / "20260319-train" / "private-secret.log"
+    private_stderr = f"fatal: could not read {repo_root / 'private-secret-token'}"
+    record = {
+        "run_id": "20260319-train",
+        "created_at": "2026-03-19T12:00:00+00:00",
+        "command_name": "train",
+        "status": "failed",
+        "returncode": 1,
+        "metric_name": "score",
+        "metric_value": 0.0,
+        "verdict": "regressed",
+        "run_dir": str(private_log.parent),
+        "log_path": str(private_log),
+        "trace_path": str(repo_root / "artifacts" / "traces" / "private.jsonl"),
+        "stderr_excerpt": private_stderr,
+    }
+
+    payload = build_spark_swarm_collective_payload(repo_root, repo_root, config, record)
+
+    serialized = json.dumps(payload, sort_keys=True)
+    assert str(repo_root) not in serialized
+    assert private_stderr not in serialized
+    assert payload["runtimePulse"]["blocker"] == "Research run failed; inspect private local evidence."
+    assert payload["insights"] == []
+    assert payload["contradictions"][0]["sourceRef"] == "spark-run:20260319-train:log"
+    assert all(ref["path"] is None for ref in payload["artifactRefs"])
+    assert record["log_path"] == str(private_log)
+    assert record["stderr_excerpt"] == private_stderr
+
+
+def test_publish_latest_omits_private_run_evidence(tmp_path: Path) -> None:
+    repo_root = tmp_path / "private-token-repo"
+    repo_root.mkdir()
+    _write_manifest(repo_root)
+    _write_config(repo_root)
+    private_log = repo_root / "artifacts" / "runs" / "20260319-train" / "private-secret.log"
+    private_stderr = f"fatal: could not read {repo_root / 'private-secret-token'}"
+    row = {
+        "run_id": "20260319-train",
+        "created_at": "2026-03-19T12:00:00+00:00",
+        "project_name": "toy-project",
+        "command_name": "train",
+        "status": "failed",
+        "returncode": 1,
+        "metric_name": "score",
+        "metric_value": 0.0,
+        "baseline_value": 1.0,
+        "verdict": "regressed",
+        "run_dir": str(private_log.parent),
+        "log_path": str(private_log),
+        "stderr_excerpt": private_stderr,
+    }
+    ledger = ledger_path(repo_root)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    published = publish_latest(repo_root, repo_root)
+
+    manifest = json.loads(Path(published["manifest_path"]).read_text(encoding="utf-8"))
+    markdown = Path(published["markdown_path"]).read_text(encoding="utf-8")
+    serialized = json.dumps(manifest, sort_keys=True) + markdown
+    assert str(repo_root) not in serialized
+    assert private_stderr not in serialized
+    assert "artifact_paths" not in manifest
+    assert manifest["artifact_refs"] == ["spark-run:20260319-train:run", "spark-run:20260319-train:log"]
+
+
 def test_frontmatter_manifest_drives_identity(tmp_path: Path) -> None:
     repo_root = tmp_path
     _write_frontmatter_manifest(repo_root)

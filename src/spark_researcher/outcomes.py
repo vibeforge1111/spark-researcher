@@ -23,6 +23,8 @@ def log_advisory_outcome(
     notes: str = "",
     domain: str = "generic",
 ) -> dict[str, object]:
+    from .runner import locked_file
+
     root = advisory_root(runtime_root)
     root.mkdir(parents=True, exist_ok=True)
     path = root / "outcomes.jsonl"
@@ -36,8 +38,9 @@ def log_advisory_outcome(
         "score": score,
         "notes": notes,
     }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    with locked_file(path):
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
     return {"path": str(path), "recorded": True, "payload": payload}
 
 
@@ -46,7 +49,11 @@ def load_advisory_outcomes(runtime_root: Path) -> list[dict[str, object]]:
     if not path.exists():
         return []
     rows: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError("Advisory outcome evidence is unavailable.") from exc
+    for line in lines:
         if not line.strip():
             continue
         try:
@@ -80,11 +87,25 @@ def review_advisory_outcomes(runtime_root: Path) -> dict[str, object]:
         avg_score = round(mean(scores), 3) if scores else None
         ok = int(record["ok"])
         fail = int(record["fail"])
+        mixed = int(record["mixed"])
         if avg_score is not None and avg_score >= 0.75 and ok > fail:
             recommendation = "keep"
+            recommendation_reason = "high_score_ok_dominant"
         elif avg_score is not None and avg_score < 0.45:
             recommendation = "drop"
+            recommendation_reason = "low_score"
+        elif mixed > ok and mixed > fail:
+            recommendation = "rewrite"
+            recommendation_reason = "mixed_dominant"
         else:
             recommendation = "rewrite"
-        reviewed.append({**record, "average_score": avg_score, "recommendation": recommendation})
+            recommendation_reason = "insufficient_signal"
+        reviewed.append(
+            {
+                **record,
+                "average_score": avg_score,
+                "recommendation": recommendation,
+                "recommendation_reason": recommendation_reason,
+            }
+        )
     return {"outcome_count": len(rows), "packet_reviews": reviewed}

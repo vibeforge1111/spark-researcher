@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import spark_researcher.research as research_module
+
 for HARNESS_CORE_SRC in (
     Path(__file__).resolve().parents[2] / "spark-harness-core" / "src",
     Path.home() / ".spark" / "modules" / "spark-harness-core" / "source" / "src",
@@ -112,6 +114,26 @@ def test_under_supported_non_web_task_stays_needs_verification(tmp_path: Path) -
     assert packet["clarifying_questions"] == ["What tradeoff matters most?"]
 
 
+def test_under_supported_web_task_uses_distinct_issue_signal_for_research(tmp_path: Path) -> None:
+    advisory = {
+        "task": "Summarize the product documentation",
+        "task_type": "analysis",
+        "domain": "generic",
+        "intent": {"resource_modes": ["web"]},
+        "epistemic_status": {
+            "status": "under_supported",
+            "missing_evidence": ["The documentation excerpt is incomplete."],
+            "issues": ["A current official source is required."],
+            "clarifying_questions": [],
+        },
+    }
+
+    packet = execute_with_verifier(tmp_path, advisory=advisory, model="generic", governor_decision=_governor_decision())
+
+    assert packet["status"] == "research_needed"
+    assert packet["reason"] == "fresh_support_required"
+
+
 def test_execute_with_verifier_threads_governor_to_provider_calls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     decision = _governor_decision()
     calls: list[dict | None] = []
@@ -165,3 +187,37 @@ def test_execute_with_research_requires_governor_before_research_artifacts(tmp_p
         execute_with_research(tmp_path, advisory=advisory, model="generic")
 
     assert not (tmp_path / "artifacts").exists()
+
+
+def test_research_artifact_io_failure_is_best_effort_after_authority(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    authority_checks: list[object] = []
+    monkeypatch.setattr(
+        research_module,
+        "require_memory_write_authority",
+        lambda decision, **_kwargs: authority_checks.append(decision),
+    )
+    monkeypatch.setattr(Path, "mkdir", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("read-only mount")))
+
+    decision = {"decision_id": "authorized-test"}
+    artifact = research_module._write_research_artifact(tmp_path, {"query": "safe"}, governor_decision=decision)
+
+    assert artifact is None
+    assert authority_checks == [decision]
+
+
+def test_research_artifact_keeps_authority_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mkdir_called = False
+
+    def unexpected_mkdir(*_args: object, **_kwargs: object) -> None:
+        nonlocal mkdir_called
+        mkdir_called = True
+
+    monkeypatch.setattr(Path, "mkdir", unexpected_mkdir)
+
+    with pytest.raises(RuntimeError, match="missing_governor_decision"):
+        research_module._write_research_artifact(tmp_path, {"query": "safe"})
+
+    assert mkdir_called is False

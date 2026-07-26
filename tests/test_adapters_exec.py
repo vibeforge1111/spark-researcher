@@ -173,11 +173,15 @@ class AdapterExecTests(unittest.TestCase):
         self.assertTrue(codex["configured"])
 
     def test_expand_command_template_rejects_unknown_placeholders(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, r"\{malicious_path\}"):
+        with self.assertRaises(RuntimeError) as error:
             _expand_command_template(
                 ["codex", "exec", "--json-out", "{response_path}", "--extra", "{malicious_path}"],
                 {"response_path": "response.json"},
             )
+
+        message = str(error.exception)
+        self.assertIn("{malicious_path}", message)
+        self.assertIn("Allowed placeholders: {response_path}.", message)
 
     def test_expand_command_template_allows_known_placeholders_inside_args(self) -> None:
         command = _expand_command_template(
@@ -204,6 +208,20 @@ class AdapterExecTests(unittest.TestCase):
                     self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
                     self.assertEqual(Path(result["user_prompt_path"]).read_text(encoding="utf-8"), "user")
                     self.assertEqual(result["command"][0].lower(), "powershell")
+
+    def test_execute_advisory_missing_command_names_configuration_env(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(RuntimeError) as error:
+                    execute_advisory(runtime_root, advisory=advisory, model="claude", dry_run=True)
+
+            message = str(error.exception)
+            self.assertIn("No execution command configured for model `claude`.", message)
+            self.assertIn("SPARK_RESEARCHER_ADAPTER_CLAUDE_COMMAND", message)
+            self.assertIn("--command", message)
+            self.assertFalse((runtime_root / "artifacts" / "advisory" / "requests").exists())
 
     def test_execute_advisory_requires_governor_before_subprocess_or_request_files(self) -> None:
         advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
@@ -239,6 +257,80 @@ class AdapterExecTests(unittest.TestCase):
             self.assertEqual(result["returncode"], 0)
             self.assertEqual(result["response"], {"raw_response": "provider ok"})
             self.assertEqual(Path(result["system_prompt_path"]).read_text(encoding="utf-8"), "system")
+
+    def test_execute_advisory_response_disappearance_falls_back_to_stdout(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        governor_decision = _governor_decision()
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            completed = subprocess.CompletedProcess(args=["codex"], returncode=0, stdout="provider ok", stderr="")
+            with patch("spark_researcher.adapters.exec.subprocess.run", return_value=completed):
+                with patch.object(Path, "exists", return_value=True):
+                    result = execute_advisory(
+                        runtime_root,
+                        advisory=advisory,
+                        model="codex",
+                        command_override=["codex", "exec", "--json-out", "{response_path}"],
+                        dry_run=False,
+                        governor_decision=governor_decision,
+                    )
+
+            self.assertEqual(result["response"], {"raw_response": "provider ok"})
+
+    def test_execute_advisory_invalid_response_bytes_are_replaced(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+
+        def write_invalid_response(command, **_kwargs):
+            response_arg = next(item for item in command if item.endswith(".response.json"))
+            Path(response_arg).write_bytes(b"\xffnot-json")
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="ignored", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("spark_researcher.adapters.exec.subprocess.run", side_effect=write_invalid_response):
+                result = execute_advisory(
+                    Path(tmp),
+                    advisory=advisory,
+                    model="codex",
+                    command_override=["codex", "exec", "--json-out", "{response_path}"],
+                    dry_run=False,
+                    governor_decision=_governor_decision(),
+                )
+
+            self.assertEqual(result["response"], {"raw_response": "�not-json"})
+
+    def test_execute_advisory_invalid_json_reads_response_once(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        original_read_text = Path.read_text
+        response_reads = 0
+
+        def one_response_read(path: Path, *args, **kwargs):
+            nonlocal response_reads
+            if path.name.endswith(".response.json"):
+                response_reads += 1
+                if response_reads > 1:
+                    raise FileNotFoundError(path)
+                return "not-json"
+            return original_read_text(path, *args, **kwargs)
+
+        def write_invalid_response(command, **_kwargs):
+            response_arg = next(item for item in command if item.endswith(".response.json"))
+            Path(response_arg).write_text("not-json", encoding="utf-8")
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="ignored", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("spark_researcher.adapters.exec.subprocess.run", side_effect=write_invalid_response):
+                with patch.object(Path, "read_text", autospec=True, side_effect=one_response_read):
+                    result = execute_advisory(
+                        Path(tmp),
+                        advisory=advisory,
+                        model="codex",
+                        command_override=["codex", "exec", "--json-out", "{response_path}"],
+                        dry_run=False,
+                        governor_decision=_governor_decision(),
+                    )
+
+            self.assertEqual(response_reads, 1)
+            self.assertEqual(result["response"], {"raw_response": "not-json"})
 
     def test_execute_advisory_short_circuits_on_empty_prompts(self) -> None:
         # Both prompts blank/whitespace: the adapter must skip the subprocess
@@ -280,6 +372,43 @@ class AdapterExecTests(unittest.TestCase):
             run_mock.assert_called_once()
             self.assertEqual(result["returncode"], 0)
             self.assertNotIn("skipped_reason", result)
+
+    def test_execute_advisory_times_out_with_bounded_config_and_error_trace(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {"SPARK_RESEARCHER_SUBPROCESS_TIMEOUT_SECONDS": "9"}, clear=False):
+                with patch(
+                    "spark_researcher.adapters.exec.subprocess.run",
+                    side_effect=subprocess.TimeoutExpired(cmd=["codex"], timeout=9),
+                ) as run_mock:
+                    with self.assertRaisesRegex(RuntimeError, "timed out after 9 seconds"):
+                        execute_advisory(
+                            runtime_root,
+                            advisory=advisory,
+                            model="codex",
+                            command_override=["codex", "exec", "--json-out", "{response_path}"],
+                            dry_run=False,
+                            governor_decision=_governor_decision(),
+                        )
+            self.assertEqual(run_mock.call_args.kwargs["timeout"], 9.0)
+
+    def test_execute_advisory_rejects_nonfinite_timeout_before_spawn(self) -> None:
+        advisory = {"trace_id": "trace-1", "adapter_request": {"system_prompt": "system", "user_prompt": "user"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = Path(tmp)
+            with patch.dict(os.environ, {"SPARK_RESEARCHER_SUBPROCESS_TIMEOUT_SECONDS": "nan"}, clear=False):
+                with patch("spark_researcher.adapters.exec.subprocess.run") as run_mock:
+                    with self.assertRaisesRegex(RuntimeError, "subprocess timeout configuration is invalid"):
+                        execute_advisory(
+                            runtime_root,
+                            advisory=advisory,
+                            model="codex",
+                            command_override=["codex", "exec", "--json-out", "{response_path}"],
+                            dry_run=False,
+                            governor_decision=_governor_decision(),
+                        )
+            run_mock.assert_not_called()
 
 
 if __name__ == "__main__":

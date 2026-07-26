@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -39,19 +40,28 @@ def _write_stale_file(docs_root: Path, name: str = "stale-old.md") -> Path:
 def _run_sync_with_locked(repo_root: Path, runtime_root: Path, locked_name: str):
     """Run sync_memory with build_beliefs mocked and a simulated locked file."""
     original_unlink = Path.unlink
+    original_replace = os.replace
+    docs_root = _documents_root(runtime_root)
 
     def selective_unlink(self: Path, *args, **kwargs):
         if self.name == locked_name:
             raise PermissionError("file in use")
         return original_unlink(self, *args, **kwargs)
 
+    def selective_replace(source, target):
+        target_path = Path(target)
+        if target_path.parent == docs_root and target_path.name == locked_name:
+            raise PermissionError("file in use")
+        return original_replace(source, target)
+
     with patch("spark_researcher.memory.build_beliefs"):
         with patch.object(Path, "unlink", selective_unlink):
-            return sync_memory(
-                repo_root,
-                runtime_root,
-                governor_decision=_governor(repo_root, runtime_root),
-            )
+            with patch("spark_researcher.memory.os.replace", selective_replace):
+                return sync_memory(
+                    repo_root,
+                    runtime_root,
+                    governor_decision=_governor(repo_root, runtime_root),
+                )
 
 
 def _run_sync(repo_root: Path, runtime_root: Path):

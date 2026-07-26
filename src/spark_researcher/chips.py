@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,30 @@ LOCAL_STATE_DIR_NAMES = (".paperclip-data", ".next", ".nuxt", ".svelte-kit", ".t
 LOCAL_PATH_SUFFIXES = (".py", ".sh", ".ps1", ".cmd", ".bat", ".exe")
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+HOOK_ENV_ALLOWLIST = frozenset(
+    {
+        "COMSPEC",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "NO_COLOR",
+        "NUMBER_OF_PROCESSORS",
+        "PATH",
+        "PATHEXT",
+        "PYTHONIOENCODING",
+        "PYTHONUTF8",
+        "SYSTEMROOT",
+        "TEMP",
+        "TERM",
+        "TMP",
+        "TMPDIR",
+        "TZ",
+        "USERPROFILE",
+        "VIRTUAL_ENV",
+        "WINDIR",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -57,10 +82,13 @@ def load_chip_context(config_path: Path, config: ProjectConfig | None = None) ->
         return None
     manifest_path = chip_root / str(loaded.chip.manifest or "spark-chip.json")
     if not manifest_path.exists():
-        raise RuntimeError("Chip manifest not found")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        raise RuntimeError("Chip manifest not found.")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError):
+        raise RuntimeError("Chip manifest could not be read as valid JSON.") from None
     if not isinstance(manifest, dict):
-        raise RuntimeError("Chip manifest must be a JSON object")
+        raise RuntimeError("Chip manifest must be a JSON object.")
     return ChipContext(
         repo_root=config_path.parent.resolve(),
         runtime_root=resolve_runtime_root(config_path),
@@ -370,14 +398,14 @@ def _validate_hook_response(hook: str, response: dict[str, Any]) -> None:
 
 
 def _build_hook_env(context: ChipContext) -> dict[str, str]:
-    env = os.environ.copy()
+    env = {key: value for key, value in os.environ.items() if key.upper() in HOOK_ENV_ALLOWLIST}
     pythonpath_parts: list[str] = []
     spark_src = Path(__file__).resolve().parents[1]
     chip_src = context.chip_root / "src"
     for path in (spark_src, chip_src, context.chip_root):
         if path.exists():
             pythonpath_parts.append(str(path))
-    existing = env.get("PYTHONPATH", "").strip()
+    existing = os.environ.get("PYTHONPATH", "").strip()
     if existing:
         pythonpath_parts.append(existing)
     if pythonpath_parts:
@@ -417,10 +445,10 @@ def invoke_chip_hook(
     command = _command_parts(commands[hook])
     hook_root = chips_root(context.runtime_root) / str(context.manifest.get("chip_name", context.chip_root.name)) / hook
     hook_root.mkdir(parents=True, exist_ok=True)
-    stamp = _now_slug()
-    input_path = hook_root / f"{stamp}.input.json"
-    output_path = hook_root / f"{stamp}.output.json"
-    log_path = hook_root / f"{stamp}.log"
+    invocation_root = Path(tempfile.mkdtemp(prefix=f"{_now_slug()}-", dir=hook_root))
+    input_path = invocation_root / "input.json"
+    output_path = invocation_root / "output.json"
+    log_path = invocation_root / "hook.log"
     envelope = {
         "hook": hook,
         "repo_root": str(context.repo_root),
@@ -474,8 +502,11 @@ def invoke_chip_hook(
     if result.returncode != 0:
         raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():
-        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file")
-    response = json.loads(output_path.read_text(encoding="utf-8-sig"))
+        raise RuntimeError(f"Chip hook `{hook}` did not produce an output file.")
+    try:
+        response = json.loads(output_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError):
+        raise RuntimeError(f"Chip hook `{hook}` returned an unreadable or invalid JSON response.") from None
     if not isinstance(response, dict):
         raise RuntimeError(f"Chip hook `{hook}` must return a JSON object.")
     _validate_hook_response(hook, response)

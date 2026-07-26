@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+from . import __version__
 
 from .adapters import adapter_status, execute_advisory, execution_public_summary, execution_status
 from .advisory import build_advisory
@@ -31,7 +34,10 @@ from .trainers import run_all_trainers, trainer_status
 
 
 def print_json(payload: object) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    if sys.stdout.isatty():
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    print(json.dumps(payload, separators=(",", ":"), sort_keys=True))
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -94,6 +100,7 @@ def _load_governor_decision(path: str | None) -> dict | None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spark-researcher")
+    parser.add_argument("--version", action="version", version=f"spark-researcher {__version__}")
     sub = parser.add_subparsers(dest="action")
 
     init_parser = sub.add_parser("init")
@@ -136,11 +143,11 @@ def build_parser() -> argparse.ArgumentParser:
     candidates_suggest = candidates_sub.add_parser("suggest")
     add_config_argument(candidates_suggest)
     candidates_suggest.add_argument("--command", dest="project_command", required=True)
-    candidates_suggest.add_argument("--limit", type=int, default=3)
+    candidates_suggest.add_argument("--limit", type=_positive_int, default=3)
     candidates_apply = candidates_sub.add_parser("apply")
     add_config_argument(candidates_apply)
     candidates_apply.add_argument("--command", dest="project_command", required=True)
-    candidates_apply.add_argument("--limit", type=int, default=3)
+    candidates_apply.add_argument("--limit", type=_positive_int, default=3)
 
     packets_parser = sub.add_parser("packets")
     packets_sub = packets_parser.add_subparsers(dest="packets_command")
@@ -303,8 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
     self_edit_policy_parser = self_edit_sub.add_parser("policy")
     add_config_argument(self_edit_policy_parser)
     self_edit_policy_parser.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_policy_parser.add_argument("--push", action="store_true")
-    self_edit_policy_parser.add_argument("--no-push", action="store_true")
+    policy_push_group = self_edit_policy_parser.add_mutually_exclusive_group()
+    policy_push_group.add_argument("--push", action="store_true")
+    policy_push_group.add_argument("--no-push", action="store_true")
     self_edit_policy_parser.add_argument("--branch-prefix")
     self_edit_policy_parser.add_argument("--main-branch")
     self_edit_policy_parser.add_argument("--commit-message-template")
@@ -322,8 +330,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_config_argument(self_edit_apply)
     self_edit_apply.add_argument("--proposal-id", required=True)
     self_edit_apply.add_argument("--git-mode", choices=["manual", "branch", "main"])
-    self_edit_apply.add_argument("--push", action="store_true")
-    self_edit_apply.add_argument("--no-push", action="store_true")
+    apply_push_group = self_edit_apply.add_mutually_exclusive_group()
+    apply_push_group.add_argument("--push", action="store_true")
+    apply_push_group.add_argument("--no-push", action="store_true")
     self_edit_apply.add_argument("--branch-name")
     self_edit_apply.add_argument("--commit-message")
     self_edit_apply.add_argument("--governor-decision", required=True)
@@ -589,7 +598,7 @@ def main() -> None:
     args = parser.parse_args()
     if not args.action:
         parser.print_help()
-        return
+        raise SystemExit(2)
     if args.action == "init":
         print_json({"config_path": str(init_project(Path(args.path).resolve(), preset=args.preset, project_name=args.project_name))})
         return
@@ -634,6 +643,7 @@ def main() -> None:
                 dry_run=args.dry_run,
                 limit=args.limit,
                 governor_decision=_load_governor_decision(args.governor_decision),
+                emit_progress=True,
             )
         )
         return

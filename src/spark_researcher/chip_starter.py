@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import keyword
 import re
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
 from .authority import require_chip_create_authority
+
+
+PACKAGE_NAME_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
 def _slug(value: str) -> str:
@@ -16,6 +20,12 @@ def _slug(value: str) -> str:
 
 def _package_name(chip_name: str) -> str:
     return _slug(chip_name).replace(".", "_").replace("-", "_")
+
+
+def _assert_safe_package_name(package_name: str) -> str:
+    if not PACKAGE_NAME_PATTERN.fullmatch(package_name) or keyword.iskeyword(package_name):
+        raise RuntimeError("Chip package name is invalid.")
+    return package_name
 
 
 def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
@@ -133,6 +143,7 @@ def _pyproject(chip_name: str, description: str) -> str:
 
 
 def _generic_manifest(chip_name: str, domain: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -289,6 +300,7 @@ def _generic_cli(package_name: str, domain: str, metric_name: str, goal: str) ->
 
 
 def _crypto_manifest(chip_name: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -604,6 +616,7 @@ def _crypto_bridge() -> str:
 
 
 def _xcontent_manifest(chip_name: str, package_name: str) -> str:
+    _assert_safe_package_name(package_name)
     payload = {
         "schema_version": "spark-chip.v1",
         "io_protocol": "spark-hook-io.v1",
@@ -1181,7 +1194,7 @@ def init_chip(
 ) -> dict[str, Any]:
     root = ensure_external_chip_target(target_dir)
     authority = require_chip_create_authority(governor_decision)
-    package = package_name or _package_name(chip_name)
+    package = _assert_safe_package_name(package_name if package_name is not None else _package_name(chip_name))
     if preset == "crypto-trading":
         files = {
             root / ".gitignore": _gitignore(),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -166,8 +167,13 @@ def _evolution_path_id(specialization_key: str, command_name: str) -> str:
     return f"evolution-path:{_slug(specialization_key)}:{_slug(command_name)}"
 
 
+def _public_run_ref(record: dict[str, Any], kind: str) -> str:
+    """Return a stable metadata reference without exposing private local paths."""
+    run_id = _slug(str(record.get("run_id") or "latest"))
+    return f"spark-run:{run_id}:{_slug(kind)}"
+
+
 def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
-    run_id = str(record.get("run_id") or "latest")
     refs = []
     for kind, label, path_key in (
         ("run_trace", "Run directory", "run_dir"),
@@ -179,10 +185,10 @@ def _artifact_refs(record: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         refs.append(
             {
-                "id": f"{run_id}:{path_key}",
+                "id": _public_run_ref(record, path_key.removesuffix("_path").removesuffix("_dir")),
                 "kind": kind,
-                "label": label,
-                "path": str(path_value),
+                "label": f"Private local {label.lower()}",
+                "path": None,
                 "url": None,
                 "hash": None,
             }
@@ -569,7 +575,7 @@ def build_spark_swarm_collective_payload(
                 "contradiction": None,
                 "confidence": 0.8 if evidence_lane == "benchmark_evidence" else 0.65,
                 "evidenceLane": evidence_lane,
-                "sourceRefs": [str(record.get("run_dir") or "")] if record.get("run_dir") else [],
+                "sourceRefs": [_public_run_ref(record, "run")] if record.get("run_dir") else [],
                 "status": (
                     "benchmark_supported"
                     if evidence_lane == "benchmark_evidence"
@@ -607,7 +613,7 @@ def build_spark_swarm_collective_payload(
                 "targetId": insight_id if insights else path_id,
                 "severity": "critical" if status != "ok" else "warn",
                 "summary": summary,
-                "sourceRef": str(record.get("log_path") or "") or None,
+                "sourceRef": _public_run_ref(record, "log") if record.get("log_path") else None,
                 "createdAt": emitted_at,
             }
         )
@@ -738,7 +744,11 @@ def publish_latest(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
         "baseline_value": run.get("baseline_value"),
         "verdict": verdict,
         "run_id": run.get("run_id"),
-        "artifact_paths": [run.get("run_dir"), run.get("log_path")],
+        "artifact_refs": [
+            _public_run_ref(run, kind)
+            for kind, key in (("run", "run_dir"), ("log", "log_path"))
+            if run.get(key)
+        ],
     }
     markdown = "\n".join(
         [
@@ -1104,6 +1114,8 @@ def _run_command(
         detail = (error.stderr or error.stdout or "").strip()
         message = detail or f"Command failed: {' '.join(command)}"
         raise RuntimeError(message) from error
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Command timed out after {COLLECTIVE_COMMAND_TIMEOUT_SECONDS} seconds.") from None
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
@@ -1151,6 +1163,13 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "absorb"
+
+
+def _source_repo_path_key(source_repo: str) -> str:
+    raw = str(source_repo).strip()
+    slug = _slugify(raw)[:80]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"{slug}-{digest}"
 
 
 def _ensure_clean_worktree(repo_root: Path) -> None:
@@ -1204,7 +1223,7 @@ def _write_absorb_review_files(
     source_repo: str,
     payload: dict[str, Any],
 ) -> dict[str, Path]:
-    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{source_repo.replace('/', '--')}"
+    review_root = repo_root / ".autoresearch" / "absorbs" / f"{stamp}-{_source_repo_path_key(source_repo)}"
     review_root.mkdir(parents=True, exist_ok=True)
 
     absorbed_path = review_root / "absorbed-insights.json"
@@ -1304,12 +1323,18 @@ def absorb(
     index_path, collective_data = _load_collective_index(repo_root)
     capsule_library = collective_data.get("capsuleLibrary", [])
     matching = [entry for entry in capsule_library if entry.get("repo") == source_repo and entry.get("verdict") == "improved"]
-    matching.sort(key=lambda entry: str(entry.get("createdAt") or ""), reverse=True)
+    matching.sort(
+        key=lambda entry: (
+            str(entry.get("createdAt") or ""),
+            str(entry.get("capsuleId") or entry.get("id") or ""),
+        ),
+        reverse=True,
+    )
     absorbed = matching[: max(limit, 0)]
     if not absorbed:
         raise RuntimeError(f"No improved Insights available to absorb from `{source_repo}`.")
 
-    absorb_root = runtime_root / "artifacts" / "collective-absorb" / source_repo.replace("/", "--")
+    absorb_root = runtime_root / "artifacts" / "collective-absorb" / _source_repo_path_key(source_repo)
     absorb_root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     bundle_path = absorb_root / f"{stamp}-absorb.json"

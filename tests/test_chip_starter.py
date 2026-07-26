@@ -6,6 +6,8 @@ import subprocess
 import sys
 import json
 
+import pytest
+
 for HARNESS_CORE_SRC in (
     Path(__file__).resolve().parents[2] / "spark-harness-core" / "src",
     Path.home() / ".spark" / "modules" / "spark-harness-core" / "source" / "src",
@@ -151,6 +153,48 @@ def test_init_chip_requires_governor_before_creating_target(tmp_path: Path) -> N
         raise AssertionError("Expected chip creation to require Governor authority")
 
     assert not chip_root.exists()
+
+
+@pytest.mark.parametrize(
+    "package_name",
+    [
+        "../../outside",
+        "valid_name; import os",
+        "valid-name",
+        "9starts_with_digit",
+        "class",
+        "a" * 65,
+    ],
+)
+def test_init_chip_rejects_unsafe_explicit_package_names_without_reflecting_input(
+    package_name: str, tmp_path: Path
+) -> None:
+    chip_root = tmp_path / "domain-chip-marketing"
+
+    with pytest.raises(RuntimeError, match=r"^Chip package name is invalid\.$") as exc_info:
+        chip_starter.init_chip(
+            chip_root,
+            chip_name="domain-chip-marketing",
+            domain="marketing",
+            metric_name="marketing_score",
+            package_name=package_name,
+            governor_decision=_chip_create_governor_decision(),
+        )
+
+    assert package_name not in str(exc_info.value)
+    assert not chip_root.exists()
+
+
+def test_manifest_builders_share_the_package_name_guard() -> None:
+    builders = (
+        lambda: chip_starter._generic_manifest("domain-chip-example", "example", "../escape"),
+        lambda: chip_starter._crypto_manifest("domain-chip-example", "../escape"),
+        lambda: chip_starter._xcontent_manifest("domain-chip-example", "../escape"),
+    )
+
+    for build in builders:
+        with pytest.raises(RuntimeError, match=r"^Chip package name is invalid\.$"):
+            build()
 
 
 def test_init_chip_rejects_wrong_governor_before_creating_target(tmp_path: Path) -> None:

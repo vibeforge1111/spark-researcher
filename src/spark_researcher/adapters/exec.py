@@ -12,6 +12,7 @@ from typing import Any
 
 from ..authority import require_advisory_execution_authority
 from ..paths import advisory_root
+from ..subprocess_policy import subprocess_timeout_seconds
 from ..tracing import start_trace
 
 
@@ -126,7 +127,11 @@ def _expand_command_template(command: list[str], replacements: dict[str, str]) -
         unknown = sorted({match.group(1) for match in _PLACEHOLDER_RE.finditer(part)} - allowed)
         if unknown:
             names = ", ".join(f"{{{name}}}" for name in unknown)
-            raise RuntimeError(f"Execution command uses unsupported template placeholder(s): {names}.")
+            allowed_names = ", ".join(f"{{{name}}}" for name in sorted(allowed)) or "none"
+            raise RuntimeError(
+                f"Execution command uses unsupported template placeholder(s): {names}. "
+                f"Allowed placeholders: {allowed_names}."
+            )
         next_part = str(part)
         for name, value in replacements.items():
             next_part = next_part.replace(f"{{{name}}}", value)
@@ -238,7 +243,11 @@ def execute_advisory(
 ) -> dict[str, Any]:
     command = _resolve_command(model, command_override)
     if not command:
-        raise RuntimeError(f"No execution command configured for model `{model}`.")
+        env_key = ENV_KEYS[model]
+        raise RuntimeError(
+            f"No execution command configured for model `{model}`. "
+            f"Set {env_key} to the executable command line or pass --command."
+        )
     authority = None if dry_run else require_advisory_execution_authority(governor_decision)
     trace = start_trace(
         runtime_root,
@@ -311,18 +320,35 @@ def execute_advisory(
             "trace_id": trace.trace_id,
             "trace_path": str(trace.path),
         }
-    with trace.span("subprocess", attributes={"command": expanded}):
-        result = subprocess.run(expanded, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+    timeout_seconds = subprocess_timeout_seconds(300)
+    try:
+        with trace.span("subprocess", attributes={"command": expanded, "timeout_seconds": timeout_seconds}):
+            result = subprocess.run(
+                expanded,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+    except subprocess.TimeoutExpired:
+        message = f"Advisory execution timed out after {timeout_seconds:g} seconds."
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text(message, encoding="utf-8")
+        trace.finish(status="error", attributes={"error": "subprocess_timeout", "timeout_seconds": timeout_seconds})
+        raise RuntimeError(message) from None
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
     response_payload: dict[str, Any]
-    if response_path.exists():
-        try:
-            response_payload = json.loads(response_path.read_text(encoding="utf-8-sig"))
-        except json.JSONDecodeError:
-            response_payload = {"raw_response": response_path.read_text(encoding="utf-8", errors="replace")}
-    else:
+    try:
+        raw_response_text = response_path.read_text(encoding="utf-8-sig", errors="replace")
+    except FileNotFoundError:
         response_payload = {"raw_response": result.stdout.strip()}
+    else:
+        try:
+            response_payload = json.loads(raw_response_text)
+        except json.JSONDecodeError:
+            response_payload = {"raw_response": raw_response_text}
     trace.finish(status="ok" if result.returncode == 0 else "error", attributes={"returncode": result.returncode, "response_path": str(response_path)})
     return {
         "model": model,

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import json
 from pathlib import Path
 
 from spark_researcher.candidates import (
     _continuous_status_path,
     _load_continuous_status,
+    _mark_stale_continuous_status,
     _write_continuous_status,
     run_continuous_autoloop,
 )
@@ -72,3 +75,57 @@ def test_continuous_status_malformed_json_returns_empty(tmp_path: Path) -> None:
     path.write_text("{not-json", encoding="utf-8")
 
     assert _load_continuous_status(tmp_path) == {}
+
+
+def test_continuous_status_failed_replace_preserves_previous_state_and_cleans_temp(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = _continuous_status_path(tmp_path)
+    _write_continuous_status(tmp_path, {"current_pass": {"status": "running"}})
+    previous = path.read_bytes()
+
+    def fail_replace(_source: str, _target: Path) -> None:
+        raise OSError("interrupted replacement")
+
+    monkeypatch.setattr("spark_researcher.candidates.os.replace", fail_replace)
+
+    try:
+        _write_continuous_status(tmp_path, {"current_pass": {"status": "complete"}})
+    except OSError as error:
+        assert str(error) == "interrupted replacement"
+    else:
+        raise AssertionError("replacement failure should propagate")
+
+    assert path.read_bytes() == previous
+    assert list(path.parent.glob(f".{path.name}.*.tmp")) == []
+
+
+def test_mark_stale_continuous_status_is_one_locked_read_modify_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = _continuous_status_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"current_pass": {"status": "running", "writer_pid": 999_999}}),
+        encoding="utf-8",
+    )
+    acquisitions: list[Path] = []
+
+    @contextmanager
+    def one_transaction(target: Path):
+        acquisitions.append(target)
+        if len(acquisitions) > 1:
+            raise AssertionError("stale marking released the lock between read and write")
+        yield
+
+    monkeypatch.setattr("spark_researcher.candidates.locked_file", one_transaction)
+    monkeypatch.setattr("spark_researcher.candidates._process_alive", lambda _pid: False)
+
+    payload = _mark_stale_continuous_status(tmp_path)
+
+    assert acquisitions == [path]
+    assert payload["current_pass"]["status"] == "stale"
+    assert json.loads(path.read_text(encoding="utf-8"))["current_pass"]["status"] == "stale"
+    assert list(path.parent.glob(f".{path.name}.*.tmp")) == []

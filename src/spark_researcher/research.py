@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from datetime import UTC, datetime
 from html import escape, unescape
 from pathlib import Path
@@ -14,9 +15,20 @@ from .adapters import adapter_request
 from .authority import memory_authority_refs, require_advisory_execution_authority, require_memory_write_authority
 from .memory import episode_memory_authority_refs, record_episode, working_memory_authority_refs, write_working_memory
 from .paths import advisory_root
-from .safe_url import UnsafeURL, assert_safe_url, safe_urlopen
+from .safe_url import UnsafeURL, assert_safe_url, read_bounded_response, safe_urlopen
 from .tracing import start_trace
 from .verifier import execute_with_verifier
+
+
+_DDG_LINK_PATTERN = re.compile(
+    r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+    re.IGNORECASE | re.DOTALL,
+)
+_DDG_SNIPPET_PATTERN = re.compile(
+    r"result__snippet[^>]*>(.*?)</[^>]+>",
+    re.IGNORECASE | re.DOTALL,
+)
+_HTML_TAG_PATTERN = re.compile(r"<.*?>")
 
 INVISIBLE_UNICODE_CHARS = {
     "\u200b": "ZERO WIDTH SPACE",
@@ -32,10 +44,10 @@ INVISIBLE_UNICODE_CHARS = {
 }
 STORED_PROMPT_INJECTION_PATTERNS = (
     ("instruction-override", re.compile(r"\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+instructions\b", re.I)),
-    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b.*\b(override|replace|ignore)\b", re.I)),
+    ("system-prompt-override", re.compile(r"\b(system|developer)\s+(prompt|message|instruction)s?\b[\s\S]{0,200}\b(override|replace|ignore)\b", re.I)),
     ("hidden-html", re.compile(r"<!--|<\s*(?:div|span)[^>]*(?:display\s*:\s*none|visibility\s*:\s*hidden)", re.I)),
-    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b.*\b(\.env|secret|token|api[_-]?key|password)\b", re.I)),
-    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b.*(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I)),
+    ("secret-exfiltration", re.compile(r"\b(curl|wget|fetch)\b[\s\S]{0,200}\b(\.env|secret|token|api[_-]?key|password)\b", re.I)),
+    ("secret-file-request", re.compile(r"\b(read|open|print|cat|get-content)\b[\s\S]{0,200}(\.env|secrets\.local\.json|id_rsa|\.ssh|api[_-]?key)\b", re.I)),
     ("private-key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.I)),
 )
 
@@ -53,18 +65,18 @@ def _bounded_web_results(query: str, *, limit: int = 5) -> list[dict[str, str]]:
     request = Request(url, headers={"User-Agent": "spark-researcher/0.1"})
     try:
         with safe_urlopen(request, timeout=6) as response:
-            page = response.read().decode("utf-8", errors="replace")
+            page = read_bounded_response(response).decode("utf-8", errors="replace")
     except (URLError, OSError, ValueError):
         return []
-    links = re.findall(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page, flags=re.IGNORECASE | re.DOTALL)
-    snippets = re.findall(r'result__snippet[^>]*>(.*?)</[^>]+>', page, flags=re.IGNORECASE | re.DOTALL)
+    links = _DDG_LINK_PATTERN.findall(page)
+    snippets = _DDG_SNIPPET_PATTERN.findall(page)
     results: list[dict[str, str]] = []
     for index, link in enumerate(links[:limit]):
         href, title = link
-        clean_title = re.sub(r"<.*?>", "", unescape(title)).strip()
+        clean_title = _HTML_TAG_PATTERN.sub("", unescape(title)).strip()
         clean_snippet = ""
         if index < len(snippets):
-            clean_snippet = re.sub(r"<.*?>", "", unescape(snippets[index])).strip()
+            clean_snippet = _HTML_TAG_PATTERN.sub("", unescape(snippets[index])).strip()
         if clean_title:
             clean_url = _clean_result_url(href)
             results.append(
@@ -121,12 +133,23 @@ def _domain_from_url(url: str) -> str:
     return netloc
 
 
+def _unicode_format_chars(text: str) -> list[tuple[str, str]]:
+    chars: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for char in text:
+        if char in seen or unicodedata.category(char) != "Cf":
+            continue
+        seen.add(char)
+        name = INVISIBLE_UNICODE_CHARS.get(char) or unicodedata.name(char, "UNICODE FORMAT CHARACTER")
+        chars.append((char, name))
+    return chars
+
+
 def scan_untrusted_research_text(value: Any) -> list[str]:
     text = str(value or "")
     findings: list[str] = []
-    for char, name in INVISIBLE_UNICODE_CHARS.items():
-        if char in text:
-            findings.append(f"invisible-unicode: U+{ord(char):04X} {name}")
+    for char, name in _unicode_format_chars(text):
+        findings.append(f"invisible-unicode: U+{ord(char):04X} {name}")
     for category, pattern in STORED_PROMPT_INJECTION_PATTERNS:
         if pattern.search(text):
             findings.append(category)
@@ -135,7 +158,7 @@ def scan_untrusted_research_text(value: Any) -> list[str]:
 
 def sanitize_untrusted_research_text(value: Any) -> str:
     text = str(value or "")
-    for char, name in INVISIBLE_UNICODE_CHARS.items():
+    for char, name in _unicode_format_chars(text):
         text = text.replace(char, f"[blocked invisible unicode U+{ord(char):04X} {name}]")
     for category, pattern in STORED_PROMPT_INJECTION_PATTERNS:
         if pattern.search(text):
@@ -154,12 +177,15 @@ def _write_research_artifact(
     payload: dict[str, Any],
     *,
     governor_decision: dict[str, Any] | None = None,
-) -> Path:
+) -> Path | None:
     root = advisory_root(runtime_root) / "research"
     require_memory_write_authority(governor_decision, binding_refs=research_artifact_authority_refs(runtime_root))
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{_now_slug()}.json"
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{_now_slug()}.json"
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return None
     return path
 
 
@@ -347,7 +373,7 @@ def execute_with_research(
     artifact_path = None
     if memory_authority:
         artifact_path = _write_research_artifact(runtime_root, research, governor_decision=memory_governor_decision)
-        research["artifact_path"] = str(artifact_path)
+        research["artifact_path"] = str(artifact_path) if artifact_path is not None else None
     else:
         research["artifact_path"] = None
     if not results:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ for HARNESS_CORE_SRC in (
         break
 
 from spark_harness_core import HarnessKernel, evidence_ref
+from spark_researcher import self_edit
 from spark_researcher.config import CommandSpec, MetricSpec, ProjectConfig, save_config
 from spark_researcher.self_edit import (
     SELF_EDIT_APPLY_CAPABILITY_ID,
@@ -22,6 +24,7 @@ from spark_researcher.self_edit import (
     _apply_result_ledger_path,
     _proposal_path,
     _review_path,
+    _workspace_dir,
     apply_proposal,
     proposal_public_summary,
 )
@@ -105,7 +108,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
     )
     target = repo_root / "README.md"
     target.write_text("old\n", encoding="utf-8")
-    workspace_root = repo_root / "proposal-workspace"
+    workspace_root = _workspace_dir(proposal_id)
     workspace_root.mkdir()
     (workspace_root / "README.md").write_text("new\n", encoding="utf-8")
     proposal = {
@@ -114,6 +117,7 @@ def _write_self_edit_fixture(repo_root: Path, proposal_id: str) -> tuple[Path, P
         "change_count": 1,
         "blocked_changes": [],
         "allowed_changes": [{"path": "README.md", "status": "modified"}],
+        "mutable_targets": ["README.md"],
         "workspace_root": str(workspace_root),
     }
     proposal_path = _proposal_path(repo_root, proposal_id)
@@ -165,6 +169,23 @@ def test_proposal_public_summary_omits_prompt_diffs_and_raw_agent_text() -> None
     assert "SECRET_DIFF_SENTINEL" not in encoded
     assert "SECRET_BLOCKED_DIFF_SENTINEL" not in encoded
     assert "SECRET_HOME" not in encoded
+
+
+def test_git_output_error_omits_raw_stderr(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_detail = f"fatal: cannot read {tmp_path / 'private-token-secret'}"
+    monkeypatch.setattr(
+        self_edit,
+        "_git",
+        lambda _repo_root, *_args: subprocess.CompletedProcess(["git", "status"], 1, "", private_detail),
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        self_edit._git_output(tmp_path, "status", "--porcelain")
+
+    message = str(error.value)
+    assert "git status failed" in message
+    assert private_detail not in message
+    assert str(tmp_path) not in message
 
 
 def test_apply_proposal_checks_remote_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -227,6 +248,85 @@ def test_apply_proposal_records_push_failure_state(monkeypatch: pytest.MonkeyPat
     assert ledger["result"]["status"] == "failure"
 
 
+def test_apply_proposal_restores_files_when_commit_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-commit-failure"
+    repo_root = tmp_path / "repo"
+    config_path, target = _write_self_edit_fixture(repo_root, proposal_id)
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.name", "Self Edit Test"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "self-edit@example.invalid"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "README.md"], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=repo_root, check=True)
+
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+
+    def fail_commit(_repo_root: Path, _paths: list[str], _message: str) -> str:
+        subprocess.run(["git", "add", "--", *_paths], cwd=_repo_root, check=True)
+        raise RuntimeError("commit rejected")
+
+    monkeypatch.setattr("spark_researcher.self_edit._commit_paths", fail_commit)
+
+    with pytest.raises(RuntimeError, match="commit rejected"):
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=False,
+            governor_decision=_governor_decision(proposal_id),
+        )
+
+    assert target.read_text(encoding="utf-8") == "old\n"
+    proposal = json.loads(_proposal_path(repo_root, proposal_id).read_text(encoding="utf-8"))
+    assert proposal["status"] == "apply_failed"
+    assert proposal["rollback_attempted"] is True
+    assert proposal["rollback_complete"] is True
+    assert subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--", "README.md"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout == ""
+    assert subprocess.run(
+        ["git", "diff", "--name-only", "--", "README.md"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout == ""
+
+
+def test_apply_proposal_removes_new_files_when_commit_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-new-file-commit-failure"
+    repo_root = tmp_path / "repo"
+    config_path, _target = _write_self_edit_fixture(repo_root, proposal_id)
+    proposal_path = _proposal_path(repo_root, proposal_id)
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["allowed_changes"] = [{"path": "NEW.md", "status": "added"}]
+    proposal["mutable_targets"] = ["NEW.md"]
+    proposal_path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
+    (Path(proposal["workspace_root"]) / "NEW.md").write_text("new\n", encoding="utf-8")
+
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+    monkeypatch.setattr(
+        "spark_researcher.self_edit._commit_paths",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("commit rejected")),
+    )
+
+    with pytest.raises(RuntimeError, match="commit rejected"):
+        apply_proposal(
+            config_path,
+            proposal_id,
+            git_mode_override="main",
+            push_override=False,
+            governor_decision=_governor_decision(proposal_id),
+        )
+
+    assert not (repo_root / "NEW.md").exists()
+
+
 def test_apply_proposal_requires_governor_before_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     proposal_id = "proposal-3"
     config_path, target = _write_self_edit_fixture(tmp_path / "repo", proposal_id)
@@ -236,6 +336,37 @@ def test_apply_proposal_requires_governor_before_copy(monkeypatch: pytest.Monkey
         apply_proposal(config_path, proposal_id, git_mode_override="manual")
 
     assert target.read_text(encoding="utf-8") == "old\n"
+
+
+def test_apply_proposal_tolerates_concurrent_target_deletion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    proposal_id = "proposal-delete-race"
+    repo_root = tmp_path / "repo"
+    config_path, target = _write_self_edit_fixture(repo_root, proposal_id)
+    proposal_path = _proposal_path(repo_root, proposal_id)
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["allowed_changes"] = [{"path": "README.md", "status": "deleted"}]
+    proposal_path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
+    target.unlink()
+
+    original_exists = Path.exists
+
+    def racing_exists(path: Path) -> bool:
+        return True if path == target else original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", racing_exists)
+    monkeypatch.setattr("spark_researcher.self_edit.run_git_status", lambda repo_root: False)
+    monkeypatch.setattr("spark_researcher.self_edit._current_branch", lambda repo_root: "main")
+
+    result = apply_proposal(
+        config_path,
+        proposal_id,
+        git_mode_override="manual",
+        push_override=False,
+        governor_decision=_governor_decision(proposal_id),
+    )
+
+    assert result["applied_files"] == ["README.md"]
+    assert json.loads(proposal_path.read_text(encoding="utf-8"))["status"] == "applied"
 
 
 def test_apply_proposal_rejects_governor_for_another_proposal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

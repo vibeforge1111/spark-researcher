@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import math
 import os
 import re
+import secrets
 import shutil
 import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -18,8 +21,12 @@ from .chips import invoke_chip_hook
 from .collective import write_spark_swarm_collective_payload
 from .config import CandidateTrial, ProjectConfig, intent_policy, load_config, mutation_lookup, resolve_project_root, trial_applies_to_command
 from .failures import record_failure
-from .paths import IGNORED_NAMES, ledger_path, resolve_runtime_root, runs_root
+from .paths import IGNORED_NAMES, ledger_path, resolve_owned_path, resolve_runtime_root, runs_root
+from .subprocess_policy import subprocess_timeout_seconds
 from .tracing import start_trace
+
+
+MAX_JSONL_READ_BYTES = 50 * 1024 * 1024
 
 
 @dataclass
@@ -81,10 +88,22 @@ def ensure_parent(path: Path) -> None:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            offset = max(0, size - MAX_JSONL_READ_BYTES)
+            stream.seek(offset)
+            raw = stream.read(MAX_JSONL_READ_BYTES)
+    except OSError:
         return []
+    if offset:
+        newline = raw.find(b"\n")
+        if newline < 0:
+            return []
+        raw = raw[newline + 1 :]
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in raw.decode("utf-8", errors="replace").splitlines():
         if not line.strip():
             continue
         try:
@@ -96,36 +115,83 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _is_pid_running(pid: int) -> bool:
-    """Check if a process with the given PID is still running."""
+def _read_lock_ownership(lock_path: Path) -> bytes | None:
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except OSError:
-        # EPERM means the process exists but is owned by another user.
-        return True
-
-
-def _read_lock_token(lock_path: Path) -> str | None:
-    """Return the raw PID token recorded in a lock file, or None if unreadable."""
-    try:
-        token = lock_path.read_text(encoding="utf-8", errors="ignore").strip()
+        ownership = lock_path.read_bytes()
     except OSError:
         return None
-    return token or None
+    return ownership or None
 
 
-def _lock_token_is_stale(token: str | None) -> bool:
-    """A lock token is stale when it is empty/invalid or its PID is dead."""
-    if not token:
-        return True
+def _lock_owner_alive(ownership: bytes) -> bool | None:
+    """Return process liveness, or None when the owner record is not trustworthy."""
     try:
-        pid = int(token.split()[0])
-    except (ValueError, IndexError):
+        pid = int(ownership.split(b":", 1)[0].decode("ascii"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
         return True
-    return not _is_pid_running(pid)
+    except OSError:
+        return True
+    return True
+
+
+def _unlink_lock_if_unchanged(lock_path: Path, expected_ownership: bytes) -> bool:
+    current_ownership = _read_lock_ownership(lock_path)
+    if current_ownership is None or not secrets.compare_digest(current_ownership, expected_ownership):
+        return False
+    try:
+        lock_path.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def _try_reclaim_stale_lock(
+    lock_path: Path,
+    recovery_ownership: bytes,
+    *,
+    allow_untrusted: bool = False,
+) -> bool:
+    """Remove one unchanged stale lock while serializing competing reapers.
+
+    Unparseable ownership is reclaimed only after the caller's wait deadline.
+    That preserves legacy-lock recovery without deleting a newly created lock
+    during the brief interval before its owner record is written.
+    """
+    observed_ownership = _read_lock_ownership(lock_path)
+    owner_alive = _lock_owner_alive(observed_ownership) if observed_ownership is not None else None
+    if observed_ownership is None or (owner_alive is not False and not (allow_untrusted and owner_alive is None)):
+        return False
+
+    recovery_path = lock_path.with_name(lock_path.name + ".reclaim")
+    try:
+        recovery_handle = os.open(str(recovery_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        recovery_owner = _read_lock_ownership(recovery_path)
+        if recovery_owner is not None and _lock_owner_alive(recovery_owner) is False:
+            _unlink_lock_if_unchanged(recovery_path, recovery_owner)
+        return False
+    except OSError:
+        return False
+
+    try:
+        if os.write(recovery_handle, recovery_ownership) != len(recovery_ownership):
+            return False
+        return _unlink_lock_if_unchanged(lock_path, observed_ownership)
+    except OSError:
+        return False
+    finally:
+        os.close(recovery_handle)
+        current_recovery_owner = _read_lock_ownership(recovery_path)
+        if current_recovery_owner is not None:
+            _unlink_lock_if_unchanged(recovery_path, current_recovery_owner)
 
 
 @contextmanager
@@ -134,34 +200,29 @@ def locked_file(path: Path, *, timeout_seconds: float = 30.0):
     lock_path = path.with_name(path.name + ".lock")
     deadline = time.monotonic() + timeout_seconds
     handle: int | None = None
+    ownership = f"{os.getpid()}:{secrets.token_hex(16)}".encode("ascii")
+    recovery_checked = False
     while handle is None:
         try:
             handle = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
-            # Recover a stale lock (holder process is dead / token invalid).
-            # Capture the token first, then re-read immediately before unlinking
-            # so we never delete a lock a different live process re-created
-            # between the staleness check and the unlink (TOCTOU double-acquire).
-            token = _read_lock_token(lock_path)
-            if _lock_token_is_stale(token):
-                try:
-                    if _read_lock_token(lock_path) == token:
-                        lock_path.unlink()
+            deadline_reached = time.monotonic() >= deadline
+            if not recovery_checked or deadline_reached:
+                recovery_checked = True
+                if _try_reclaim_stale_lock(lock_path, ownership, allow_untrusted=deadline_reached):
                     continue
-                except FileNotFoundError:
-                    continue
-            if time.monotonic() >= deadline:
-                # Do not leak the lock path or holder PID into the error.
+            if deadline_reached:
                 raise TimeoutError("Timed out waiting for file lock")
             time.sleep(0.05)
     try:
-        os.write(handle, str(os.getpid()).encode("ascii", errors="ignore"))
+        os.write(handle, ownership)
         yield
     finally:
         os.close(handle)
         try:
-            lock_path.unlink()
-        except FileNotFoundError:
+            if secrets.compare_digest(lock_path.read_bytes(), ownership):
+                lock_path.unlink()
+        except OSError:
             pass
 
 
@@ -238,17 +299,37 @@ def run_process(command: list[str], cwd: Path, log_path: Path, *, dry_run: bool 
         preview = {"cwd": str(cwd), "command": command}
         log_path.write_text(json.dumps(preview, indent=2) + "\n", encoding="utf-8")
         return CommandResult(returncode=0, stdout=json.dumps(preview), stderr="", command=command, cwd=str(cwd))
-    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+    timeout_seconds = subprocess_timeout_seconds(300)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        message = f"Command timed out after {timeout_seconds:g} seconds."
+        log_path.write_text(f"[stderr]\n{message}\n", encoding="utf-8")
+        return CommandResult(returncode=-1, stdout="", stderr=message, command=command, cwd=str(cwd))
     log_path.write_text(result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else ""), encoding="utf-8")
     return CommandResult(result.returncode, result.stdout, result.stderr, command, str(cwd))
 
 
 def parse_metric_value(kind: str, raw: str) -> float | int | str:
     if kind == "int":
-        return int(float(raw))
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(f"Non-finite value for int metric: {raw!r}")
+        return int(value)
     if kind == "str":
         return raw
-    return float(raw)
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError(f"Non-finite value for float metric: {raw!r}")
+    return value
 
 
 def parse_metrics(log_path: Path, metrics: dict[str, Any]) -> dict[str, Any]:
@@ -278,14 +359,28 @@ def apply_mutations(workspace_root: Path, config: ProjectConfig, mutations: dict
                 "No mutable parameters are defined; add entries under `mutable_parameters` in the project config."
             )
         spec = lookup[name]
-        target_path = (workspace_root / spec.file).resolve()
-        text = target_path.read_text(encoding="utf-8-sig")
-        replacement = spec.template.format(value=value)
-        updated, count = re.subn(spec.pattern, replacement, text, count=1)
+        target_path = resolve_owned_path(workspace_root, spec.file)
+        try:
+            text = target_path.read_text(encoding="utf-8-sig")
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Mutable parameter {name!r} targets {spec.file!r}, but that file is missing from the workspace. "
+                "Check the mutable_parameters entry in the project config."
+            ) from exc
+        replacement = spec.template.replace("{value}", value)
+        try:
+            updated, count = re.subn(spec.pattern, lambda _match: replacement, text, count=1)
+        except re.error as exc:
+            raise RuntimeError(
+                f"Mutable parameter {name!r} uses invalid regex pattern {spec.pattern!r} in the project config: {exc}."
+            ) from exc
         if count != 1:
-            raise RuntimeError(f"Expected exactly one replacement for {name} in {target_path}")
+            raise RuntimeError(
+                f"Could not apply mutable parameter {name!r} to {spec.file!r}: "
+                f"pattern {spec.pattern!r} did not match."
+            )
         target_path.write_text(updated, encoding="utf-8")
-        applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root))})
+        applied.append({"name": name, "value": value, "file": str(target_path.relative_to(workspace_root.resolve()))})
     return applied
 
 
@@ -697,6 +792,7 @@ def run_loop(
     dry_run: bool = False,
     limit: int | None = None,
     governor_decision: dict[str, Any] | None = None,
+    emit_progress: bool = False,
 ) -> dict[str, Any]:
     config = load_config(config_path)
     requested_limit = limit or config.guardrails.max_loop_iterations
@@ -705,7 +801,9 @@ def run_loop(
     consecutive_discards = 0
     results: list[dict[str, Any]] = []
     pending_trials = [trial for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)]
-    for trial in pending_trials[:max_iterations]:
+    planned_trials = pending_trials[:max_iterations]
+    planned_count = len(planned_trials)
+    for index, trial in enumerate(planned_trials, start=1):
         record = run_once(
             config_path,
             command_name,
@@ -715,6 +813,17 @@ def run_loop(
             authority_args_path=authority_args_path,
         )
         results.append(record)
+        if emit_progress:
+            try:
+                candidate_id = json.dumps(str(trial.candidate_id), ensure_ascii=True)[1:-1]
+                verdict = json.dumps(str(record.get("verdict")), ensure_ascii=True)[1:-1]
+                print(
+                    f"[{index}/{planned_count}] candidate={candidate_id} verdict={verdict}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except OSError:
+                pass
         if record["verdict"] == "improved":
             consecutive_discards = 0
         elif row_counts_as_discard(record):

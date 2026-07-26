@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
+import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +28,23 @@ MAX_DOCUMENT_STEM_LENGTH = 80
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(content.rstrip() + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _documents_root(runtime_root: Path) -> Path:
@@ -140,6 +159,7 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
     docs_root = _documents_root(runtime_root)
+    episode_state = _episode_memory_state(runtime_root)
     return {
         "backend": "local",
         "document_count": 0,
@@ -151,7 +171,9 @@ def _empty_manifest(runtime_root: Path) -> dict[str, Any]:
         "self_edit_documents": [],
         "chip_documents": [],
         "working_memory": load_working_memory(runtime_root),
-        "episode_count": len(load_episode_memory(runtime_root)),
+        "episode_count": len(episode_state["rows"]),
+        "episode_state": episode_state["status"],
+        "episode_invalid_line_count": episode_state["invalid_line_count"],
     }
 
 
@@ -243,24 +265,33 @@ def _infer_document_kind(path: Path) -> str:
 def _manifest_docs_by_path(runtime_root: Path, *, repo_root: Path, goal: str, config_path: Path | None) -> dict[str, dict[str, Any]]:
     manifest = _local_manifest(runtime_root)
     mapped: dict[str, dict[str, Any]] = {}
+    docs_root = _documents_root(runtime_root)
+    resolved_docs_root = docs_root.resolve(strict=False)
+    documents = manifest.get("documents")
+    if isinstance(documents, list):
+        for item in documents:
+            if not isinstance(item, dict) or not item.get("path"):
+                continue
+            path = Path(str(item["path"])).resolve(strict=False)
+            if path.parent == resolved_docs_root:
+                mapped[str(path)] = {**item, "path": str(path)}
+        return mapped
     for collection_name in ("chip_documents",):
         collection = manifest.get(collection_name, [])
         if isinstance(collection, list):
             for item in collection:
                 if isinstance(item, dict) and item.get("path"):
                     mapped[str(item["path"])] = item
-    docs_root = Path(str(manifest["documents_root"])) if manifest.get("documents_root") else None
-    if docs_root is not None:
-        for path in docs_root.glob("*.md"):
-            mapped.setdefault(
-                str(path),
-                {
-                    "path": str(path),
-                    "kind": _infer_document_kind(path),
-                    "title": path.stem,
-                    "memory_tier": _default_memory_tier(_infer_document_kind(path)),
-                },
-            )
+    for path in docs_root.glob("*.md"):
+        mapped.setdefault(
+            str(path),
+            {
+                "path": str(path),
+                "kind": _infer_document_kind(path),
+                "title": path.stem,
+                "memory_tier": _default_memory_tier(_infer_document_kind(path)),
+            },
+        )
     return mapped
 
 
@@ -278,7 +309,10 @@ def _local_search_results(
     terms = [term for term in normalized_query.lower().split() if term]
     docs_by_path = _manifest_docs_by_path(runtime_root, repo_root=repo_root, goal=goal, config_path=config_path)
     results = []
-    for path in sorted(docs_root.glob("*.md")):
+    for path_text in sorted(docs_by_path):
+        path = Path(path_text)
+        if path.suffix.lower() != ".md" or path.resolve(strict=False).parent != docs_root.resolve(strict=False):
+            continue
         try:
             text = _read_text(path)
         except FileNotFoundError:
@@ -528,16 +562,43 @@ def record_episode(
     return payload
 
 
-def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+def _episode_memory_state(runtime_root: Path, *, limit: int = 12) -> dict[str, Any]:
     path = _episodes_path(runtime_root)
     if not path.exists():
-        return []
-    rows = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    return list(reversed(rows[-limit:]))
+        return {
+            "status": "empty",
+            "valid_line_count": 0,
+            "invalid_line_count": 0,
+            "rows": [],
+        }
+    rows: list[dict[str, Any]] = []
+    invalid_line_count = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            invalid_line_count += 1
+            continue
+        if not isinstance(parsed, dict):
+            invalid_line_count += 1
+            continue
+        rows.append(parsed)
+    if invalid_line_count:
+        status = "partial" if rows else "invalid"
+    else:
+        status = "ready" if rows else "empty"
+    return {
+        "status": status,
+        "valid_line_count": len(rows),
+        "invalid_line_count": invalid_line_count,
+        "rows": list(reversed(rows[-limit:])),
+    }
+
+
+def load_episode_memory(runtime_root: Path, *, limit: int = 12) -> list[dict[str, Any]]:
+    return list(_episode_memory_state(runtime_root, limit=limit)["rows"])
 
 
 def _is_better(candidate: float, current: float | None, goal: str) -> bool:
@@ -579,6 +640,45 @@ def _build_outcomes(rows: list[dict[str, Any]], *, goal: str) -> list[dict[str, 
     return sorted(grouped.values(), key=lambda item: (str(item["command_name"]), str(item["candidate_id"])))
 
 
+def _publish_staged_documents(
+    staging_root: Path,
+    documents_root: Path,
+    written: list[dict[str, str]],
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    documents_root.mkdir(parents=True, exist_ok=True)
+    used_paths = {str(path) for path in documents_root.glob("*") if path.is_file()}
+    moved: dict[str, str] = {}
+    staged_files = sorted(
+        (path for path in staging_root.glob("*") if path.is_file()),
+        key=lambda path: (path.name != "INDEX.md", path.name),
+    )
+    for source in staged_files:
+        target = documents_root / source.name
+        try:
+            os.replace(source, target)
+        except PermissionError:
+            if source.name == "INDEX.md":
+                raise RuntimeError("Memory snapshot is busy; the prior snapshot and manifest remain authoritative.") from None
+            target = _unique_document_path(documents_root, source.stem, used_paths)
+            os.replace(source, target)
+        moved[str(source)] = str(target)
+        used_paths.add(str(target))
+
+    for item in written:
+        item["path"] = moved[item["path"]]
+    index_path = moved[str(staging_root / "INDEX.md")]
+    documents = [dict(item) for item in written]
+    documents.append(
+        {
+            "path": index_path,
+            "kind": "index",
+            "title": "Memory Index",
+            "memory_tier": "state_snapshot",
+        }
+    )
+    return moved, documents
+
+
 def sync_memory(
     repo_root: Path,
     runtime_root: Path,
@@ -588,147 +688,157 @@ def sync_memory(
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     require_memory_write_authority(governor_decision, binding_refs=sync_memory_authority_refs(repo_root, runtime_root, config_path))
-    rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
-    docs_root = _documents_root(runtime_root)
-    docs_root.mkdir(parents=True, exist_ok=True)
-    for path in docs_root.glob("*"):
-        if path.is_file():
-            _safe_unlink(path)
-    # Re-glob after deletion: collect any locked files that could not be removed.
-    # Seed used_paths with them so _unique_document_path never collides, and
-    # exclude them from the written manifest so stale content is not searched.
-    locked_files: set[Path] = {p for p in docs_root.glob("*") if p.is_file()}
-    build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
-    written: list[dict[str, str]] = []
-    kind_counts: dict[str, int] = defaultdict(int)
-    tier_counts: dict[str, int] = defaultdict(int)
-    used_paths: set[str] = {str(p) for p in locked_files}
+    manifest_path = _manifest_path(runtime_root)
+    final_documents_root = _documents_root(runtime_root)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with locked_file(manifest_path):
+        staging_root = Path(tempfile.mkdtemp(prefix=".documents-stage-", dir=manifest_path.parent))
+        try:
+            rows = read_jsonl(runtime_root / "artifacts" / "ledger" / "runs.jsonl")
+            build_beliefs(repo_root, runtime_root, governor_decision=governor_decision)
+            written: list[dict[str, str]] = []
+            kind_counts: dict[str, int] = defaultdict(int)
+            tier_counts: dict[str, int] = defaultdict(int)
+            used_paths: set[str] = set()
 
-    for record in rows:
-        path = _unique_document_path(docs_root, f"run-{record.get('run_id', 'run')}", used_paths)
-        write_text(path, build_run_doc(record))
-        memory_tier = "raw_run"
-        written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
-        kind_counts["run"] += 1
-        tier_counts[memory_tier] += 1
+            for record in rows:
+                path = _unique_document_path(staging_root, f"run-{record.get('run_id', 'run')}", used_paths)
+                write_text(path, build_run_doc(record))
+                memory_tier = "raw_run"
+                written.append({"path": str(path), "kind": "run", "title": str(record.get("run_id") or path.stem), "memory_tier": memory_tier})
+                kind_counts["run"] += 1
+                tier_counts[memory_tier] += 1
 
-    belief_docs_root = beliefs_root(runtime_root)
-    if belief_docs_root.exists():
-        for path in sorted(belief_docs_root.glob("*.md")):
-            if path.name.upper() == "INDEX.MD":
-                continue
-            target = _unique_document_path(docs_root, f"belief-{path.stem}", used_paths)
-            shutil.copyfile(path, target)
-            written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
-            kind_counts["belief"] += 1
-            tier_counts["belief"] += 1
+            belief_docs_root = beliefs_root(runtime_root)
+            if belief_docs_root.exists():
+                for path in sorted(belief_docs_root.glob("*.md")):
+                    if path.name.upper() == "INDEX.MD":
+                        continue
+                    target = _unique_document_path(staging_root, f"belief-{path.stem}", used_paths)
+                    shutil.copyfile(path, target)
+                    written.append({"path": str(target), "kind": "belief", "title": path.stem, "memory_tier": "belief"})
+                    kind_counts["belief"] += 1
+                    tier_counts["belief"] += 1
 
-    self_edit_docs = []
-    proposals_root = self_edit_root(runtime_root)
-    if proposals_root.exists():
-        for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-            review_path = proposal_path.parent / "review.json"
-            review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
-            target = _unique_document_path(docs_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
-            write_text(target, build_self_edit_doc(proposal, review))
-            written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
-            kind_counts["self_edit"] += 1
-            tier_counts["raw_outcome"] += 1
-            self_edit_docs.append(str(target))
+            self_edit_docs: list[str] = []
+            proposals_root = self_edit_root(runtime_root)
+            if proposals_root.exists():
+                for proposal_path in sorted(proposals_root.glob("*/proposal.json")):
+                    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+                    review_path = proposal_path.parent / "review.json"
+                    review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else None
+                    target = _unique_document_path(staging_root, f"self-edit-{proposal.get('proposal_id')}", used_paths)
+                    write_text(target, build_self_edit_doc(proposal, review))
+                    written.append({"path": str(target), "kind": "self_edit", "title": str(proposal.get("proposal_id")), "memory_tier": "raw_outcome"})
+                    kind_counts["self_edit"] += 1
+                    tier_counts["raw_outcome"] += 1
+                    self_edit_docs.append(str(target))
 
-    working = load_working_memory(runtime_root)
-    if working:
-        target = docs_root / "working-memory.md"
-        used_paths.add(str(target))
-        write_text(target, build_working_memory_doc(working))
-        working_tier = "state_snapshot"
-        written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
-        kind_counts["working"] += 1
-        tier_counts[working_tier] += 1
+            working = load_working_memory(runtime_root)
+            if working:
+                target = staging_root / "working-memory.md"
+                used_paths.add(str(target))
+                write_text(target, build_working_memory_doc(working))
+                working_tier = "state_snapshot"
+                written.append({"path": str(target), "kind": "working", "title": "Working Memory", "memory_tier": working_tier})
+                kind_counts["working"] += 1
+                tier_counts[working_tier] += 1
 
-    episodes = load_episode_memory(runtime_root)
-    if episodes:
-        target = docs_root / "episode-memory.md"
-        used_paths.add(str(target))
-        write_text(target, build_episode_memory_doc(episodes))
-        written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
-        kind_counts["episode"] += 1
-        tier_counts["state_snapshot"] += 1
+            episode_state = _episode_memory_state(runtime_root)
+            episodes = episode_state["rows"]
+            if episodes:
+                target = staging_root / "episode-memory.md"
+                used_paths.add(str(target))
+                write_text(target, build_episode_memory_doc(episodes))
+                written.append({"path": str(target), "kind": "episode", "title": "Episode Memory", "memory_tier": "state_snapshot"})
+                kind_counts["episode"] += 1
+                tier_counts["state_snapshot"] += 1
 
-    outcomes = _build_outcomes(rows, goal=goal)
-    for outcome in outcomes:
-        path = _unique_document_path(docs_root, outcome["outcome_id"], used_paths)
-        write_text(path, build_outcome_doc(outcome))
-        written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
-        kind_counts["outcome"] += 1
-        tier_counts["raw_outcome"] += 1
+            outcomes = _build_outcomes(rows, goal=goal)
+            for outcome in outcomes:
+                path = _unique_document_path(staging_root, outcome["outcome_id"], used_paths)
+                write_text(path, build_outcome_doc(outcome))
+                written.append({"path": str(path), "kind": "outcome", "title": outcome["title"], "memory_tier": "raw_outcome"})
+                kind_counts["outcome"] += 1
+                tier_counts["raw_outcome"] += 1
 
-    chip_documents: list[dict[str, str]] = []
-    if config_path is not None and chip_has_hook(config_path, "packets"):
-        packet = invoke_chip_hook(
-            config_path,
-            "packets",
-            {
-                "project_name": repo_root.name,
-                "ledger_rows": rows,
+            chip_documents: list[dict[str, str]] = []
+            if config_path is not None and chip_has_hook(config_path, "packets"):
+                packet = invoke_chip_hook(
+                    config_path,
+                    "packets",
+                    {
+                        "project_name": repo_root.name,
+                        "ledger_rows": rows,
+                        "outcomes": outcomes,
+                        "documents_root": str(staging_root),
+                    },
+                )
+                seen_chip_documents: set[tuple[str, str, str, str]] = set()
+                for item in packet.get("documents", []):
+                    title = str(item.get("title") or "Chip Document")
+                    kind = str(item.get("kind") or "chip")
+                    slug = _safe_slug(str(item.get("slug") or title))
+                    memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
+                    content = str(item.get("content") or "")
+                    signature = (kind, title, content, memory_tier)
+                    if signature in seen_chip_documents:
+                        continue
+                    seen_chip_documents.add(signature)
+                    path = _unique_document_path(staging_root, f"{kind}-{slug}", used_paths)
+                    write_text(path, content)
+                    record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
+                    written.append(record)
+                    chip_documents.append(record)
+                    kind_counts[kind] += 1
+                    tier_counts[memory_tier] += 1
+
+            index_lines = [
+                "# Memory Index",
+                "",
+                f"- documents_root: `{final_documents_root}`",
+                f"- total_documents: `{len(written)}`",
+                "",
+                "## Kinds",
+                "",
+                *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
+                "",
+                "## Memory Tiers",
+                "",
+                *[f"- {tier}: `{count}`" for tier, count in sorted(tier_counts.items())],
+                "",
+                "## Outcomes",
+                "",
+            ]
+            index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
+            write_text(staging_root / "INDEX.md", "\n".join(index_lines))
+
+            moved, documents = _publish_staged_documents(staging_root, final_documents_root, written)
+            self_edit_docs = [moved[path] for path in self_edit_docs]
+            manifest = {
+                "backend": "local",
+                "document_count": len(written),
+                "documents_root": str(final_documents_root),
+                "documents": documents,
+                "source_runs": len(rows),
+                "kinds": dict(kind_counts),
+                "memory_tiers": dict(tier_counts),
                 "outcomes": outcomes,
-                "documents_root": str(docs_root),
-            },
-        )
-        seen_chip_documents: set[tuple[str, str, str, str]] = set()
-        for item in packet.get("documents", []):
-            title = str(item.get("title") or "Chip Document")
-            kind = str(item.get("kind") or "chip")
-            slug = _safe_slug(str(item.get("slug") or title))
-            memory_tier = str(item.get("memory_tier") or _default_memory_tier(kind))
-            content = str(item.get("content") or "")
-            signature = (kind, title, content, memory_tier)
-            if signature in seen_chip_documents:
-                continue
-            seen_chip_documents.add(signature)
-            path = _unique_document_path(docs_root, f"{kind}-{slug}", used_paths)
-            write_text(path, content)
-            record = {"path": str(path), "kind": kind, "title": title, "memory_tier": memory_tier}
-            written.append(record)
-            chip_documents.append(record)
-            kind_counts[kind] += 1
-            tier_counts[memory_tier] += 1
-
-    index_lines = [
-        "# Memory Index",
-        "",
-        f"- documents_root: `{docs_root}`",
-        f"- total_documents: `{len(written)}`",
-        "",
-        "## Kinds",
-        "",
-        *[f"- {kind}: `{count}`" for kind, count in sorted(kind_counts.items())],
-        "",
-        "## Memory Tiers",
-        "",
-        *[f"- {tier}: `{count}`" for tier, count in sorted(tier_counts.items())],
-        "",
-        "## Outcomes",
-        "",
-    ]
-    index_lines.extend(f"- [[{item['outcome_id']}]]" for item in outcomes)
-    write_text(docs_root / "INDEX.md", "\n".join(index_lines))
-    manifest = {
-        "backend": "local",
-        "document_count": len(written),
-        "documents_root": str(docs_root),
-        "source_runs": len(rows),
-        "kinds": dict(kind_counts),
-        "memory_tiers": dict(tier_counts),
-        "outcomes": outcomes,
-        "self_edit_documents": self_edit_docs,
-        "chip_documents": chip_documents,
-        "working_memory": working,
-        "episode_count": len(episodes),
-    }
-    write_text(_manifest_path(runtime_root), json.dumps(manifest, indent=2, sort_keys=True))
-    return manifest
+                "self_edit_documents": self_edit_docs,
+                "chip_documents": chip_documents,
+                "working_memory": working,
+                "episode_count": len(episodes),
+                "episode_state": episode_state["status"],
+                "episode_invalid_line_count": episode_state["invalid_line_count"],
+            }
+            _atomic_write_text(manifest_path, json.dumps(manifest, indent=2, sort_keys=True))
+            active_paths = {Path(item["path"]) for item in documents}
+            for path in final_documents_root.glob("*"):
+                if path.is_file() and path not in active_paths:
+                    _safe_unlink(path)
+            return manifest
+        finally:
+            shutil.rmtree(staging_root, ignore_errors=True)
 
 
 def search_memory(
@@ -783,18 +893,22 @@ def memory_status(
     if backend == "ruvector":
         status = ruvector_status()
         status["configured_backend"] = configured_backend
-        status["local_documents_root"] = manifest["documents_root"]
+        status["local_documents_root"] = str(_documents_root(runtime_root))
         status["local_document_count"] = manifest["document_count"]
         status["local_kinds"] = manifest.get("kinds", {})
+        status["local_episode_state"] = manifest.get("episode_state", "empty")
+        status["local_episode_invalid_line_count"] = int(manifest.get("episode_invalid_line_count", 0))
         status["local_storage_backend"] = "local"
         status["default_role"] = "retrieval"
         return status
     return {
         "backend": "local",
         "configured_backend": configured_backend,
-        "documents_root": manifest["documents_root"],
+        "documents_root": str(_documents_root(runtime_root)),
         "document_count": manifest["document_count"],
         "kinds": manifest.get("kinds", {}),
+        "episode_state": manifest.get("episode_state", "empty"),
+        "episode_invalid_line_count": int(manifest.get("episode_invalid_line_count", 0)),
         "manifest_present": manifest_path.exists(),
         "notes": [
             "Local memory remains Spark's canonical storage layer.",

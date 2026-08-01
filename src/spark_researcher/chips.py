@@ -457,7 +457,9 @@ def invoke_chip_hook(
         "manifest_path": str(context.manifest_path),
         **payload,
     }
-    input_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tmp = input_path.with_suffix(input_path.suffix + ".tmp")
+    _tmp.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tmp.replace(input_path)
     invoked = command + ["--input", str(input_path), "--output", str(output_path)]
     if dry_run:
         preview = {
@@ -467,7 +469,9 @@ def invoke_chip_hook(
             "input_path": str(input_path),
             "output_path": str(output_path),
         }
-        log_path.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _tmp = log_path.with_suffix(log_path.suffix + ".tmp")
+        _tmp.write_text(json.dumps(preview, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _tmp.replace(log_path)
         return preview
     try:
         result = subprocess.run(
@@ -482,7 +486,8 @@ def invoke_chip_hook(
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"Chip hook `{hook}` timed out after {exc.timeout}s") from None
-    log_path.write_text(
+    _log_tmp = log_path.with_suffix(log_path.suffix + ".tmp")
+    _log_tmp.write_text(
         json.dumps(
             {
                 "command": invoked,
@@ -499,6 +504,7 @@ def invoke_chip_hook(
         + "\n",
         encoding="utf-8",
     )
+    _log_tmp.replace(log_path)
     if result.returncode != 0:
         raise RuntimeError(_public_hook_failure_detail(hook, result.returncode))
     if not output_path.exists():

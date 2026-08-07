@@ -221,7 +221,9 @@ def safe_urlopen(request: Request | str, *, timeout: float):
         _PinnedHTTPSHandler,
     )
     try:
-        return opener.open(request, timeout=timeout)
+        response = opener.open(request, timeout=timeout)
+        assert_safe_url(response.url)
+        return response
     except UnsafeURL:
         raise
     except URLError:

@@ -171,7 +171,7 @@ def _relevant_note_ids(advisory: dict[str, Any], draft_text: str, *, limit: int 
         if score > 0:
             ranked.append((score, note_id))
     ranked.sort(key=lambda item: (-item[0], item[1]))
-    return [note_id for score, note_id in ranked[:limit] if score >= 2]
+    return [note_id for score, note_id in ranked[:limit] if score >= 1]
 
 
 def _alternative_draft_task(task: str) -> str:

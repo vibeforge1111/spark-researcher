@@ -221,8 +221,29 @@ def safe_urlopen(request: Request | str, *, timeout: float):
         _PinnedHTTPSHandler,
     )
     try:
-        return opener.open(request, timeout=timeout)
+        response = opener.open(request, timeout=timeout)
     except UnsafeURL:
         raise
     except URLError:
         raise
+    # Re-validate the resolved IP after connection to mitigate DNS rebinding.
+    # The socket may have connected to a different IP than the pre-flight check.
+    peer = getattr(response.fp, "raw", None)
+    if peer is None:
+        peer = response
+    sock = getattr(getattr(peer, "_sock", None), "getpeername", None)
+    if sock is None:
+        sock = getattr(getattr(getattr(peer, "fp", None), "raw", None), "_sock", None)
+        if sock is not None:
+            sock = sock.getpeername
+    if sock is not None:
+        try:
+            peer_ip = ipaddress.ip_address(sock()[0])
+            if not _is_public_ip(peer_ip):
+                response.close()
+                raise UnsafeURL(
+                    f"DNS rebinding detected: connected to non-public IP {peer_ip}"
+                )
+        except (OSError, TypeError, IndexError):
+            pass  # Best-effort; socket may already be closed
+    return response

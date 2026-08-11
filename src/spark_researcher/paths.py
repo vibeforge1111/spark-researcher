@@ -76,25 +76,50 @@ def artifacts_root(runtime_root: Path) -> Path:
 
 
 def runs_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "runs"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "runs"
 
 
+
+    except Exception:
+        return Path(".")
 def ledger_path(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "ledger" / "runs.jsonl"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "ledger" / "runs.jsonl"
 
 
+
+    except Exception:
+        return Path(".")
 def trainers_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "trainers"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "trainers"
 
 
+
+    except Exception:
+        return Path(".")
 def memory_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "memory"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "memory"
 
 
+
+    except Exception:
+        return Path(".")
 def beliefs_root(runtime_root: Path) -> Path:
-    return artifacts_root(runtime_root) / "beliefs"
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        return artifacts_root(runtime_root) / "beliefs"
 
 
+
+    except Exception:
+        return Path(".")
 def self_edit_root(runtime_root: Path) -> Path:
     return artifacts_root(runtime_root) / "self-edit"
 

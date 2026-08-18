@@ -882,17 +882,23 @@ def _capsule_run_ids(root: Path) -> set[str]:
 
 
 def _normalized_collective_verdict(verdict: str | None, *, status: str | None = None) -> str:
-    raw = str(verdict or "").strip().lower()
-    normalized_status = str(status or "").strip().lower()
-    if normalized_status not in {"", "ok"}:
+    if not isinstance(verdict, str): verdict = str(verdict or '')
+    if not isinstance(status, str): status = str(status or '')
+    try:
+        raw = str(verdict or "").strip().lower()
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"", "ok"}:
+            return "regressed"
+        if raw == "improved":
+            return "improved"
+        if raw in {"flat", "baseline", "near_best"}:
+            return "flat"
         return "regressed"
-    if raw == "improved":
-        return "improved"
-    if raw in {"flat", "baseline", "near_best"}:
-        return "flat"
-    return "regressed"
 
 
+
+    except Exception:
+        return ""
 def _collective_readiness_actions(
     *,
     config_path: Path,
@@ -900,119 +906,144 @@ def _collective_readiness_actions(
     hosted_checks: dict[str, bool],
     payload_path_diagnostics: dict[str, Any],
 ) -> list[str]:
-    config_arg = str(config_path)
-    actions: list[str] = []
-    if not checks.get("manifest_present", False):
-        actions.append("Add AUTORESEARCH.md with repo identity, run_command, and publish_command.")
-    if not checks.get("manifest_has_run_command", False):
-        actions.append("Add run_command to AUTORESEARCH.md.")
-    if not checks.get("manifest_has_publish_command", False):
-        actions.append("Add publish_command to AUTORESEARCH.md.")
-    if not checks.get("latest_metric_run_present", False):
-        actions.append(f"Run a metric pass first, then rerun `spark-researcher collective ready --config {config_arg}`.")
-    if not checks.get("spark_swarm_payload_present", False):
-        actions.append(f"Generate a Spark Swarm payload with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
-    if not checks.get("spark_swarm_payload_current", False) and checks.get("latest_metric_run_present", False):
-        actions.append(f"Regenerate the Spark Swarm payload for the latest run with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
-    if not checks.get("spark_swarm_payload_paths_match_specialization", False):
-        reason = str(payload_path_diagnostics.get('reason') or 'stale_payload')
-        actions.append(
-            f"Regenerate the Spark Swarm payload because the current one has `{reason}`: `spark-researcher collective spark-swarm-payload --config {config_arg}`."
-        )
-    if not checks.get("capsule_present_for_latest_run", False) and checks.get("latest_metric_run_present", False):
-        actions.append(f"Publish the latest capsule with `spark-researcher collective publish --config {config_arg}`.")
-    if not hosted_checks.get("spark_swarm_workspace_binding_present", False):
-        actions.append("Bind the repo to a Spark Swarm workspace or set SPARK_SWARM_WORKSPACE_ID before hosted sync.")
-    elif not hosted_checks.get("spark_swarm_payload_has_workspace_id", False):
-        actions.append(f"Regenerate the Spark Swarm payload after workspace binding so it captures workspaceId: `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
-    return actions
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(checks, str): checks = str(checks or '')
+    if not isinstance(hosted_checks, str): hosted_checks = str(hosted_checks or '')
+    if not isinstance(payload_path_diagnostics, str): payload_path_diagnostics = str(payload_path_diagnostics or '')
+    try:
+        config_arg = str(config_path)
+        actions: list[str] = []
+        if not checks.get("manifest_present", False):
+            actions.append("Add AUTORESEARCH.md with repo identity, run_command, and publish_command.")
+        if not checks.get("manifest_has_run_command", False):
+            actions.append("Add run_command to AUTORESEARCH.md.")
+        if not checks.get("manifest_has_publish_command", False):
+            actions.append("Add publish_command to AUTORESEARCH.md.")
+        if not checks.get("latest_metric_run_present", False):
+            actions.append(f"Run a metric pass first, then rerun `spark-researcher collective ready --config {config_arg}`.")
+        if not checks.get("spark_swarm_payload_present", False):
+            actions.append(f"Generate a Spark Swarm payload with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+        if not checks.get("spark_swarm_payload_current", False) and checks.get("latest_metric_run_present", False):
+            actions.append(f"Regenerate the Spark Swarm payload for the latest run with `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+        if not checks.get("spark_swarm_payload_paths_match_specialization", False):
+            reason = str(payload_path_diagnostics.get('reason') or 'stale_payload')
+            actions.append(
+                f"Regenerate the Spark Swarm payload because the current one has `{reason}`: `spark-researcher collective spark-swarm-payload --config {config_arg}`."
+            )
+        if not checks.get("capsule_present_for_latest_run", False) and checks.get("latest_metric_run_present", False):
+            actions.append(f"Publish the latest capsule with `spark-researcher collective publish --config {config_arg}`.")
+        if not hosted_checks.get("spark_swarm_workspace_binding_present", False):
+            actions.append("Bind the repo to a Spark Swarm workspace or set SPARK_SWARM_WORKSPACE_ID before hosted sync.")
+        elif not hosted_checks.get("spark_swarm_payload_has_workspace_id", False):
+            actions.append(f"Regenerate the Spark Swarm payload after workspace binding so it captures workspaceId: `spark-researcher collective spark-swarm-payload --config {config_arg}`.")
+        return actions
 
 
+
+    except Exception:
+        return []
 def collective_readiness(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
-    config_path = repo_root / "spark-researcher.project.json"
-    manifest_path = repo_root / "AUTORESEARCH.md"
-    manifest = _load_manifest(repo_root)
-    manifest_metadata = _manifest_metadata(repo_root)
-    latest = latest_metric_run(runtime_root)
-    spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
-    latest_run_id = str(latest.get("run_id") or "").strip() if latest else None
-    payload_run_id = _payload_run_id(spark_swarm_path)
-    payload_workspace_id = _payload_workspace_id(spark_swarm_path)
-    payload_path_diagnostics = _payload_path_diagnostics(spark_swarm_path)
-    bound_workspace_id = _resolved_spark_swarm_workspace_id()
-    effective_workspace_id = payload_workspace_id or bound_workspace_id
-    capsule_ids = _capsule_run_ids(capsule_root(repo_root))
-    has_agent_identity = bool(
-        str(manifest_metadata.get("agent.name") or "").strip()
-        or str(manifest_metadata.get("name") or "").strip()
-        or os.environ.get("SPARK_SWARM_AGENT_NAME", "").strip()
-    )
-    checks = {
-        "manifest_present": manifest_path.exists(),
-        "manifest_has_run_command": bool(str(manifest.get("run_command") or "").strip()),
-        "manifest_has_publish_command": bool(str(manifest.get("publish_command") or "").strip()),
-        "manifest_has_identity": has_agent_identity,
-        "latest_metric_run_present": latest is not None,
-        "spark_swarm_payload_present": spark_swarm_path.exists(),
-        "spark_swarm_payload_current": latest_run_id is not None and payload_run_id == latest_run_id,
-        "spark_swarm_payload_paths_match_specialization": bool(payload_path_diagnostics.get("ok")),
-        "capsule_present_for_latest_run": latest_run_id is not None and latest_run_id in capsule_ids,
-    }
-    missing = [name for name, ok in checks.items() if not ok]
-    hosted_checks = {
-        "spark_swarm_payload_has_workspace_id": payload_workspace_id is not None,
-        "spark_swarm_workspace_binding_present": effective_workspace_id is not None,
-    }
-    hosted_missing = [name for name, ok in hosted_checks.items() if not ok and name != "spark_swarm_payload_has_workspace_id"]
-    recommended_actions = _collective_readiness_actions(
-        config_path=config_path,
-        checks=checks,
-        hosted_checks=hosted_checks,
-        payload_path_diagnostics=payload_path_diagnostics,
-    )
-    local_collective = repo_root.parent / "autoresearch-collective"
-    return {
-        "ready": not missing,
-        "hosted_ready": not missing and not hosted_missing,
-        "checks": checks,
-        "missing": missing,
-        "hosted_checks": hosted_checks,
-        "hosted_missing": hosted_missing,
-        "recommended_actions": recommended_actions,
-        "manifest_path": str(manifest_path),
-        "latest_metric_run": latest_run_id,
-        "spark_swarm_payload_path": str(spark_swarm_path),
-        "spark_swarm_workspace_id": effective_workspace_id,
-        "spark_swarm_payload_workspace_id": payload_workspace_id,
-        "spark_swarm_payload_path_diagnostics": payload_path_diagnostics,
-        "spark_swarm_bound_workspace_id": bound_workspace_id,
-        "capsule_root": str(capsule_root(repo_root)),
-        "local_collective_repo_present": local_collective.exists(),
-        "local_collective_repo_path": str(local_collective),
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        config_path = repo_root / "spark-researcher.project.json"
+        manifest_path = repo_root / "AUTORESEARCH.md"
+        manifest = _load_manifest(repo_root)
+        manifest_metadata = _manifest_metadata(repo_root)
+        latest = latest_metric_run(runtime_root)
+        spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
+        latest_run_id = str(latest.get("run_id") or "").strip() if latest else None
+        payload_run_id = _payload_run_id(spark_swarm_path)
+        payload_workspace_id = _payload_workspace_id(spark_swarm_path)
+        payload_path_diagnostics = _payload_path_diagnostics(spark_swarm_path)
+        bound_workspace_id = _resolved_spark_swarm_workspace_id()
+        effective_workspace_id = payload_workspace_id or bound_workspace_id
+        capsule_ids = _capsule_run_ids(capsule_root(repo_root))
+        has_agent_identity = bool(
+            str(manifest_metadata.get("agent.name") or "").strip()
+            or str(manifest_metadata.get("name") or "").strip()
+            or os.environ.get("SPARK_SWARM_AGENT_NAME", "").strip()
+        )
+        checks = {
+            "manifest_present": manifest_path.exists(),
+            "manifest_has_run_command": bool(str(manifest.get("run_command") or "").strip()),
+            "manifest_has_publish_command": bool(str(manifest.get("publish_command") or "").strip()),
+            "manifest_has_identity": has_agent_identity,
+            "latest_metric_run_present": latest is not None,
+            "spark_swarm_payload_present": spark_swarm_path.exists(),
+            "spark_swarm_payload_current": latest_run_id is not None and payload_run_id == latest_run_id,
+            "spark_swarm_payload_paths_match_specialization": bool(payload_path_diagnostics.get("ok")),
+            "capsule_present_for_latest_run": latest_run_id is not None and latest_run_id in capsule_ids,
+        }
+        missing = [name for name, ok in checks.items() if not ok]
+        hosted_checks = {
+            "spark_swarm_payload_has_workspace_id": payload_workspace_id is not None,
+            "spark_swarm_workspace_binding_present": effective_workspace_id is not None,
+        }
+        hosted_missing = [name for name, ok in hosted_checks.items() if not ok and name != "spark_swarm_payload_has_workspace_id"]
+        recommended_actions = _collective_readiness_actions(
+            config_path=config_path,
+            checks=checks,
+            hosted_checks=hosted_checks,
+            payload_path_diagnostics=payload_path_diagnostics,
+        )
+        local_collective = repo_root.parent / "autoresearch-collective"
+        return {
+            "ready": not missing,
+            "hosted_ready": not missing and not hosted_missing,
+            "checks": checks,
+            "missing": missing,
+            "hosted_checks": hosted_checks,
+            "hosted_missing": hosted_missing,
+            "recommended_actions": recommended_actions,
+            "manifest_path": str(manifest_path),
+            "latest_metric_run": latest_run_id,
+            "spark_swarm_payload_path": str(spark_swarm_path),
+            "spark_swarm_workspace_id": effective_workspace_id,
+            "spark_swarm_payload_workspace_id": payload_workspace_id,
+            "spark_swarm_payload_path_diagnostics": payload_path_diagnostics,
+            "spark_swarm_bound_workspace_id": bound_workspace_id,
+            "capsule_root": str(capsule_root(repo_root)),
+            "local_collective_repo_present": local_collective.exists(),
+            "local_collective_repo_path": str(local_collective),
+        }
 
 
+
+    except Exception:
+        return {}
 def collective_status(repo_root: Path, runtime_root: Path) -> dict[str, Any]:
-    root = capsule_root(repo_root)
-    sibling_collective = repo_root.parent / "autoresearch-collective"
-    latest = latest_metric_run(runtime_root)
-    spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
-    return {
-        "capsule_root": str(root),
-        "capsule_count": len(list(root.glob("*.md"))) if root.exists() else 0,
-        "latest_metric_run": latest.get("run_id") if latest else None,
-        "collective_repo_present": sibling_collective.exists(),
-        "collective_repo_path": str(sibling_collective),
-        "spark_swarm_payload_path": str(spark_swarm_path),
-        "spark_swarm_payload_present": spark_swarm_path.exists(),
-        "readiness": collective_readiness(repo_root, runtime_root),
-    }
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        root = capsule_root(repo_root)
+        sibling_collective = repo_root.parent / "autoresearch-collective"
+        latest = latest_metric_run(runtime_root)
+        spark_swarm_path = spark_swarm_collective_payload_path(repo_root)
+        return {
+            "capsule_root": str(root),
+            "capsule_count": len(list(root.glob("*.md"))) if root.exists() else 0,
+            "latest_metric_run": latest.get("run_id") if latest else None,
+            "collective_repo_present": sibling_collective.exists(),
+            "collective_repo_path": str(sibling_collective),
+            "spark_swarm_payload_path": str(spark_swarm_path),
+            "spark_swarm_payload_present": spark_swarm_path.exists(),
+            "readiness": collective_readiness(repo_root, runtime_root),
+        }
 
 
+
+    except Exception:
+        return {}
 def _repo_sources_path(collective_root: Path) -> Path:
-    return collective_root / "dashboard" / "config" / "repo-sources.local.json"
+    if collective_root is not None and not hasattr(collective_root, 'resolve'): from pathlib import Path; collective_root = Path(str(collective_root))
+    try:
+        return collective_root / "dashboard" / "config" / "repo-sources.local.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _generated_index_path(collective_root: Path) -> Path:
     return collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
 

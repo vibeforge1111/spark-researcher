@@ -778,7 +778,11 @@ def _payload_run_id(path: Path) -> str | None:
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        payload = json.loads(raw)
     except json.JSONDecodeError:
         return None
     for outcome in payload.get("outcomes", []):
@@ -794,7 +798,11 @@ def _payload_workspace_id(path: Path) -> str | None:
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        payload = json.loads(raw)
     except json.JSONDecodeError:
         return None
     workspace_id = str(payload.get("workspaceId") or "").strip()
@@ -805,7 +813,11 @@ def _payload_path_diagnostics(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"ok": False, "reason": "missing_payload"}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return {"ok": False, "reason": "payload_unreadable"}
+    try:
+        payload = json.loads(raw)
     except json.JSONDecodeError:
         return {"ok": False, "reason": "invalid_json"}
     specialization = payload.get("specialization", {})

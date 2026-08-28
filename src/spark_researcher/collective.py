@@ -1020,7 +1020,10 @@ def _generated_index_path(collective_root: Path) -> Path:
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def _manifest_repo_slug(repo_root: Path) -> str:
@@ -1158,7 +1161,10 @@ def _load_collective_index(repo_root: Path) -> tuple[Path, dict[str, Any]]:
     path = collective_root / "dashboard" / "public" / "data" / "collective.generated.json"
     if not path.exists():
         return path, {"repoDirectory": [], "capsuleLibrary": []}
-    return path, json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return path, json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return path, {"repoDirectory": [], "capsuleLibrary": []}
 
 
 def _slugify(value: str) -> str:

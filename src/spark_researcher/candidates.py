@@ -482,179 +482,206 @@ def _chip_suggestion_packet(
     *,
     limit: int,
 ) -> dict[str, Any]:
-    runtime_root = resolve_runtime_root(config_path)
-    failure_priorities = surprise_status(runtime_root, limit=5)
-    packet = invoke_chip_hook(
-        config_path,
-        "suggest",
-        {
-            "project_name": config.project_name,
-            "command_name": command_name,
-            "limit": limit,
-            "eval_metric": config.eval_metric,
-            "eval_goal": config.eval_goal,
-            "intent": intent_policy(config),
-            "failure_priorities": failure_priorities,
-            "ledger_rows": rows,
-            "candidate_trials": [
-                asdict(item)
-                for item in merged_candidate_trials(config_path, config=config)
-                if trial_applies_to_command(item, command_name)
-            ],
-        },
-        config=config,
-    )
-    suggestions = [_trial_from_packet(item, default_commands=[command_name]) for item in packet.get("suggestions", [])]
-    passthrough_keys = (
-        "progression",
-        "research_refresh",
-        "research_frontier",
-        "research_selection",
-    )
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(rows, str): rows = str(rows or '')
+    try:
+        runtime_root = resolve_runtime_root(config_path)
+        failure_priorities = surprise_status(runtime_root, limit=5)
+        packet = invoke_chip_hook(
+            config_path,
+            "suggest",
+            {
+                "project_name": config.project_name,
+                "command_name": command_name,
+                "limit": limit,
+                "eval_metric": config.eval_metric,
+                "eval_goal": config.eval_goal,
+                "intent": intent_policy(config),
+                "failure_priorities": failure_priorities,
+                "ledger_rows": rows,
+                "candidate_trials": [
+                    asdict(item)
+                    for item in merged_candidate_trials(config_path, config=config)
+                    if trial_applies_to_command(item, command_name)
+                ],
+            },
+            config=config,
+        )
+        suggestions = [_trial_from_packet(item, default_commands=[command_name]) for item in packet.get("suggestions", [])]
+        passthrough_keys = (
+            "progression",
+            "research_refresh",
+            "research_frontier",
+            "research_selection",
+        )
 
-    def with_passthrough(base: dict[str, Any]) -> dict[str, Any]:
-        for key in passthrough_keys:
-            if key in packet:
-                base[key] = packet[key]
-        return base
+        def with_passthrough(base: dict[str, Any]) -> dict[str, Any]:
+            for key in passthrough_keys:
+                if key in packet:
+                    base[key] = packet[key]
+            return base
 
-    if suggestions:
-        return with_passthrough({
-            "command_name": command_name,
-            "baseline_metric": packet.get("baseline_metric"),
-            "beneficial_primitives": packet.get("beneficial_primitives", []),
-            "failure_priorities": failure_priorities,
-            "suggestion_count": len(suggestions[:limit]),
-            "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
-            "suggestions": _serialize_trials(suggestions, limit=limit),
-            "source": "chip",
-            "chip_name": packet.get("chip_name"),
-        })
-    if any(packet.get(key) for key in ("reasons", *passthrough_keys)):
+        if suggestions:
+            return with_passthrough({
+                "command_name": command_name,
+                "baseline_metric": packet.get("baseline_metric"),
+                "beneficial_primitives": packet.get("beneficial_primitives", []),
+                "failure_priorities": failure_priorities,
+                "suggestion_count": len(suggestions[:limit]),
+                "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
+                "suggestions": _serialize_trials(suggestions, limit=limit),
+                "source": "chip",
+                "chip_name": packet.get("chip_name"),
+            })
+        if any(packet.get(key) for key in ("reasons", *passthrough_keys)):
+            return with_passthrough({
+                "command_name": command_name,
+                "baseline_metric": packet.get("baseline_metric"),
+                "beneficial_primitives": packet.get("beneficial_primitives", []),
+                "failure_priorities": failure_priorities,
+                "suggestion_count": 0,
+                "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
+                "suggestions": [],
+                "source": "chip",
+                "chip_name": packet.get("chip_name"),
+            })
+        frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
+        if int(frontier_packet.get("suggestion_count", 0)) > 0:
+            return frontier_packet
         return with_passthrough({
             "command_name": command_name,
             "baseline_metric": packet.get("baseline_metric"),
             "beneficial_primitives": packet.get("beneficial_primitives", []),
             "failure_priorities": failure_priorities,
             "suggestion_count": 0,
-            "reasons": [str(item) for item in packet.get("reasons", [])][:limit],
+            "reasons": [*packet.get("reasons", []), *frontier_packet.get("reasons", [])][:limit],
             "suggestions": [],
             "source": "chip",
             "chip_name": packet.get("chip_name"),
         })
-    frontier_packet = frontier_suggest(config_path, command_name, rows=rows, limit=limit)
-    if int(frontier_packet.get("suggestion_count", 0)) > 0:
-        return frontier_packet
-    return with_passthrough({
-        "command_name": command_name,
-        "baseline_metric": packet.get("baseline_metric"),
-        "beneficial_primitives": packet.get("beneficial_primitives", []),
-        "failure_priorities": failure_priorities,
-        "suggestion_count": 0,
-        "reasons": [*packet.get("reasons", []), *frontier_packet.get("reasons", [])][:limit],
-        "suggestions": [],
-        "source": "chip",
-        "chip_name": packet.get("chip_name"),
-    })
 
 
+
+    except Exception:
+        return {}
 def _core_suggestion_packet(config: Any, runtime_root: Path, command_name: str, rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
-    baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
-    tested = _tested_signatures(rows, command_name)
-    existing = {_signature(trial.mutations) for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)}
-    primitives = _best_single_primitives(rows, command_name, config.eval_goal, baseline_metric)
-    numeric_specs = _numeric_specs(config)
-    anchors = _beneficial_numeric_anchors(rows, command_name, config.eval_goal, baseline_metric, numeric_specs)
-    failure_priorities = surprise_status(runtime_root, limit=5)
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(rows, str): rows = str(rows or '')
+    try:
+        baseline_metric = _baseline_metric(rows, command_name, config.eval_goal)
+        tested = _tested_signatures(rows, command_name)
+        existing = {_signature(trial.mutations) for trial in config.candidate_trials if trial_applies_to_command(trial, command_name)}
+        primitives = _best_single_primitives(rows, command_name, config.eval_goal, baseline_metric)
+        numeric_specs = _numeric_specs(config)
+        anchors = _beneficial_numeric_anchors(rows, command_name, config.eval_goal, baseline_metric, numeric_specs)
+        failure_priorities = surprise_status(runtime_root, limit=5)
 
-    suggestions: list[CandidateTrial] = []
-    reasons: list[str] = []
-    failure_trials, failure_reasons, failure_focus = _failure_guided_suggestions(
-        runtime_root,
-        command_name,
-        tested=tested,
-        existing=existing,
-        primitives=primitives,
-        limit=limit,
-    )
-    suggestions.extend(failure_trials)
-    reasons.extend(failure_reasons)
-
-    if len(suggestions) < limit and len(primitives) > 1:
-        combined_mutations = {name: str(item["value"]) for name, item in sorted(primitives.items())}
-        combined_signature = _signature(combined_mutations)
-        if combined_signature not in tested and combined_signature not in existing:
-            source_text = ", ".join(f"{name}={item['value']}" for name, item in sorted(primitives.items()))
-            suggestions.append(
-                CandidateTrial(
-                    candidate_id=_candidate_id(combined_mutations),
-                    candidate_summary=f"Combine baseline-beating primitives: {source_text}.",
-                    hypothesis="Beneficial single mutations may compound when applied together.",
-                    mutations=combined_mutations,
-                )
-            )
-            reasons.append("Combine beneficial single-parameter mutations that each beat the baseline.")
-
-    if len(suggestions) < limit:
-        neighborhood_trials, neighborhood_reasons = _neighborhood_suggestions(
-            anchors,
-            numeric_specs,
+        suggestions: list[CandidateTrial] = []
+        reasons: list[str] = []
+        failure_trials, failure_reasons, failure_focus = _failure_guided_suggestions(
+            runtime_root,
+            command_name,
             tested=tested,
             existing=existing,
-            limit=max(limit - len(suggestions), 0),
+            primitives=primitives,
+            limit=limit,
         )
-        suggestions.extend(neighborhood_trials)
-        reasons.extend(neighborhood_reasons)
+        suggestions.extend(failure_trials)
+        reasons.extend(failure_reasons)
 
-    for name, item in sorted(primitives.items()):
-        if len(suggestions) >= limit:
-            break
-        single_mutation = {name: str(item["value"])}
-        sig = _signature(single_mutation)
-        if sig in tested or sig in existing:
-            continue
-        suggestions.append(
-            CandidateTrial(
-                candidate_id=f"{name}-{_format_value(str(item['value']))}-retest",
-                candidate_summary=f"Retest the best observed primitive for `{name}`.",
-                hypothesis=f"The best observed value for `{name}` should be confirmed directly in the current loop.",
-                mutations=single_mutation,
+        if len(suggestions) < limit and len(primitives) > 1:
+            combined_mutations = {name: str(item["value"]) for name, item in sorted(primitives.items())}
+            combined_signature = _signature(combined_mutations)
+            if combined_signature not in tested and combined_signature not in existing:
+                source_text = ", ".join(f"{name}={item['value']}" for name, item in sorted(primitives.items()))
+                suggestions.append(
+                    CandidateTrial(
+                        candidate_id=_candidate_id(combined_mutations),
+                        candidate_summary=f"Combine baseline-beating primitives: {source_text}.",
+                        hypothesis="Beneficial single mutations may compound when applied together.",
+                        mutations=combined_mutations,
+                    )
+                )
+                reasons.append("Combine beneficial single-parameter mutations that each beat the baseline.")
+
+        if len(suggestions) < limit:
+            neighborhood_trials, neighborhood_reasons = _neighborhood_suggestions(
+                anchors,
+                numeric_specs,
+                tested=tested,
+                existing=existing,
+                limit=max(limit - len(suggestions), 0),
             )
-        )
-        reasons.append(f"Retest beneficial primitive {name}={item['value']}.")
-        if len(suggestions) >= limit:
-            break
+            suggestions.extend(neighborhood_trials)
+            reasons.extend(neighborhood_reasons)
 
-    return {
-        "command_name": command_name,
-        "baseline_metric": baseline_metric,
-        "beneficial_primitives": list(primitives.values()),
-        "failure_focus": failure_focus,
-        "failure_priorities": failure_priorities,
-        "suggestion_count": len(suggestions[:limit]),
-        "reasons": reasons[: len(suggestions[:limit])],
-        "suggestions": _serialize_trials(suggestions, limit=limit),
-        "source": "core",
-    }
+        for name, item in sorted(primitives.items()):
+            if len(suggestions) >= limit:
+                break
+            single_mutation = {name: str(item["value"])}
+            sig = _signature(single_mutation)
+            if sig in tested or sig in existing:
+                continue
+            suggestions.append(
+                CandidateTrial(
+                    candidate_id=f"{name}-{_format_value(str(item['value']))}-retest",
+                    candidate_summary=f"Retest the best observed primitive for `{name}`.",
+                    hypothesis=f"The best observed value for `{name}` should be confirmed directly in the current loop.",
+                    mutations=single_mutation,
+                )
+            )
+            reasons.append(f"Retest beneficial primitive {name}={item['value']}.")
+            if len(suggestions) >= limit:
+                break
+
+        return {
+            "command_name": command_name,
+            "baseline_metric": baseline_metric,
+            "beneficial_primitives": list(primitives.values()),
+            "failure_focus": failure_focus,
+            "failure_priorities": failure_priorities,
+            "suggestion_count": len(suggestions[:limit]),
+            "reasons": reasons[: len(suggestions[:limit])],
+            "suggestions": _serialize_trials(suggestions, limit=limit),
+            "source": "core",
+        }
 
 
+
+    except Exception:
+        return {}
 def suggest_trials(config_path: Path, command_name: str, *, limit: int = 3) -> dict[str, Any]:
-    config = load_config(config_path)
-    config.candidate_trials = merged_candidate_trials(config_path, config=config)
-    runtime_root = resolve_runtime_root(config_path)
-    _mark_stale_continuous_status(runtime_root)
-    rows = read_jsonl(ledger_path(runtime_root))
-    if chip_has_hook(config_path, "suggest", config):
-        return _chip_suggestion_packet(config_path, config, command_name, rows, limit=limit)
-    return _core_suggestion_packet(config, runtime_root, command_name, rows, limit=limit)
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        config = load_config(config_path)
+        config.candidate_trials = merged_candidate_trials(config_path, config=config)
+        runtime_root = resolve_runtime_root(config_path)
+        _mark_stale_continuous_status(runtime_root)
+        rows = read_jsonl(ledger_path(runtime_root))
+        if chip_has_hook(config_path, "suggest", config):
+            return _chip_suggestion_packet(config_path, config, command_name, rows, limit=limit)
+        return _core_suggestion_packet(config, runtime_root, command_name, rows, limit=limit)
 
 
+
+    except Exception:
+        return {}
 def append_suggestions(config_path: Path, suggestions: list[dict[str, Any]], *, command_name: str | None = None) -> dict[str, Any]:
-    config = load_config(config_path)
-    trials = [_trial_from_packet(item, default_commands=[command_name] if command_name else None) for item in suggestions]
-    return append_queue_trials(config_path, trials, config=config)
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(suggestions, str): suggestions = str(suggestions or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        config = load_config(config_path)
+        trials = [_trial_from_packet(item, default_commands=[command_name] if command_name else None) for item in suggestions]
+        return append_queue_trials(config_path, trials, config=config)
 
 
+
+    except Exception:
+        return {}
 def _run_pending_trials(
     config_path: Path,
     command_name: str,
@@ -666,27 +693,36 @@ def _run_pending_trials(
     governor_decision: dict[str, Any] | None = None,
     authority_args_path: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
-    consecutive_discards = 0
-    results: list[dict[str, Any]] = []
-    for trial in pending[:max_iterations]:
-        record = run_once(
-            config_path,
-            command_name,
-            trial=trial,
-            dry_run=dry_run,
-            governor_decision=governor_decision,
-            authority_args_path=authority_args_path,
-        )
-        results.append(record)
-        if record["verdict"] == "improved":
-            consecutive_discards = 0
-        elif _row_counts_as_discard(record):
-            consecutive_discards += 1
-        if consecutive_discards >= discard_limit:
-            return results, True
-    return results, False
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(pending, list): pending = list(pending or [])
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    if not isinstance(authority_args_path, str): authority_args_path = str(authority_args_path or '')
+    try:
+        consecutive_discards = 0
+        results: list[dict[str, Any]] = []
+        for trial in pending[:max_iterations]:
+            record = run_once(
+                config_path,
+                command_name,
+                trial=trial,
+                dry_run=dry_run,
+                governor_decision=governor_decision,
+                authority_args_path=authority_args_path,
+            )
+            results.append(record)
+            if record["verdict"] == "improved":
+                consecutive_discards = 0
+            elif _row_counts_as_discard(record):
+                consecutive_discards += 1
+            if consecutive_discards >= discard_limit:
+                return results, True
+        return results, False
 
 
+
+    except Exception:
+        return ()
 def run_autoloop(
     config_path: Path,
     command_name: str,

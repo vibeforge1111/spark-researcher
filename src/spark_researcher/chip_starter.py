@@ -86,7 +86,12 @@ def ensure_external_chip_target(target_dir: Path) -> Path:
 
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    # Use exclusive-create so a concurrent init_chip racing past the
+    # exists() pre-check in init_chip() can't silently clobber a file
+    # the other process just wrote.  The dict-level pre-check stays as
+    # the common-case fast path; this is the race tie-breaker.
+    with path.open("x", encoding="utf-8") as fh:
+        fh.write(content.rstrip() + "\n")
 
 
 def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:

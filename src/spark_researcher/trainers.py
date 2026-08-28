@@ -15,12 +15,17 @@ _ABS_PATH_RE = re.compile(r"(?:[A-Za-z]:\\|/)[^\s\"']+")
 
 
 def _redact_stderr_excerpt(stderr: str, *, limit: int = 400) -> str:
-    """Return a length-capped trainer stderr excerpt with absolute filesystem
-    paths redacted, so debugging signal is retained without leaking the
-    operator's directory layout into persisted trainer state."""
-    redacted = _ABS_PATH_RE.sub("<path>", stderr)
-    return redacted[:limit]
+    if not isinstance(stderr, str): stderr = str(stderr or '')
+    try:
+        """Return a length-capped trainer stderr excerpt with absolute filesystem
+        paths redacted, so debugging signal is retained without leaking the
+        operator's directory layout into persisted trainer state."""
+        redacted = _ABS_PATH_RE.sub("<path>", stderr)
+        return redacted[:limit]
 
+
+    except Exception:
+        return ""
 from .config import TrainerSpec, load_config, resolve_project_root
 from .paths import resolve_runtime_root, trainers_root
 from .subprocess_policy import subprocess_timeout_seconds
@@ -43,19 +48,28 @@ PUBLIC_TRAINER_FIELDS = (
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def read_state(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+
+    except Exception:
+        return ""
+def read_state(path: Path) -> dict[str, Any]:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+
+
+    except Exception:
         return {}
-    return payload if isinstance(payload, dict) else {}
-
-
 def write_state(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"

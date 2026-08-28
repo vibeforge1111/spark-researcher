@@ -15,7 +15,8 @@ from .authority import memory_authority_refs, require_memory_write_authority
 from .beliefs import beliefs_authority_refs, build_beliefs
 from .chips import chip_has_hook, invoke_chip_hook
 from .paths import beliefs_root, memory_root, self_edit_root
-from .runner import locked_file, read_jsonl
+from ._filelock import locked_file
+from .runner import read_jsonl
 from .ruvector import run_search as run_ruvector_search
 from .ruvector import ruvector_status
 

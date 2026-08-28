@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .paths import artifacts_root
+from ._filelock import locked_file
 
 
 def _now_iso() -> str:
@@ -28,12 +29,15 @@ def _index_path(runtime_root: Path) -> Path:
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    from .runner import locked_file
+    """Append a single JSONL record, protected by a file lock to prevent
+    interleaved writes from concurrent processes (CWE-362)."""
+    from ._filelock import locked_file
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with locked_file(path):
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
 
 
 def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:

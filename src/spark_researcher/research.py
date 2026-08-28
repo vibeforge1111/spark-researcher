@@ -51,6 +51,17 @@ STORED_PROMPT_INJECTION_PATTERNS = (
     ("private-key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.I)),
 )
 
+# Compile-once for the DDG result-parse loop in _bounded_web_results.
+_DDG_LINK_PATTERN = re.compile(
+    r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_DDG_SNIPPET_PATTERN = re.compile(
+    r'result__snippet[^>]*>(.*?)</[^>]+>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_TAG_PATTERN = re.compile(r"<.*?>")
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()

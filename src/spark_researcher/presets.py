@@ -244,7 +244,10 @@ def _write_toy_files(target_dir: Path) -> None:
 
 
             def main() -> None:
-                config = json.loads(Path("config.json").read_text(encoding="utf-8"))
+                try:
+                    config = json.loads(Path("config.json").read_text(encoding="utf-8"))
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Invalid JSON (presets.py)") from exc
                 learning_rate = float(config["learning_rate"])
                 weight_decay = float(config["weight_decay"])
                 val_loss = 1.0 + ((learning_rate - 0.0003) ** 2) * 1000000 + abs(weight_decay - 0.02) * 5

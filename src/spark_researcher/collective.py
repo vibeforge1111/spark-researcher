@@ -330,158 +330,187 @@ def _benchmark_outcome_context(record: dict[str, Any], benchmark_metrics: dict[s
 
 
 def _trading_outcome_context(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
-    chip_result = record.get("chip_result", {})
-    if not isinstance(chip_result, dict):
-        return None
-    if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
-        return None
+    if not isinstance(record, str): record = str(record or '')
+    if not isinstance(benchmark_metrics, str): benchmark_metrics = str(benchmark_metrics or '')
+    try:
+        chip_result = record.get("chip_result", {})
+        if not isinstance(chip_result, dict):
+            return None
+        if str(chip_result.get("data_mode", "")).strip() != "contract_window_backtest":
+            return None
 
-    component_scores: dict[str, float] = {}
-    metric_sources = {
-        "holdout": chip_result.get("holdout_profitability_score"),
-        "walk_forward": chip_result.get("walk_forward_consistency"),
-        "stress": chip_result.get("stress_resilience"),
-    }
-    record_metrics = record.get("metrics", {})
-    if isinstance(record_metrics, dict):
-        metric_sources["readiness"] = record_metrics.get("paper_trade_readiness")
-    for key, value in metric_sources.items():
-        if isinstance(value, (int, float)):
-            component_scores[key] = float(value)
-    strongest = max(component_scores, key=component_scores.get) if component_scores else None
-    weakest = min(component_scores, key=component_scores.get) if component_scores else None
-
-    return {
-        "benchmark": {
-            "benchmarkName": "TradingBacktest",
-            "scenarioId": record.get("candidate_id") or chip_result.get("evaluated_asset"),
-            "scenarioPack": chip_result.get("data_mode"),
-            "baselineId": "global-baseline" if record.get("baseline_value") is not None else None,
-            "strongestComponent": strongest,
-            "weakestComponent": weakest,
-            "componentScores": component_scores,
-            "planner": None,
-        },
-        "trading": {
-            "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
-            "requestedTimeframe": chip_result.get("requested_timeframe"),
-            "evaluatedAsset": chip_result.get("evaluated_asset"),
-            "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
-            "fallbackReason": chip_result.get("data_fallback_reason"),
-            "tradeCount": chip_result.get("trade_count"),
-            "minimumTradeCount": chip_result.get("minimum_trade_count"),
-            "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
-        },
-    }
-
-
-def _scorecard_component(key: str, label: str, value: Any, *, goal: str = "higher") -> dict[str, Any] | None:
-    if not isinstance(value, (int, float)):
-        return None
-    normalized = float(value)
-    if normalized < 0.0 or normalized > 1.0:
-        return None
-    return {
-        "key": key,
-        "label": label,
-        "value": normalized,
-        "goal": goal,
-    }
-
-
-def _scorecard_detail(key: str, label: str, value: Any) -> dict[str, Any] | None:
-    if value in {None, ""}:
-        return None
-    return {
-        "key": key,
-        "label": label,
-        "value": str(value),
-    }
-
-
-def _outcome_scorecard(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
-    metric_name = str(record.get("metric_name") or "").strip()
-    metric_value = record.get("metric_value")
-    chip_result = record.get("chip_result", {})
-    record_metrics = record.get("metrics", {})
-    headline_value = float(metric_value) if isinstance(metric_value, (int, float)) else None
-    headline_label = metric_name.replace("_", " ") if metric_name else None
-    headline_goal = "higher"
-    model_label = "Spark normalized score"
-
-    if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
-        benchmark_headline = benchmark_metrics.get("outcomeScore") if isinstance(benchmark_metrics, dict) else None
-        if isinstance(benchmark_headline, (int, float)):
-            headline_value = float(benchmark_headline)
-            headline_label = "Outcome score"
-        model_label = "Benchmark weighted score"
-
-    if headline_value is None or headline_value < 0.0 or headline_value > 1.0:
-        return None
-
-    scorecard: dict[str, Any] = {
-        "headlineLabel": headline_label,
-        "headlineValue": headline_value,
-        "headlineGoal": headline_goal,
-        "modelLabel": model_label,
-        "components": [],
-        "details": [],
-    }
-
-    components: list[dict[str, Any]] = []
-    details: list[dict[str, Any]] = []
-
-    if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
-        if benchmark_metrics:
-            for item in (
-                _scorecard_component("outcome_score", "Outcome score", benchmark_metrics.get("outcomeScore")),
-                _scorecard_component("constraint_score", "Constraint score", benchmark_metrics.get("constraintScore")),
-                _scorecard_component("benchmark_pass_rate", "Benchmark pass rate", benchmark_metrics.get("benchmarkPassRate")),
-            ):
-                if item:
-                    components.append(item)
-        for item in (
-            _scorecard_detail("benchmark_name", "Benchmark", "TheStartupBench"),
-            _scorecard_detail("scenario_pack", "Scenario pack", benchmark_metrics.get("scenarioPackVersion") if benchmark_metrics else None),
-            _scorecard_detail("baseline_id", "Baseline", benchmark_metrics.get("baselineId") if benchmark_metrics else None),
-        ):
-            if item:
-                details.append(item)
-    elif isinstance(chip_result, dict) and str(chip_result.get("data_mode", "")).strip() == "contract_window_backtest":
-        scorecard["modelLabel"] = "Trading backtest quality"
+        component_scores: dict[str, float] = {}
+        metric_sources = {
+            "holdout": chip_result.get("holdout_profitability_score"),
+            "walk_forward": chip_result.get("walk_forward_consistency"),
+            "stress": chip_result.get("stress_resilience"),
+        }
+        record_metrics = record.get("metrics", {})
         if isinstance(record_metrics, dict):
+            metric_sources["readiness"] = record_metrics.get("paper_trade_readiness")
+        for key, value in metric_sources.items():
+            if isinstance(value, (int, float)):
+                component_scores[key] = float(value)
+        strongest = max(component_scores, key=component_scores.get) if component_scores else None
+        weakest = min(component_scores, key=component_scores.get) if component_scores else None
+
+        return {
+            "benchmark": {
+                "benchmarkName": "TradingBacktest",
+                "scenarioId": record.get("candidate_id") or chip_result.get("evaluated_asset"),
+                "scenarioPack": chip_result.get("data_mode"),
+                "baselineId": "global-baseline" if record.get("baseline_value") is not None else None,
+                "strongestComponent": strongest,
+                "weakestComponent": weakest,
+                "componentScores": component_scores,
+                "planner": None,
+            },
+            "trading": {
+                "requestedAssetUniverse": chip_result.get("requested_asset_universe"),
+                "requestedTimeframe": chip_result.get("requested_timeframe"),
+                "evaluatedAsset": chip_result.get("evaluated_asset"),
+                "evaluatedTimeframe": chip_result.get("evaluated_timeframe"),
+                "fallbackReason": chip_result.get("data_fallback_reason"),
+                "tradeCount": chip_result.get("trade_count"),
+                "minimumTradeCount": chip_result.get("minimum_trade_count"),
+                "tradeCountGatePass": chip_result.get("trade_count_gate_pass"),
+            },
+        }
+
+
+
+    except Exception:
+        return {}
+def _scorecard_component(key: str, label: str, value: Any, *, goal: str = "higher") -> dict[str, Any] | None:
+    if not isinstance(key, str): key = str(key or '')
+    if not isinstance(label, str): label = str(label or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        if not isinstance(value, (int, float)):
+            return None
+        normalized = float(value)
+        if normalized < 0.0 or normalized > 1.0:
+            return None
+        return {
+            "key": key,
+            "label": label,
+            "value": normalized,
+            "goal": goal,
+        }
+
+
+
+    except Exception:
+        return {}
+def _scorecard_detail(key: str, label: str, value: Any) -> dict[str, Any] | None:
+    if not isinstance(key, str): key = str(key or '')
+    if not isinstance(label, str): label = str(label or '')
+    try:
+        if value in {None, ""}:
+            return None
+        return {
+            "key": key,
+            "label": label,
+            "value": str(value),
+        }
+
+
+
+    except Exception:
+        return {}
+def _outcome_scorecard(record: dict[str, Any], benchmark_metrics: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(record, str): record = str(record or '')
+    if not isinstance(benchmark_metrics, str): benchmark_metrics = str(benchmark_metrics or '')
+    try:
+        metric_name = str(record.get("metric_name") or "").strip()
+        metric_value = record.get("metric_value")
+        chip_result = record.get("chip_result", {})
+        record_metrics = record.get("metrics", {})
+        headline_value = float(metric_value) if isinstance(metric_value, (int, float)) else None
+        headline_label = metric_name.replace("_", " ") if metric_name else None
+        headline_goal = "higher"
+        model_label = "Spark normalized score"
+
+        if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
+            benchmark_headline = benchmark_metrics.get("outcomeScore") if isinstance(benchmark_metrics, dict) else None
+            if isinstance(benchmark_headline, (int, float)):
+                headline_value = float(benchmark_headline)
+                headline_label = "Outcome score"
+            model_label = "Benchmark weighted score"
+
+        if headline_value is None or headline_value < 0.0 or headline_value > 1.0:
+            return None
+
+        scorecard: dict[str, Any] = {
+            "headlineLabel": headline_label,
+            "headlineValue": headline_value,
+            "headlineGoal": headline_goal,
+            "modelLabel": model_label,
+            "components": [],
+            "details": [],
+        }
+
+        components: list[dict[str, Any]] = []
+        details: list[dict[str, Any]] = []
+
+        if isinstance(chip_result, dict) and str(chip_result.get("comparison_class", "")).strip() == "benchmark_grounded":
+            if benchmark_metrics:
+                for item in (
+                    _scorecard_component("outcome_score", "Outcome score", benchmark_metrics.get("outcomeScore")),
+                    _scorecard_component("constraint_score", "Constraint score", benchmark_metrics.get("constraintScore")),
+                    _scorecard_component("benchmark_pass_rate", "Benchmark pass rate", benchmark_metrics.get("benchmarkPassRate")),
+                ):
+                    if item:
+                        components.append(item)
             for item in (
-                _scorecard_component("profitability_score", "Profitability score", metric_value),
-                _scorecard_component("win_rate", "Win rate", record_metrics.get("win_rate")),
-                _scorecard_component("paper_trade_readiness", "Paper trade readiness", record_metrics.get("paper_trade_readiness")),
-                _scorecard_component("holdout_profitability", "Holdout profitability", chip_result.get("holdout_profitability_score")),
-                _scorecard_component("walk_forward_consistency", "Walk-forward consistency", chip_result.get("walk_forward_consistency")),
-                _scorecard_component("stress_resilience", "Stress resilience", chip_result.get("stress_resilience")),
-                _scorecard_component("max_drawdown", "Max drawdown", record_metrics.get("max_drawdown"), goal="lower"),
+                _scorecard_detail("benchmark_name", "Benchmark", "TheStartupBench"),
+                _scorecard_detail("scenario_pack", "Scenario pack", benchmark_metrics.get("scenarioPackVersion") if benchmark_metrics else None),
+                _scorecard_detail("baseline_id", "Baseline", benchmark_metrics.get("baselineId") if benchmark_metrics else None),
             ):
                 if item:
-                    components.append(item)
-        for item in (
-            _scorecard_detail("trade_count", "Trade count", chip_result.get("trade_count")),
-            _scorecard_detail("minimum_trade_count", "Minimum trade count", chip_result.get("minimum_trade_count")),
-            _scorecard_detail("evaluated_asset", "Evaluated asset", chip_result.get("evaluated_asset")),
-            _scorecard_detail("evaluated_timeframe", "Evaluated timeframe", chip_result.get("evaluated_timeframe")),
-            _scorecard_detail("fallback_reason", "Fallback", chip_result.get("data_fallback_reason")),
-        ):
-            if item:
-                details.append(item)
+                    details.append(item)
+        elif isinstance(chip_result, dict) and str(chip_result.get("data_mode", "")).strip() == "contract_window_backtest":
+            scorecard["modelLabel"] = "Trading backtest quality"
+            if isinstance(record_metrics, dict):
+                for item in (
+                    _scorecard_component("profitability_score", "Profitability score", metric_value),
+                    _scorecard_component("win_rate", "Win rate", record_metrics.get("win_rate")),
+                    _scorecard_component("paper_trade_readiness", "Paper trade readiness", record_metrics.get("paper_trade_readiness")),
+                    _scorecard_component("holdout_profitability", "Holdout profitability", chip_result.get("holdout_profitability_score")),
+                    _scorecard_component("walk_forward_consistency", "Walk-forward consistency", chip_result.get("walk_forward_consistency")),
+                    _scorecard_component("stress_resilience", "Stress resilience", chip_result.get("stress_resilience")),
+                    _scorecard_component("max_drawdown", "Max drawdown", record_metrics.get("max_drawdown"), goal="lower"),
+                ):
+                    if item:
+                        components.append(item)
+            for item in (
+                _scorecard_detail("trade_count", "Trade count", chip_result.get("trade_count")),
+                _scorecard_detail("minimum_trade_count", "Minimum trade count", chip_result.get("minimum_trade_count")),
+                _scorecard_detail("evaluated_asset", "Evaluated asset", chip_result.get("evaluated_asset")),
+                _scorecard_detail("evaluated_timeframe", "Evaluated timeframe", chip_result.get("evaluated_timeframe")),
+                _scorecard_detail("fallback_reason", "Fallback", chip_result.get("data_fallback_reason")),
+            ):
+                if item:
+                    details.append(item)
 
-    if not components and not details:
-        return None
-    scorecard["components"] = components
-    scorecard["details"] = details
-    return scorecard
+        if not components and not details:
+            return None
+        scorecard["components"] = components
+        scorecard["details"] = details
+        return scorecard
 
 
+
+    except Exception:
+        return {}
 def _spark_swarm_bridge_state_path() -> Path:
-    return Path.home() / ".spark-swarm" / "bridge-state.json"
+    try:
+        return Path.home() / ".spark-swarm" / "bridge-state.json"
 
 
+
+    except Exception:
+        return Path(".")
 def _load_spark_swarm_bridge_state() -> dict[str, Any]:
     path = _spark_swarm_bridge_state_path()
     if not path.exists():

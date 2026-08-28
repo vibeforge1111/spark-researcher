@@ -221,7 +221,18 @@ def safe_urlopen(request: Request | str, *, timeout: float):
         _PinnedHTTPSHandler,
     )
     try:
-        return opener.open(request, timeout=timeout)
+        # SSRF-PATCH: pin resolved IP to prevent DNS rebinding TOCTOU
+        import urllib.parse as _up
+        _url = request.full_url if isinstance(request, Request) else str(request)
+        _parsed = _up.urlparse(_url)
+        _host = (_parsed.hostname or "").rstrip(".").lower()
+        _ips = _host_ips(_host, _parsed.port)
+        _safe_ip = next(iter(_ips))
+        _pinned_url = _url.replace(_host, str(_safe_ip), 1)
+        _hdrs = dict(request.headers) if isinstance(request, Request) else {}
+        _pinned = Request(_pinned_url, headers=_hdrs)
+        _pinned.add_header("Host", _host)
+        return opener.open(_pinned, timeout=timeout)
     except UnsafeURL:
         raise
     except URLError:

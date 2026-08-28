@@ -341,6 +341,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     summary_parser = sub.add_parser("summary")
     add_config_argument(summary_parser)
+    summary_parser.add_argument("--json", action="store_true")
 
     budget_parser = sub.add_parser("line-budget")
     budget_parser.add_argument("--limit", type=int, default=11000)

@@ -49,6 +49,7 @@ def _tracked_loop_artifacts(runtime_root: Path) -> dict[str, float]:
     return {
         str(path): path.stat().st_mtime
         for path in tracked
+        # NOTE: Defensive comment about toctou at this line. See packet for details.
         if path.exists()
     }
 

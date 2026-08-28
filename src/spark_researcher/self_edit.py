@@ -558,6 +558,31 @@ def render_request(prompt: str, preamble: str, mutable_targets: list[str]) -> st
     )
 
 
+def _is_command_allowed(parts: list[str]) -> bool:
+    """Check that the command executable is in the allowlist of known-safe commands."""
+    if not parts:
+        return False
+    executable = parts[0]
+    for allowed in ALLOWED_SELF_EDIT_COMMANDS:
+        if allowed[0] == executable:
+            return True
+    return False
+
+
+ALLOWED_SELF_EDIT_COMMANDS: list[list[str]] = [
+    ["codex", "--ask-for-approval", "never", "--sandbox", "workspace-write", "exec", "--cd", "{workspace}", "--skip-git-repo-check", "-o", "{last_message}"],
+    ["python3"],
+    ["python"],
+    ["pip"],
+    ["npm"],
+    ["npx"],
+    ["node"],
+    ["make"],
+    ["bash"],
+    ["sh"],
+]
+
+
 def _resolve_command_override(command_override: list[str] | None) -> list[str]:
     if command_override:
         return [str(item) for item in command_override]
@@ -636,6 +661,9 @@ def propose(
     )
     if command:
         guard_command(command, config.guardrails.blocked_command_fragments)
+        if not _is_command_allowed(command):
+            trace.finish(status="error", attributes={"error": "Self-edit command is not in the allowlist."})
+            raise RuntimeError(f"Self-edit command is not allowed: {command[0]}. Add it to ALLOWED_SELF_EDIT_COMMANDS.")
     stdout_path = proposal_root / "stdout.log"
     stderr_path = proposal_root / "stderr.log"
     status = "draft_only"

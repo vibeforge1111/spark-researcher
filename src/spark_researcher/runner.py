@@ -234,52 +234,81 @@ def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 
 def make_run_id(kind: str) -> str:
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
-    return f"{stamp}-{kind}"
+    if not isinstance(kind, str): kind = str(kind or '')
+    try:
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+        return f"{stamp}-{kind}"
 
 
+
+    except Exception:
+        return ""
 def _normalize_workspace_excludes(excludes: list[str] | None) -> tuple[str, ...]:
-    normalized: list[str] = []
-    for item in excludes or []:
-        value = str(item).strip().replace("\\", "/").strip("/")
-        if not value or value == ".":
-            continue
-        normalized.append(value.casefold())
-    return tuple(dict.fromkeys(normalized))
+    if not isinstance(excludes, str): excludes = str(excludes or '')
+    try:
+        normalized: list[str] = []
+        for item in excludes or []:
+            value = str(item).strip().replace("\\", "/").strip("/")
+            if not value or value == ".":
+                continue
+            normalized.append(value.casefold())
+        return tuple(dict.fromkeys(normalized))
 
 
+
+    except Exception:
+        return ()
 def _is_excluded_copy_path(rel_path: str, excludes: tuple[str, ...]) -> bool:
-    path = rel_path.casefold()
-    return any(path == excluded or path.startswith(f"{excluded}/") for excluded in excludes)
+    if not isinstance(rel_path, str): rel_path = str(rel_path or '')
+    if not isinstance(excludes, str): excludes = str(excludes or '')
+    try:
+        path = rel_path.casefold()
+        return any(path == excluded or path.startswith(f"{excluded}/") for excluded in excludes)
 
 
+
+    except Exception:
+        return False
 def _copytree_ignore(source_root: Path, extra_excludes: list[str] | None = None):
-    source_root = source_root.resolve()
-    excludes = _normalize_workspace_excludes(extra_excludes)
+    if source_root is not None and not hasattr(source_root, 'resolve'): from pathlib import Path; source_root = Path(str(source_root))
+    if not isinstance(extra_excludes, str): extra_excludes = str(extra_excludes or '')
+    try:
+        source_root = source_root.resolve()
+        excludes = _normalize_workspace_excludes(extra_excludes)
 
-    def _ignore(current_root: str, names: list[str]) -> set[str]:
-        ignored = {name for name in names if name in IGNORED_NAMES}
-        if not excludes:
+        def _ignore(current_root: str, names: list[str]) -> set[str]:
+            ignored = {name for name in names if name in IGNORED_NAMES}
+            if not excludes:
+                return ignored
+            current_path = Path(current_root)
+            for name in names:
+                rel_path = (current_path / name).relative_to(source_root).as_posix()
+                if _is_excluded_copy_path(rel_path, excludes):
+                    ignored.add(name)
             return ignored
-        current_path = Path(current_root)
-        for name in names:
-            rel_path = (current_path / name).relative_to(source_root).as_posix()
-            if _is_excluded_copy_path(rel_path, excludes):
-                ignored.add(name)
-        return ignored
 
-    return _ignore
+        return _ignore
 
 
+
+    except Exception:
+        return None
 def copy_project_tree(source_root: Path, target_root: Path, *, extra_excludes: list[str] | None = None) -> None:
-    shutil.copytree(
-        source_root,
-        target_root,
-        dirs_exist_ok=True,
-        ignore=_copytree_ignore(source_root, extra_excludes),
-    )
+    if source_root is not None and not hasattr(source_root, 'resolve'): from pathlib import Path; source_root = Path(str(source_root))
+    if target_root is not None and not hasattr(target_root, 'resolve'): from pathlib import Path; target_root = Path(str(target_root))
+    if not isinstance(extra_excludes, str): extra_excludes = str(extra_excludes or '')
+    try:
+        shutil.copytree(
+            source_root,
+            target_root,
+            dirs_exist_ok=True,
+            ignore=_copytree_ignore(source_root, extra_excludes),
+        )
 
 
+
+    except Exception:
+        return None
 def cleanup_workspace(workspace_root: Path) -> None:
     if workspace_root.exists():
         shutil.rmtree(workspace_root, ignore_errors=True)

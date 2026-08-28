@@ -240,6 +240,7 @@ def build_parser() -> argparse.ArgumentParser:
     trainer_run = trainer_sub.add_parser("run")
     add_config_argument(trainer_run)
     trainer_run.add_argument("--dry-run", action="store_true")
+    trainer_run.add_argument("--output")
     trainer_status_parser = trainer_sub.add_parser("status")
     add_config_argument(trainer_status_parser)
 

@@ -1456,6 +1456,7 @@ def absorb(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Spark Researcher collective bridge")
+    parser.add_argument("--json", action="store_true", help="Output in JSON format")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     publish_parser = subparsers.add_parser("publish")

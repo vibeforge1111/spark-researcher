@@ -169,7 +169,7 @@ def sanitize_untrusted_research_text(value: Any) -> str:
 def _bounded_research_text(value: Any, *, limit: int) -> str:
     compact = " ".join(sanitize_untrusted_research_text(value).split())
     compact = compact if len(compact) <= limit else compact[: limit - 3].rstrip() + "..."
-    return escape(compact, quote=False)
+    return compact
 
 
 def _write_research_artifact(

@@ -107,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--path", required=True)
     init_parser.add_argument("--preset", choices=preset_names(), required=True)
     init_parser.add_argument("--project-name", required=True)
+    init_parser.add_argument("--dry-run", action="store_true")
 
     run_parser = sub.add_parser("run")
     add_config_argument(run_parser)

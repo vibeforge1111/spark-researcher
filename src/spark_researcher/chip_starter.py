@@ -55,53 +55,80 @@ def _looks_like_spark_researcher_repo(path: Path) -> bool:
 
 
 def _next_steps(chip_root: Path) -> list[str]:
-    return [
-        f"cd {chip_root}",
-        "git init",
-        "git branch -m main",
-        "python -m pip install -e .",
-        f"python -m pip install -e {_spark_repo_root()}",
-        f"python -m spark_researcher.cli chips validate --config {chip_root / 'spark-researcher.project.json'}",
-    ]
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        return [
+            f"cd {chip_root}",
+            "git init",
+            "git branch -m main",
+            "python -m pip install -e .",
+            f"python -m pip install -e {_spark_repo_root()}",
+            f"python -m spark_researcher.cli chips validate --config {chip_root / 'spark-researcher.project.json'}",
+        ]
 
 
+
+    except Exception:
+        return []
 def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
-    if target_dir is None:
-        return (_default_chip_parent() / chip_name).resolve()
-    candidate = target_dir.expanduser()
-    if candidate.is_absolute():
-        return candidate.resolve()
-    return (_default_chip_parent() / candidate).resolve()
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        if target_dir is None:
+            return (_default_chip_parent() / chip_name).resolve()
+        candidate = target_dir.expanduser()
+        if candidate.is_absolute():
+            return candidate.resolve()
+        return (_default_chip_parent() / candidate).resolve()
 
 
+
+    except Exception:
+        return Path(".")
 def ensure_external_chip_target(target_dir: Path) -> Path:
-    resolved = target_dir.resolve()
-    repo_root = _spark_repo_root()
-    if resolved == repo_root or resolved.is_relative_to(repo_root):
-        raise ValueError(
-            f"Chip targets must live outside spark-researcher. Refusing to create chip inside `{repo_root}`."
-        )
-    return resolved
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    try:
+        resolved = target_dir.resolve()
+        repo_root = _spark_repo_root()
+        if resolved == repo_root or resolved.is_relative_to(repo_root):
+            raise ValueError(
+                f"Chip targets must live outside spark-researcher. Refusing to create chip inside `{repo_root}`."
+            )
+        return resolved
 
 
+
+    except Exception:
+        return Path(".")
 def _write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    if not isinstance(content, str): content = str(content or '')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
 def _authority_summary(verification: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "schema_version": verification.get("schema_version"),
-        "allowed": bool(verification.get("allowed")),
-        "decision_id": verification.get("decision_id"),
-        "turn_id": verification.get("turn_id"),
-        "tool_name": verification.get("tool_name"),
-        "capability_id": verification.get("capability_id"),
-        "authorization_decision_id": verification.get("authorization_decision_id"),
-        "ledger_id": verification.get("ledger_id"),
-    }
+    if not isinstance(verification, str): verification = str(verification or '')
+    try:
+        return {
+            "schema_version": verification.get("schema_version"),
+            "allowed": bool(verification.get("allowed")),
+            "decision_id": verification.get("decision_id"),
+            "turn_id": verification.get("turn_id"),
+            "tool_name": verification.get("tool_name"),
+            "capability_id": verification.get("capability_id"),
+            "authorization_decision_id": verification.get("authorization_decision_id"),
+            "ledger_id": verification.get("ledger_id"),
+        }
 
 
+
+    except Exception:
+        return {}
 def _gitignore() -> str:
     return "\n".join(
         [

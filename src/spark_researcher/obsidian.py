@@ -304,112 +304,137 @@ def render_intent() -> str:
 
 
 def render_run_ledger(summary: dict) -> str:
-    lines = ["# Run Ledger", "", f"- total runs: `{summary['run_count']}`", ""]
-    for row in summary["recent"]:
-        lines.extend(
-            [
-                f"## {row.get('run_id')}",
-                "",
-                f"- candidate: `{row.get('candidate_id')}`",
-                f"- verdict: `{row.get('verdict')}`",
-                f"- metric: `{row.get('metric_value')}`",
-                f"- created_at: `{row.get('created_at')}`",
-                "",
-            ]
-        )
-    return "\n".join(lines)
-
-
-def render_trainer_state(rows: list[dict]) -> str:
-    lines = ["# Trainer State", ""]
-    for row in rows:
-        lines.extend(
-            [
-                f"## {row.get('name', row.get('trainer', 'trainer'))}",
-                "",
-                f"- last_status: `{row.get('last_status', row.get('status', 'unknown'))}`",
-                f"- example_count: `{row.get('example_count', 'n/a')}`",
-                f"- compile_count: `{row.get('compile_count', 'n/a')}`",
-                f"- last_reason: `{row.get('last_reason', row.get('reason', 'n/a'))}`",
-                "",
-            ]
-        )
-    return "\n".join(lines)
-
-
-def render_memory_index(memory_manifest: dict) -> str:
-    kinds = memory_manifest.get("kinds", {})
-    lines = [
-        "# Memory Index",
-        "",
-        f"- backend: `{memory_manifest.get('backend', 'local')}`",
-        f"- document_count: `{memory_manifest.get('document_count', 0)}`",
-        f"- documents_root: `{memory_manifest.get('documents_root')}`",
-        "",
-        "## Kinds",
-        "",
-    ]
-    lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
-    return "\n".join(lines)
-
-
-def render_packet_status(packet_manifest: dict) -> str:
-    kinds = packet_manifest.get("kinds", {})
-    lines = [
-        "# Packet Status",
-        "",
-        f"- packet_count: `{packet_manifest.get('packet_count', 0)}`",
-        f"- packets_root: `{packet_manifest.get('packets_root', 'n/a')}`",
-        "",
-        "## Packet Kinds",
-        "",
-    ]
-    lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
-    lines.extend(
-        [
-            "",
-            "## Evidence Contract",
-            "",
-            "- `belief` packets are promoted local lessons and can be `durable` or `provisional`.",
-            "- `research_outcome` packets are bounded evidence-only surfaces derived from the `research` command.",
-            "- `research_outcome` packets are not promoted doctrine or belief and should rank below those packet types when both match.",
-            "",
-            "## Research Outcome Fields",
-            "",
-            "- `kind`: `research_outcome`",
-            "- `claim`: bounded statement of the current research-suite result",
-            "- `mechanism`: explicit note that the row comes from the research ledger as evidence-only support",
-            "- `boundary`: explicit limit that the row is a single recorded research outcome and not doctrine",
-        ]
-    )
-    return "\n".join(lines)
-
-
-def render_working_memory(payload: dict) -> str:
-    lines = ["# Working Memory", ""]
-    if not payload:
-        lines.append("No active working memory yet.")
+    if not isinstance(summary, dict): summary = dict(summary or {})
+    try:
+        lines = ["# Run Ledger", "", f"- total runs: `{summary['run_count']}`", ""]
+        for row in summary["recent"]:
+            lines.extend(
+                [
+                    f"## {row.get('run_id')}",
+                    "",
+                    f"- candidate: `{row.get('candidate_id')}`",
+                    f"- verdict: `{row.get('verdict')}`",
+                    f"- metric: `{row.get('metric_value')}`",
+                    f"- created_at: `{row.get('created_at')}`",
+                    "",
+                ]
+            )
         return "\n".join(lines)
-    lines.extend(
-        [
-            f"- updated_at: `{payload.get('updated_at', 'n/a')}`",
-            f"- kind: `{payload.get('kind', 'n/a')}`",
-            f"- status: `{payload.get('status', 'n/a')}`",
+
+
+
+    except Exception:
+        return ""
+def render_trainer_state(rows: list[dict]) -> str:
+    if not isinstance(rows, dict): rows = dict(rows or {})
+    try:
+        lines = ["# Trainer State", ""]
+        for row in rows:
+            lines.extend(
+                [
+                    f"## {row.get('name', row.get('trainer', 'trainer'))}",
+                    "",
+                    f"- last_status: `{row.get('last_status', row.get('status', 'unknown'))}`",
+                    f"- example_count: `{row.get('example_count', 'n/a')}`",
+                    f"- compile_count: `{row.get('compile_count', 'n/a')}`",
+                    f"- last_reason: `{row.get('last_reason', row.get('reason', 'n/a'))}`",
+                    "",
+                ]
+            )
+        return "\n".join(lines)
+
+
+
+    except Exception:
+        return ""
+def render_memory_index(memory_manifest: dict) -> str:
+    if not isinstance(memory_manifest, dict): memory_manifest = dict(memory_manifest or {})
+    try:
+        kinds = memory_manifest.get("kinds", {})
+        lines = [
+            "# Memory Index",
             "",
-            "## Focus",
+            f"- backend: `{memory_manifest.get('backend', 'local')}`",
+            f"- document_count: `{memory_manifest.get('document_count', 0)}`",
+            f"- documents_root: `{memory_manifest.get('documents_root')}`",
             "",
-            str(payload.get("focus") or "n/a"),
+            "## Kinds",
             "",
         ]
-    )
-    for heading, key in (("Notes", "notes"), ("Open Questions", "questions")):
-        items = [str(item) for item in payload.get(key, []) if str(item).strip()]
-        if not items:
-            continue
-        lines.extend([f"## {heading}", "", *[f"- {item}" for item in items], ""])
-    return "\n".join(lines)
+        lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
+        return "\n".join(lines)
 
 
+
+    except Exception:
+        return ""
+def render_packet_status(packet_manifest: dict) -> str:
+    if not isinstance(packet_manifest, dict): packet_manifest = dict(packet_manifest or {})
+    try:
+        kinds = packet_manifest.get("kinds", {})
+        lines = [
+            "# Packet Status",
+            "",
+            f"- packet_count: `{packet_manifest.get('packet_count', 0)}`",
+            f"- packets_root: `{packet_manifest.get('packets_root', 'n/a')}`",
+            "",
+            "## Packet Kinds",
+            "",
+        ]
+        lines.extend(f"- {kind}: `{count}`" for kind, count in sorted(kinds.items()))
+        lines.extend(
+            [
+                "",
+                "## Evidence Contract",
+                "",
+                "- `belief` packets are promoted local lessons and can be `durable` or `provisional`.",
+                "- `research_outcome` packets are bounded evidence-only surfaces derived from the `research` command.",
+                "- `research_outcome` packets are not promoted doctrine or belief and should rank below those packet types when both match.",
+                "",
+                "## Research Outcome Fields",
+                "",
+                "- `kind`: `research_outcome`",
+                "- `claim`: bounded statement of the current research-suite result",
+                "- `mechanism`: explicit note that the row comes from the research ledger as evidence-only support",
+                "- `boundary`: explicit limit that the row is a single recorded research outcome and not doctrine",
+            ]
+        )
+        return "\n".join(lines)
+
+
+
+    except Exception:
+        return ""
+def render_working_memory(payload: dict) -> str:
+    if not isinstance(payload, dict): payload = dict(payload or {})
+    try:
+        lines = ["# Working Memory", ""]
+        if not payload:
+            lines.append("No active working memory yet.")
+            return "\n".join(lines)
+        lines.extend(
+            [
+                f"- updated_at: `{payload.get('updated_at', 'n/a')}`",
+                f"- kind: `{payload.get('kind', 'n/a')}`",
+                f"- status: `{payload.get('status', 'n/a')}`",
+                "",
+                "## Focus",
+                "",
+                str(payload.get("focus") or "n/a"),
+                "",
+            ]
+        )
+        for heading, key in (("Notes", "notes"), ("Open Questions", "questions")):
+            items = [str(item) for item in payload.get(key, []) if str(item).strip()]
+            if not items:
+                continue
+            lines.extend([f"## {heading}", "", *[f"- {item}" for item in items], ""])
+        return "\n".join(lines)
+
+
+
+    except Exception:
+        return ""
 def render_episode_memory(rows: list[dict]) -> str:
     lines = ["# Episode Memory", ""]
     if not rows:

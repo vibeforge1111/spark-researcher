@@ -222,50 +222,72 @@ def config_to_payload(config: ProjectConfig) -> dict[str, object]:
 
 
 def save_config(path: Path, config: ProjectConfig) -> None:
-    payload = config_to_payload(config)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def public_config_path(path: Path) -> str:
-    resolved = path.resolve(strict=False)
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
     try:
-        display = str(resolved.relative_to(Path.cwd().resolve(strict=False)))
-    except ValueError:
-        return "<external-config>"
-    return "<redacted-config-path>" if SECRET_PATH_PATTERN.search(display) else display
+        payload = config_to_payload(config)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+
+    except Exception:
+        return None
+def public_config_path(path: Path) -> str:
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        resolved = path.resolve(strict=False)
+        try:
+            display = str(resolved.relative_to(Path.cwd().resolve(strict=False)))
+        except ValueError:
+            return "<external-config>"
+        return "<redacted-config-path>" if SECRET_PATH_PATTERN.search(display) else display
+
+
+
+    except Exception:
+        return ""
 def self_edit_policy(config: ProjectConfig) -> dict[str, object]:
-    return {
-        "git_mode": config.self_edit.git_mode,
-        "auto_push": config.self_edit.auto_push,
-        "branch_prefix": config.self_edit.branch_prefix,
-        "main_branch": config.self_edit.main_branch,
-        "commit_message_template": config.self_edit.commit_message_template,
-        "mutable_targets": list(config.self_edit.mutable_targets),
-        "backend_command": list(config.self_edit.command),
-    }
+    try:
+        return {
+            "git_mode": config.self_edit.git_mode,
+            "auto_push": config.self_edit.auto_push,
+            "branch_prefix": config.self_edit.branch_prefix,
+            "main_branch": config.self_edit.main_branch,
+            "commit_message_template": config.self_edit.commit_message_template,
+            "mutable_targets": list(config.self_edit.mutable_targets),
+            "backend_command": list(config.self_edit.command),
+        }
 
 
+
+    except Exception:
+        return {}
 def memory_policy(config: ProjectConfig) -> dict[str, object]:
-    return {
-        "backend": config.memory.backend,
-    }
+    try:
+        return {
+            "backend": config.memory.backend,
+        }
 
 
+
+    except Exception:
+        return {}
 def intent_policy(config: ProjectConfig) -> dict[str, object]:
-    return {
-        "goal": config.intent.goal,
-        "outcome": config.intent.outcome,
-        "success_criteria": list(config.intent.success_criteria),
-        "search_queries": list(config.intent.search_queries),
-        "frontier_mode": config.intent.frontier_mode,
-        "resource_modes": list(config.intent.resource_modes),
-        "notes": config.intent.notes,
-        "active": bool(config.intent.goal.strip() or config.intent.outcome.strip()),
-    }
+    try:
+        return {
+            "goal": config.intent.goal,
+            "outcome": config.intent.outcome,
+            "success_criteria": list(config.intent.success_criteria),
+            "search_queries": list(config.intent.search_queries),
+            "frontier_mode": config.intent.frontier_mode,
+            "resource_modes": list(config.intent.resource_modes),
+            "notes": config.intent.notes,
+            "active": bool(config.intent.goal.strip() or config.intent.outcome.strip()),
+        }
 
 
+
+    except Exception:
+        return {}
 def update_memory_policy(config: ProjectConfig, *, backend: str | None = None) -> ProjectConfig:
     if backend is not None:
         config.memory.backend = str(backend)

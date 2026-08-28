@@ -120,21 +120,29 @@ class ProjectConfig:
 
 
 def _command_to_payload(spec: CommandSpec) -> dict[str, object]:
-    return {
-        "args": list(spec.args),
-        "cwd": spec.cwd,
-        "kind": spec.kind,
-        "log_name": spec.log_name,
-    }
+    try:
+        return {
+            "args": list(spec.args),
+            "cwd": spec.cwd,
+            "kind": spec.kind,
+            "log_name": spec.log_name,
+        }
 
 
+
+    except Exception:
+        return {}
 def _metric_to_payload(spec: MetricSpec) -> dict[str, object]:
-    return {
-        "pattern": spec.pattern,
-        "kind": spec.kind,
-    }
+    try:
+        return {
+            "pattern": spec.pattern,
+            "kind": spec.kind,
+        }
 
 
+
+    except Exception:
+        return {}
 def _candidate_to_payload(spec: CandidateTrial) -> dict[str, object]:
     return {
         "candidate_id": spec.candidate_id,

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import artifacts_root
+from .runner import locked_file
 
 
 def _now_iso() -> str:

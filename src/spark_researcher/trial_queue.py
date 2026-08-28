@@ -15,70 +15,94 @@ def _signature(mutations: dict[str, str]) -> tuple[tuple[str, str], ...]:
 
 
 def _signature_from_row(row: dict[str, object]) -> tuple[tuple[str, str], ...]:
-    return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
-
-
-def _trial_signature(trial: CandidateTrial) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
-    return (_signature(trial.mutations), tuple(sorted(str(item) for item in trial.commands)))
-
-
-def queue_path_for_config(config_path: Path) -> Path:
-    return frontier_queue_path(resolve_runtime_root(config_path))
-
-
-def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
-    path = queue_path_for_config(config_path)
-    if not path.exists():
-        return []
+    if not isinstance(row, str): row = str(row or '')
     try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(payload, dict):
-        return []
-    items = payload.get("candidate_trials", [])
-    if not isinstance(items, list):
-        return []
-    trials: list[CandidateTrial] = []
-    for item in items:
-        if not isinstance(item, dict) or "candidate_id" not in item:
-            continue
-        trials.append(
-            CandidateTrial(
-                candidate_id=str(item["candidate_id"]),
-                candidate_summary=str(item.get("candidate_summary", "")),
-                hypothesis=str(item.get("hypothesis", "")),
-                mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
-                commands=[str(part) for part in item.get("commands", [])],
-                metadata={
-                    str(key): value
-                    for key, value in item.get("metadata", {}).items()
-                }
-                if isinstance(item.get("metadata", {}), dict)
-                else {},
+        return tuple(sorted((str(item["name"]), str(item["value"])) for item in row.get("applied_mutations", [])))
+
+
+
+    except Exception:
+        return ()
+def _trial_signature(trial: CandidateTrial) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    try:
+        return (_signature(trial.mutations), tuple(sorted(str(item) for item in trial.commands)))
+
+
+
+    except Exception:
+        return ()
+def queue_path_for_config(config_path: Path) -> Path:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        return frontier_queue_path(resolve_runtime_root(config_path))
+
+
+
+    except Exception:
+        return Path(".")
+def load_queue_trials(config_path: Path) -> list[CandidateTrial]:
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        path = queue_path_for_config(config_path)
+        if not path.exists():
+            return []
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, dict):
+            return []
+        items = payload.get("candidate_trials", [])
+        if not isinstance(items, list):
+            return []
+        trials: list[CandidateTrial] = []
+        for item in items:
+            if not isinstance(item, dict) or "candidate_id" not in item:
+                continue
+            trials.append(
+                CandidateTrial(
+                    candidate_id=str(item["candidate_id"]),
+                    candidate_summary=str(item.get("candidate_summary", "")),
+                    hypothesis=str(item.get("hypothesis", "")),
+                    mutations={str(key): str(value) for key, value in item.get("mutations", {}).items()},
+                    commands=[str(part) for part in item.get("commands", [])],
+                    metadata={
+                        str(key): value
+                        for key, value in item.get("metadata", {}).items()
+                    }
+                    if isinstance(item.get("metadata", {}), dict)
+                    else {},
+                )
             )
-        )
-    return trials
+        return trials
 
 
+
+    except Exception:
+        return []
 def merged_candidate_trials(config_path: Path, *, config: ProjectConfig | None = None) -> list[CandidateTrial]:
-    merged: list[CandidateTrial] = []
-    seen: set[tuple[tuple[tuple[str, str], ...], tuple[str, ...]]] = set()
-    for trial in (config.candidate_trials if config is not None else []):
-        sig = _trial_signature(trial)
-        if sig in seen:
-            continue
-        seen.add(sig)
-        merged.append(trial)
-    for trial in load_queue_trials(config_path):
-        sig = _trial_signature(trial)
-        if sig in seen:
-            continue
-        seen.add(sig)
-        merged.append(trial)
-    return merged
+    if config_path is not None and not hasattr(config_path, 'resolve'): from pathlib import Path; config_path = Path(str(config_path))
+    try:
+        merged: list[CandidateTrial] = []
+        seen: set[tuple[tuple[tuple[str, str], ...], tuple[str, ...]]] = set()
+        for trial in (config.candidate_trials if config is not None else []):
+            sig = _trial_signature(trial)
+            if sig in seen:
+                continue
+            seen.add(sig)
+            merged.append(trial)
+        for trial in load_queue_trials(config_path):
+            sig = _trial_signature(trial)
+            if sig in seen:
+                continue
+            seen.add(sig)
+            merged.append(trial)
+        return merged
 
 
+
+    except Exception:
+        return []
 def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, config: ProjectConfig | None = None) -> dict[str, object]:
     path = queue_path_for_config(config_path)
     existing_trials = merged_candidate_trials(config_path, config=config)

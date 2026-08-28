@@ -102,6 +102,17 @@ def _validated_workspace_root(proposal_id: str, stored_path: object) -> Path:
     return workspace
 
 
+def _validate_proposal_id(proposal_id: str) -> None:
+    """Reject proposal_id values that could escape the intended directory."""
+    if not proposal_id or not proposal_id.strip():
+        raise ValueError("proposal_id must not be empty")
+    parts = Path(proposal_id).parts
+    if ".." in parts or any(sep in proposal_id for sep in ("/", "\\")):
+        raise ValueError(
+            f"proposal_id contains path traversal characters: {proposal_id!r}"
+        )
+
+
 def _proposal_path(runtime_root: Path, proposal_id: str) -> Path:
     return _proposal_dir(runtime_root, proposal_id) / "proposal.json"
 
@@ -742,6 +753,7 @@ def review_proposal(
     notes: str = "",
 ) -> dict[str, Any]:
     runtime_root = resolve_runtime_root(config_path)
+    _validate_proposal_id(proposal_id)
     trace = start_trace(runtime_root, kind="self_edit_review", name=proposal_id, attributes={"decision": decision})
     proposal = _load_json(_proposal_path(runtime_root, proposal_id))
     if not proposal:
@@ -804,6 +816,7 @@ def apply_proposal(
     config = load_config(config_path)
     repo_root = config_path.parent.resolve()
     runtime_root = resolve_runtime_root(config_path)
+    _validate_proposal_id(proposal_id)
     trace = start_trace(runtime_root, kind="self_edit_apply", name=proposal_id)
     if config.guardrails.require_clean_git_for_self_edit and run_git_status(repo_root):
         trace.finish(status="error", attributes={"error": "Git worktree must be clean before applying a self-edit proposal."})

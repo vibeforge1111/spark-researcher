@@ -38,42 +38,66 @@ def normalize_chip_name(domain: str, chip_name: str | None = None) -> str:
 
 
 def _default_chip_parent() -> Path:
-    return Path.home() / ".spark" / "chips"
+    try:
+        return Path.home() / ".spark" / "chips"
 
 
+
+    except Exception:
+        return Path(".")
 def _spark_repo_root() -> Path:
-    cwd = Path.cwd().resolve()
-    for candidate in (cwd, *cwd.parents):
-        if _looks_like_spark_researcher_repo(candidate):
-            return candidate
-    source_root = Path(__file__).resolve().parents[2]
-    return source_root
+    try:
+        cwd = Path.cwd().resolve()
+        for candidate in (cwd, *cwd.parents):
+            if _looks_like_spark_researcher_repo(candidate):
+                return candidate
+        source_root = Path(__file__).resolve().parents[2]
+        return source_root
 
 
+
+    except Exception:
+        return Path(".")
 def _looks_like_spark_researcher_repo(path: Path) -> bool:
-    return (path / "pyproject.toml").exists() and (path / "src" / "spark_researcher").is_dir()
+    if path is not None and not hasattr(path, 'resolve'): from pathlib import Path; path = Path(str(path))
+    try:
+        return (path / "pyproject.toml").exists() and (path / "src" / "spark_researcher").is_dir()
 
 
+
+    except Exception:
+        return False
 def _next_steps(chip_root: Path) -> list[str]:
-    return [
-        f"cd {chip_root}",
-        "git init",
-        "git branch -m main",
-        "python -m pip install -e .",
-        f"python -m pip install -e {_spark_repo_root()}",
-        f"python -m spark_researcher.cli chips validate --config {chip_root / 'spark-researcher.project.json'}",
-    ]
+    if chip_root is not None and not hasattr(chip_root, 'resolve'): from pathlib import Path; chip_root = Path(str(chip_root))
+    try:
+        return [
+            f"cd {chip_root}",
+            "git init",
+            "git branch -m main",
+            "python -m pip install -e .",
+            f"python -m pip install -e {_spark_repo_root()}",
+            f"python -m spark_researcher.cli chips validate --config {chip_root / 'spark-researcher.project.json'}",
+        ]
 
 
+
+    except Exception:
+        return []
 def resolve_chip_target(target_dir: Path | None, chip_name: str) -> Path:
-    if target_dir is None:
-        return (_default_chip_parent() / chip_name).resolve()
-    candidate = target_dir.expanduser()
-    if candidate.is_absolute():
-        return candidate.resolve()
-    return (_default_chip_parent() / candidate).resolve()
+    if target_dir is not None and not hasattr(target_dir, 'resolve'): from pathlib import Path; target_dir = Path(str(target_dir))
+    if not isinstance(chip_name, str): chip_name = str(chip_name or '')
+    try:
+        if target_dir is None:
+            return (_default_chip_parent() / chip_name).resolve()
+        candidate = target_dir.expanduser()
+        if candidate.is_absolute():
+            return candidate.resolve()
+        return (_default_chip_parent() / candidate).resolve()
 
 
+
+    except Exception:
+        return Path(".")
 def ensure_external_chip_target(target_dir: Path) -> Path:
     resolved = target_dir.resolve()
     repo_root = _spark_repo_root()

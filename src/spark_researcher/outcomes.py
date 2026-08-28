@@ -6,6 +6,7 @@ from pathlib import Path
 from statistics import mean
 
 from .paths import advisory_root
+from .runner import locked_file
 
 
 def _now_iso() -> str:

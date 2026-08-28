@@ -136,91 +136,111 @@ def _metric_to_payload(spec: MetricSpec) -> dict[str, object]:
 
 
 def _candidate_to_payload(spec: CandidateTrial) -> dict[str, object]:
-    return {
-        "candidate_id": spec.candidate_id,
-        "candidate_summary": spec.candidate_summary,
-        "hypothesis": spec.hypothesis,
-        "mutations": dict(spec.mutations),
-        "commands": list(spec.commands),
-        "metadata": dict(spec.metadata),
-    }
+    try:
+        return {
+            "candidate_id": spec.candidate_id,
+            "candidate_summary": spec.candidate_summary,
+            "hypothesis": spec.hypothesis,
+            "mutations": dict(spec.mutations),
+            "commands": list(spec.commands),
+            "metadata": dict(spec.metadata),
+        }
 
 
+
+    except Exception:
+        return {}
 def _trainer_to_payload(spec: TrainerSpec) -> dict[str, object]:
-    return {
-        "name": spec.name,
-        "examples_path": spec.examples_path,
-        "compile_command": list(spec.compile_command),
-        "min_examples": spec.min_examples,
-        "recompile_every": spec.recompile_every,
-        "max_examples": spec.max_examples,
-    }
+    try:
+        return {
+            "name": spec.name,
+            "examples_path": spec.examples_path,
+            "compile_command": list(spec.compile_command),
+            "min_examples": spec.min_examples,
+            "recompile_every": spec.recompile_every,
+            "max_examples": spec.max_examples,
+        }
 
 
+
+    except Exception:
+        return {}
 def _safe_int(value: Any, default: int) -> int:
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
 
+
+    except Exception:
+        return 0
 def _safe_float(value: Any, default: float) -> float:
     try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
 
+
+    except Exception:
+        return None
 def config_to_payload(config: ProjectConfig) -> dict[str, object]:
-    return {
-        "project_name": config.project_name,
-        "project_root": config.project_root,
-        "eval_metric": config.eval_metric,
-        "eval_goal": config.eval_goal,
-        "commands": {name: _command_to_payload(spec) for name, spec in config.commands.items()},
-        "metrics": {name: _metric_to_payload(spec) for name, spec in config.metrics.items()},
-        "workspace_excludes": list(config.workspace_excludes),
-        "mutable_parameters": [asdict(item) for item in config.mutable_parameters],
-        "candidate_trials": [_candidate_to_payload(item) for item in config.candidate_trials],
-        "trainers": [_trainer_to_payload(item) for item in config.trainers],
-        "mutable_targets": list(config.mutable_targets),
-        "memory": {
-            "backend": config.memory.backend,
-        },
-        "chip": {
-            "path": config.chip.path,
-            "manifest": config.chip.manifest,
-        },
-        "intent": {
-            "goal": config.intent.goal,
-            "outcome": config.intent.outcome,
-            "success_criteria": list(config.intent.success_criteria),
-            "search_queries": list(config.intent.search_queries),
-            "frontier_mode": config.intent.frontier_mode,
-            "resource_modes": list(config.intent.resource_modes),
-            "notes": config.intent.notes,
-        },
-        "self_edit": {
-            "command": list(config.self_edit.command),
-            "mutable_targets": list(config.self_edit.mutable_targets),
-            "prompt_preamble": config.self_edit.prompt_preamble,
-            "git_mode": config.self_edit.git_mode,
-            "auto_push": config.self_edit.auto_push,
-            "branch_prefix": config.self_edit.branch_prefix,
-            "main_branch": config.self_edit.main_branch,
-            "commit_message_template": config.self_edit.commit_message_template,
-        },
-        "guardrails": {
-            "max_loop_iterations": config.guardrails.max_loop_iterations,
-            "consecutive_discard_limit": config.guardrails.consecutive_discard_limit,
-            "near_best_tolerance": config.guardrails.near_best_tolerance,
-            "require_clean_git_for_self_edit": config.guardrails.require_clean_git_for_self_edit,
-            "require_human_approval_for_self_edit": config.guardrails.require_human_approval_for_self_edit,
-            "blocked_command_fragments": list(config.guardrails.blocked_command_fragments),
-        },
-    }
+    try:
+        return {
+            "project_name": config.project_name,
+            "project_root": config.project_root,
+            "eval_metric": config.eval_metric,
+            "eval_goal": config.eval_goal,
+            "commands": {name: _command_to_payload(spec) for name, spec in config.commands.items()},
+            "metrics": {name: _metric_to_payload(spec) for name, spec in config.metrics.items()},
+            "workspace_excludes": list(config.workspace_excludes),
+            "mutable_parameters": [asdict(item) for item in config.mutable_parameters],
+            "candidate_trials": [_candidate_to_payload(item) for item in config.candidate_trials],
+            "trainers": [_trainer_to_payload(item) for item in config.trainers],
+            "mutable_targets": list(config.mutable_targets),
+            "memory": {
+                "backend": config.memory.backend,
+            },
+            "chip": {
+                "path": config.chip.path,
+                "manifest": config.chip.manifest,
+            },
+            "intent": {
+                "goal": config.intent.goal,
+                "outcome": config.intent.outcome,
+                "success_criteria": list(config.intent.success_criteria),
+                "search_queries": list(config.intent.search_queries),
+                "frontier_mode": config.intent.frontier_mode,
+                "resource_modes": list(config.intent.resource_modes),
+                "notes": config.intent.notes,
+            },
+            "self_edit": {
+                "command": list(config.self_edit.command),
+                "mutable_targets": list(config.self_edit.mutable_targets),
+                "prompt_preamble": config.self_edit.prompt_preamble,
+                "git_mode": config.self_edit.git_mode,
+                "auto_push": config.self_edit.auto_push,
+                "branch_prefix": config.self_edit.branch_prefix,
+                "main_branch": config.self_edit.main_branch,
+                "commit_message_template": config.self_edit.commit_message_template,
+            },
+            "guardrails": {
+                "max_loop_iterations": config.guardrails.max_loop_iterations,
+                "consecutive_discard_limit": config.guardrails.consecutive_discard_limit,
+                "near_best_tolerance": config.guardrails.near_best_tolerance,
+                "require_clean_git_for_self_edit": config.guardrails.require_clean_git_for_self_edit,
+                "require_human_approval_for_self_edit": config.guardrails.require_human_approval_for_self_edit,
+                "blocked_command_fragments": list(config.guardrails.blocked_command_fragments),
+            },
+        }
 
 
+
+    except Exception:
+        return {}
 def save_config(path: Path, config: ProjectConfig) -> None:
     payload = config_to_payload(config)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -220,49 +220,66 @@ def _baseline_metric(rows: list[dict[str, Any]], command_name: str, goal: str) -
 
 
 def _tested_signatures(rows: list[dict[str, Any]], command_name: str) -> set[tuple[tuple[str, str], ...]]:
-    return {
-        _signature_from_row(row)
-        for row in rows
-        if row.get("command_name") == command_name
-    }
+    if not isinstance(rows, str): rows = str(rows or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    try:
+        return {
+            _signature_from_row(row)
+            for row in rows
+            if row.get("command_name") == command_name
+        }
 
 
+
+    except Exception:
+        return None
 def _best_single_primitives(rows: list[dict[str, Any]], command_name: str, goal: str, baseline_metric: float | None) -> dict[str, dict[str, Any]]:
-    best: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        if row.get("command_name") != command_name:
-            continue
-        metric_value = _row_numeric_metric(row)
-        mutations = row.get("applied_mutations") or []
-        if metric_value is None or len(mutations) != 1:
-            continue
-        mutation = mutations[0]
-        name = str(mutation["name"])
-        value = str(mutation["value"])
-        row_metric = metric_value
-        beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
-        if not beneficial:
-            continue
-        current = best.get(name)
-        if current is None or _metric_is_better(row_metric, float(current["metric_value"]), goal):
-            best[name] = {
-                "name": name,
-                "value": value,
-                "metric_value": row_metric,
-                "candidate_id": row.get("candidate_id"),
-                "reason": "beats baseline" if baseline_metric is not None and _metric_is_better(row_metric, baseline_metric, goal) else "improved run",
-            }
-    return best
+    if not isinstance(rows, str): rows = str(rows or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    try:
+        best: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if row.get("command_name") != command_name:
+                continue
+            metric_value = _row_numeric_metric(row)
+            mutations = row.get("applied_mutations") or []
+            if metric_value is None or len(mutations) != 1:
+                continue
+            mutation = mutations[0]
+            name = str(mutation["name"])
+            value = str(mutation["value"])
+            row_metric = metric_value
+            beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
+            if not beneficial:
+                continue
+            current = best.get(name)
+            if current is None or _metric_is_better(row_metric, float(current["metric_value"]), goal):
+                best[name] = {
+                    "name": name,
+                    "value": value,
+                    "metric_value": row_metric,
+                    "candidate_id": row.get("candidate_id"),
+                    "reason": "beats baseline" if baseline_metric is not None and _metric_is_better(row_metric, baseline_metric, goal) else "improved run",
+                }
+        return best
 
 
+
+    except Exception:
+        return {}
 def _numeric_specs(config: Any) -> dict[str, MutationSpec]:
-    specs: dict[str, MutationSpec] = {}
-    for spec in config.mutable_parameters:
-        if spec.value_step and len(spec.value_range) == 2:
-            specs[spec.name] = spec
-    return specs
+    try:
+        specs: dict[str, MutationSpec] = {}
+        for spec in config.mutable_parameters:
+            if spec.value_step and len(spec.value_range) == 2:
+                specs[spec.name] = spec
+        return specs
 
 
+
+    except Exception:
+        return {}
 def _beneficial_numeric_anchors(
     rows: list[dict[str, Any]],
     command_name: str,
@@ -270,36 +287,44 @@ def _beneficial_numeric_anchors(
     baseline_metric: float | None,
     specs: dict[str, MutationSpec],
 ) -> dict[str, dict[str, Any]]:
-    anchors: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        if row.get("command_name") != command_name:
-            continue
-        metric_value = _row_numeric_metric(row)
-        if metric_value is None:
-            continue
-        mutation_map = {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}
-        if not mutation_map:
-            continue
-        row_metric = metric_value
-        beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
-        if not beneficial:
-            continue
-        for name, value in mutation_map.items():
-            spec = specs.get(name)
-            if spec is None or _parse_decimal(value) is None:
+    if not isinstance(rows, str): rows = str(rows or '')
+    if not isinstance(command_name, str): command_name = str(command_name or '')
+    if not isinstance(goal, str): goal = str(goal or '')
+    if not isinstance(specs, str): specs = str(specs or '')
+    try:
+        anchors: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if row.get("command_name") != command_name:
                 continue
-            current = anchors.get(name)
-            if current is None or _metric_is_better(row_metric, float(current["metric_value"]), goal):
-                anchors[name] = {
-                    "name": name,
-                    "value": value,
-                    "metric_value": row_metric,
-                    "candidate_id": row.get("candidate_id"),
-                    "base_mutations": mutation_map,
-                }
-    return anchors
+            metric_value = _row_numeric_metric(row)
+            if metric_value is None:
+                continue
+            mutation_map = {str(item["name"]): str(item["value"]) for item in row.get("applied_mutations", [])}
+            if not mutation_map:
+                continue
+            row_metric = metric_value
+            beneficial = _metric_is_better(row_metric, baseline_metric, goal) or row.get("verdict") == "improved"
+            if not beneficial:
+                continue
+            for name, value in mutation_map.items():
+                spec = specs.get(name)
+                if spec is None or _parse_decimal(value) is None:
+                    continue
+                current = anchors.get(name)
+                if current is None or _metric_is_better(row_metric, float(current["metric_value"]), goal):
+                    anchors[name] = {
+                        "name": name,
+                        "value": value,
+                        "metric_value": row_metric,
+                        "candidate_id": row.get("candidate_id"),
+                        "base_mutations": mutation_map,
+                    }
+        return anchors
 
 
+
+    except Exception:
+        return {}
 def _neighborhood_suggestions(
     anchors: dict[str, dict[str, Any]],
     specs: dict[str, MutationSpec],
@@ -308,55 +333,63 @@ def _neighborhood_suggestions(
     existing: set[tuple[tuple[str, str], ...]],
     limit: int,
 ) -> tuple[list[CandidateTrial], list[str]]:
-    suggestions: list[CandidateTrial] = []
-    reasons: list[str] = []
-    queued = set(tested | existing)
-    for name, anchor in sorted(anchors.items()):
-        if len(suggestions) >= limit:
-            break
-        spec = specs[name]
-        step = _parse_decimal(spec.value_step)
-        lower = _parse_decimal(spec.value_range[0])
-        upper = _parse_decimal(spec.value_range[1])
-        current_value = _parse_decimal(str(anchor["value"]))
-        if None in {step, lower, upper, current_value}:
-            continue
-        base_mutations = {str(key): str(value) for key, value in dict(anchor["base_mutations"]).items()}
-        for direction in (-1, 1):
+    if not isinstance(anchors, str): anchors = str(anchors or '')
+    if not isinstance(specs, str): specs = str(specs or '')
+    if not isinstance(tested, str): tested = str(tested or '')
+    if not isinstance(existing, str): existing = str(existing or '')
+    try:
+        suggestions: list[CandidateTrial] = []
+        reasons: list[str] = []
+        queued = set(tested | existing)
+        for name, anchor in sorted(anchors.items()):
             if len(suggestions) >= limit:
                 break
-            neighbor = current_value + (step * direction)
-            if neighbor < lower or neighbor > upper:
+            spec = specs[name]
+            step = _parse_decimal(spec.value_step)
+            lower = _parse_decimal(spec.value_range[0])
+            upper = _parse_decimal(spec.value_range[1])
+            current_value = _parse_decimal(str(anchor["value"]))
+            if None in {step, lower, upper, current_value}:
                 continue
-            neighbor_value = _format_decimal(neighbor)
-            if neighbor_value == str(anchor["value"]):
-                continue
-            candidate_mutations = dict(base_mutations) if base_mutations else {name: str(anchor["value"])}
-            candidate_mutations[name] = neighbor_value
-            sig = _signature(candidate_mutations)
-            if sig in queued:
-                continue
-            queued.add(sig)
-            focused = len(candidate_mutations) > 1
-            focus_text = "best combo" if focused else "best observed primitive"
-            suggestions.append(
-                CandidateTrial(
-                    candidate_id=f"neighbor-{_candidate_id(candidate_mutations)}",
-                    candidate_summary=(
-                        f"Probe `{name}` near the {focus_text} by moving from {anchor['value']} to {neighbor_value}."
-                    ),
-                    hypothesis=(
-                        f"A small numeric move around the current winning value for `{name}` may improve further without changing the search axis."
-                    ),
-                    mutations=candidate_mutations,
+            base_mutations = {str(key): str(value) for key, value in dict(anchor["base_mutations"]).items()}
+            for direction in (-1, 1):
+                if len(suggestions) >= limit:
+                    break
+                neighbor = current_value + (step * direction)
+                if neighbor < lower or neighbor > upper:
+                    continue
+                neighbor_value = _format_decimal(neighbor)
+                if neighbor_value == str(anchor["value"]):
+                    continue
+                candidate_mutations = dict(base_mutations) if base_mutations else {name: str(anchor["value"])}
+                candidate_mutations[name] = neighbor_value
+                sig = _signature(candidate_mutations)
+                if sig in queued:
+                    continue
+                queued.add(sig)
+                focused = len(candidate_mutations) > 1
+                focus_text = "best combo" if focused else "best observed primitive"
+                suggestions.append(
+                    CandidateTrial(
+                        candidate_id=f"neighbor-{_candidate_id(candidate_mutations)}",
+                        candidate_summary=(
+                            f"Probe `{name}` near the {focus_text} by moving from {anchor['value']} to {neighbor_value}."
+                        ),
+                        hypothesis=(
+                            f"A small numeric move around the current winning value for `{name}` may improve further without changing the search axis."
+                        ),
+                        mutations=candidate_mutations,
+                    )
                 )
-            )
-            reasons.append(
-                f"Explore the numeric neighborhood around {name}={anchor['value']} within the declared range {spec.value_range[0]}..{spec.value_range[1]}."
-            )
-    return suggestions, reasons
+                reasons.append(
+                    f"Explore the numeric neighborhood around {name}={anchor['value']} within the declared range {spec.value_range[0]}..{spec.value_range[1]}."
+                )
+        return suggestions, reasons
 
 
+
+    except Exception:
+        return ()
 def _trial_from_packet(item: dict[str, Any], *, default_commands: list[str] | None = None) -> CandidateTrial:
     return CandidateTrial(
         candidate_id=str(item["candidate_id"]),

@@ -253,6 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
     memory_search.add_argument("query")
     memory_search.add_argument("--limit", type=int, default=5)
     memory_search.add_argument("--backend", choices=["local", "ruvector"])
+    memory_search.add_argument("--output", "-o", metavar="FILE", default=None, help="write JSON output to FILE instead of stdout")
     memory_status_parser = memory_sub.add_parser("status")
     add_config_argument(memory_status_parser)
     memory_status_parser.add_argument("--backend", choices=["local", "ruvector"])
@@ -457,17 +458,21 @@ def _handle_memory(args: argparse.Namespace, *, config_path: Path, repo_root: Pa
         )
         return
     if args.memory_command == "search":
-        print_json(
-            search_memory(
-                repo_root,
-                runtime_root,
-                args.query,
-                limit=args.limit,
-                backend=selected_backend,
-                goal=config.eval_goal,
-                config_path=config_path,
-            )
+        payload = search_memory(
+            repo_root,
+            runtime_root,
+            args.query,
+            limit=args.limit,
+            backend=selected_backend,
+            goal=config.eval_goal,
+            config_path=config_path,
         )
+        output_path = getattr(args, "output", None)
+        if output_path:
+            with open(output_path, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print_json(payload)
         return
     print_json(
         memory_status(

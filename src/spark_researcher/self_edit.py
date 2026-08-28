@@ -1004,7 +1004,10 @@ def proposal_status(config_path: Path) -> dict[str, Any]:
     proposals = []
     if root.exists():
         for path in sorted(root.glob("*/proposal.json"), reverse=True):
-            proposal = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                proposal = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
             review = _load_json(path.parent / "review.json")
             proposals.append(_proposal_summary(proposal, review))
     return {"proposal_count": len(proposals), "proposals": proposals}

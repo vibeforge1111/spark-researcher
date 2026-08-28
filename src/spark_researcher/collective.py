@@ -35,68 +35,92 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def now_stamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+    try:
+        return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+
+    except Exception:
+        return ""
 def _slug(value: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
-    return normalized or "generalist"
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+        return normalized or "generalist"
 
 
+
+    except Exception:
+        return ""
 def _repo_key(value: str) -> str:
-    repo_name = value.strip().split("/")[-1]
-    if repo_name.startswith("domain-chip-"):
-        repo_name = repo_name[len("domain-chip-") :]
-    return _slug(repo_name)
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        repo_name = value.strip().split("/")[-1]
+        if repo_name.startswith("domain-chip-"):
+            repo_name = repo_name[len("domain-chip-") :]
+        return _slug(repo_name)
+
+    except Exception:
+        return ""
 def _parse_frontmatter(raw: str) -> dict[str, Any]:
-    lines = raw.splitlines()
-    if not lines or lines[0].strip() != "---":
+    if not isinstance(raw, str): raw = str(raw or '')
+    try:
+        lines = raw.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return {}
+        payload: dict[str, Any] = {}
+        current_key: str | None = None
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            if line.startswith("  - ") and current_key is not None:
+                existing = payload.get(current_key)
+                if not isinstance(existing, list):
+                    payload[current_key] = [] if existing is None else [existing]
+                payload[current_key].append(line[4:].strip())
+                continue
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            current_key = key.strip()
+            parsed = value.strip()
+            if parsed == "":
+                payload[current_key] = []
+                continue
+            if parsed in {"true", "false"}:
+                payload[current_key] = parsed == "true"
+                continue
+            try:
+                payload[current_key] = json.loads(parsed)
+            except json.JSONDecodeError:
+                payload[current_key] = parsed
+        return payload
+
+
+    except Exception:
         return {}
-    payload: dict[str, Any] = {}
-    current_key: str | None = None
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if line.startswith("  - ") and current_key is not None:
-            existing = payload.get(current_key)
-            if not isinstance(existing, list):
-                payload[current_key] = [] if existing is None else [existing]
-            payload[current_key].append(line[4:].strip())
-            continue
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        current_key = key.strip()
-        parsed = value.strip()
-        if parsed == "":
-            payload[current_key] = []
-            continue
-        if parsed in {"true", "false"}:
-            payload[current_key] = parsed == "true"
-            continue
-        try:
-            payload[current_key] = json.loads(parsed)
-        except json.JSONDecodeError:
-            payload[current_key] = parsed
-    return payload
-
 def _parse_legacy_manifest_fields(raw: str) -> dict[str, str]:
-    payload: dict[str, str] = {}
-    current_section: str | None = None
-    for raw_line in raw.splitlines():
-        line = raw_line.rstrip()
-        if not line or line.lstrip().startswith("#"):
-            continue
-        if not raw_line.startswith(" "):
-            current_section = line[:-1].strip() if line.endswith(":") else None
-            continue
-        if not current_section or ":" not in line:
-            continue
-        key, value = line.strip().split(":", 1)
-        payload[f"{current_section}.{key.strip()}"] = value.strip()
-    return payload
+    if not isinstance(raw, str): raw = str(raw or '')
+    try:
+        payload: dict[str, str] = {}
+        current_section: str | None = None
+        for raw_line in raw.splitlines():
+            line = raw_line.rstrip()
+            if not line or line.lstrip().startswith("#"):
+                continue
+            if not raw_line.startswith(" "):
+                current_section = line[:-1].strip() if line.endswith(":") else None
+                continue
+            if not current_section or ":" not in line:
+                continue
+            key, value = line.strip().split(":", 1)
+            payload[f"{current_section}.{key.strip()}"] = value.strip()
+        return payload
 
 
+
+    except Exception:
+        return {}
 def _manifest_metadata(repo_root: Path) -> dict[str, Any]:
     path = repo_root / "AUTORESEARCH.md"
     if not path.exists():

@@ -108,7 +108,7 @@ def append_queue_trials(config_path: Path, trials: list[CandidateTrial], *, conf
                 tmp_name = handle.name
                 handle.write(serialized)
             os.replace(tmp_name, path)
-        except Exception:
+        except Exception as _e:
             if tmp_name:
                 try:
                     os.unlink(tmp_name)

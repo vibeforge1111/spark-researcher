@@ -66,6 +66,10 @@ _FACTUAL_LOOKUP_PREFIXES = (
     "give me",
 )
 
+# Compile-once for _overlap_tokens, which runs once per draft + once per
+# citation (up to 5) per advisory verification round.
+_OVERLAP_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+
 
 def _response_text(payload: Any) -> str:
     if isinstance(payload, dict):
@@ -145,7 +149,7 @@ def _used_note_ids(text: str, note_ids: list[str]) -> list[str]:
 def _overlap_tokens(text: str) -> set[str]:
     return {
         token
-        for token in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        for token in _OVERLAP_TOKEN_PATTERN.findall(str(text or "").lower())
         if len(token) >= 4 and token not in _OVERLAP_STOPWORDS
     }
 

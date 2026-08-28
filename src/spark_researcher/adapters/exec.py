@@ -37,44 +37,66 @@ _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
 
 def _now_slug() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+    try:
+        return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
 
 
+
+    except Exception:
+        return ""
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    try:
+        return Path(__file__).resolve().parents[3]
 
 
+
+    except Exception:
+        return Path(".")
 def _powershell_executable() -> str:
-    for candidate in ("pwsh", "powershell"):
-        if shutil.which(candidate):
-            return candidate
-    return ""
+    try:
+        for candidate in ("pwsh", "powershell"):
+            if shutil.which(candidate):
+                return candidate
+        return ""
 
 
+
+    except Exception:
+        return ""
 def _default_command(model: str) -> list[str]:
-    if model != "codex":
-        return []
-    wrapper_path = _repo_root() / "scripts" / "codex_frontier_wrapper.ps1"
-    powershell = _powershell_executable()
-    if not powershell or not wrapper_path.exists():
-        return []
-    return [
-        powershell,
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(wrapper_path),
-        "{system_prompt_path}",
-        "{user_prompt_path}",
-        "{response_path}",
-    ]
+    if not isinstance(model, str): model = str(model or '')
+    try:
+        if model != "codex":
+            return []
+        wrapper_path = _repo_root() / "scripts" / "codex_frontier_wrapper.ps1"
+        powershell = _powershell_executable()
+        if not powershell or not wrapper_path.exists():
+            return []
+        return [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper_path),
+            "{system_prompt_path}",
+            "{user_prompt_path}",
+            "{response_path}",
+        ]
 
 
+
+    except Exception:
+        return []
 def _truthy_env(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+    if not isinstance(name, str): name = str(name or '')
+    try:
+        return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+
+    except Exception:
+        return False
 def _executable_name(executable: str) -> str:
     normalized = executable.strip().strip("\"'")
     return Path(normalized).name.lower()

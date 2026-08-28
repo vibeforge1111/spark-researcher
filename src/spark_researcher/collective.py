@@ -44,76 +44,101 @@ def _slug(value: str) -> str:
 
 
 def _repo_key(value: str) -> str:
-    repo_name = value.strip().split("/")[-1]
-    if repo_name.startswith("domain-chip-"):
-        repo_name = repo_name[len("domain-chip-") :]
-    return _slug(repo_name)
+    if not isinstance(value, str): value = str(value or '')
+    try:
+        repo_name = value.strip().split("/")[-1]
+        if repo_name.startswith("domain-chip-"):
+            repo_name = repo_name[len("domain-chip-") :]
+        return _slug(repo_name)
+
+    except Exception:
+        return ""
 def _parse_frontmatter(raw: str) -> dict[str, Any]:
-    lines = raw.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-    payload: dict[str, Any] = {}
-    current_key: str | None = None
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if line.startswith("  - ") and current_key is not None:
-            existing = payload.get(current_key)
-            if not isinstance(existing, list):
-                payload[current_key] = [] if existing is None else [existing]
-            payload[current_key].append(line[4:].strip())
-            continue
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        current_key = key.strip()
-        parsed = value.strip()
-        if parsed == "":
-            payload[current_key] = []
-            continue
-        if parsed in {"true", "false"}:
-            payload[current_key] = parsed == "true"
-            continue
-        try:
-            payload[current_key] = json.loads(parsed)
-        except json.JSONDecodeError:
-            payload[current_key] = parsed
-    return payload
+    if not isinstance(raw, str): raw = str(raw or '')
+    try:
+        lines = raw.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return {}
+        payload: dict[str, Any] = {}
+        current_key: str | None = None
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            if line.startswith("  - ") and current_key is not None:
+                existing = payload.get(current_key)
+                if not isinstance(existing, list):
+                    payload[current_key] = [] if existing is None else [existing]
+                payload[current_key].append(line[4:].strip())
+                continue
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            current_key = key.strip()
+            parsed = value.strip()
+            if parsed == "":
+                payload[current_key] = []
+                continue
+            if parsed in {"true", "false"}:
+                payload[current_key] = parsed == "true"
+                continue
+            try:
+                payload[current_key] = json.loads(parsed)
+            except json.JSONDecodeError:
+                payload[current_key] = parsed
+        return payload
 
+
+    except Exception:
+        return {}
 def _parse_legacy_manifest_fields(raw: str) -> dict[str, str]:
-    payload: dict[str, str] = {}
-    current_section: str | None = None
-    for raw_line in raw.splitlines():
-        line = raw_line.rstrip()
-        if not line or line.lstrip().startswith("#"):
-            continue
-        if not raw_line.startswith(" "):
-            current_section = line[:-1].strip() if line.endswith(":") else None
-            continue
-        if not current_section or ":" not in line:
-            continue
-        key, value = line.strip().split(":", 1)
-        payload[f"{current_section}.{key.strip()}"] = value.strip()
-    return payload
+    if not isinstance(raw, str): raw = str(raw or '')
+    try:
+        payload: dict[str, str] = {}
+        current_section: str | None = None
+        for raw_line in raw.splitlines():
+            line = raw_line.rstrip()
+            if not line or line.lstrip().startswith("#"):
+                continue
+            if not raw_line.startswith(" "):
+                current_section = line[:-1].strip() if line.endswith(":") else None
+                continue
+            if not current_section or ":" not in line:
+                continue
+            key, value = line.strip().split(":", 1)
+            payload[f"{current_section}.{key.strip()}"] = value.strip()
+        return payload
 
 
-def _manifest_metadata(repo_root: Path) -> dict[str, Any]:
-    path = repo_root / "AUTORESEARCH.md"
-    if not path.exists():
+
+    except Exception:
         return {}
-    raw = path.read_text(encoding="utf-8")
-    metadata = _parse_frontmatter(raw)
-    legacy_fields = _parse_legacy_manifest_fields(raw)
-    metadata.update(legacy_fields)
-    return metadata
+def _manifest_metadata(repo_root: Path) -> dict[str, Any]:
+    if repo_root is not None and not hasattr(repo_root, 'resolve'): from pathlib import Path; repo_root = Path(str(repo_root))
+    try:
+        path = repo_root / "AUTORESEARCH.md"
+        if not path.exists():
+            return {}
+        raw = path.read_text(encoding="utf-8")
+        metadata = _parse_frontmatter(raw)
+        legacy_fields = _parse_legacy_manifest_fields(raw)
+        metadata.update(legacy_fields)
+        return metadata
 
 
+
+    except Exception:
+        return {}
 def latest_metric_run(runtime_root: Path) -> dict[str, Any] | None:
-    rows = read_jsonl(ledger_path(runtime_root))
-    metric_rows = [row for row in rows if isinstance(row.get("metric_value"), (int, float))]
-    return metric_rows[-1] if metric_rows else None
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    try:
+        rows = read_jsonl(ledger_path(runtime_root))
+        metric_rows = [row for row in rows if isinstance(row.get("metric_value"), (int, float))]
+        return metric_rows[-1] if metric_rows else None
 
 
+
+    except Exception:
+        return {}
 def _runtime_source(record: dict[str, Any], *, agent_id: str, run_id: str) -> dict[str, Any]:
     chip_result = record.get("chip_result", {})
     comparison_class = ""

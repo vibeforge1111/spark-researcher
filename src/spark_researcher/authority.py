@@ -113,7 +113,7 @@ def _contains_string(payload: Any, needle: str) -> bool:
         return any(_contains_string(key, needle) or _contains_string(value, needle) for key, value in payload.items())
     if isinstance(payload, (list, tuple, set)):
         return any(_contains_string(item, needle) for item in payload)
-    return str(payload) == needle
+    return needle in str(payload)
 
 
 def governor_decision_has_canonical_binding(governor_decision: dict[str, Any] | None) -> bool:

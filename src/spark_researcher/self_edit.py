@@ -115,7 +115,10 @@ def _apply_result_ledger_path(runtime_root: Path, proposal_id: str) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    try:
+            return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except json.JSONDecodeError:
+            return {}
 
 
 def _harness_artifact_ref(kind: str, path_or_uri: str, summary: str) -> dict[str, Any]:

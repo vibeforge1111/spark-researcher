@@ -48,7 +48,7 @@ def _has_pi_identity() -> bool:
 
 def ruvector_status() -> dict[str, Any]:
     command = _resolve_command()
-    executable = shutil.which(command[0]) if command else None
+    executable = shutil.which(command[0]) if command and len(command) > 0 else None
     available = executable is not None
     has_pi = _has_pi_identity()
     status = "available" if available and has_pi else "missing_pi" if available else "missing_cli"

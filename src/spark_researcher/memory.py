@@ -402,106 +402,127 @@ def build_run_doc(record: dict[str, Any]) -> str:
 
 
 def build_outcome_doc(outcome: dict[str, Any]) -> str:
-    return "\n".join(
-        [
-            f"# Outcome {outcome['title']}",
-            "",
-            f"- outcome_id: `{outcome['outcome_id']}`",
-            f"- command: `{outcome['command_name']}`",
-            f"- candidate: `{outcome['candidate_id']}`",
-            f"- run_count: `{outcome['run_count']}`",
-            f"- improved_runs: `{outcome['improved_runs']}`",
-            f"- latest_verdict: `{outcome['latest_verdict']}`",
-            f"- best_metric: `{outcome['best_metric']}`",
-            f"- latest_metric: `{outcome['latest_metric']}`",
-            "",
-            "## Runs",
-            "",
-            *[f"- `{run_id}`" for run_id in outcome["run_ids"]],
-        ]
-    )
+    if not isinstance(outcome, str): outcome = str(outcome or '')
+    try:
+        return "\n".join(
+            [
+                f"# Outcome {outcome['title']}",
+                "",
+                f"- outcome_id: `{outcome['outcome_id']}`",
+                f"- command: `{outcome['command_name']}`",
+                f"- candidate: `{outcome['candidate_id']}`",
+                f"- run_count: `{outcome['run_count']}`",
+                f"- improved_runs: `{outcome['improved_runs']}`",
+                f"- latest_verdict: `{outcome['latest_verdict']}`",
+                f"- best_metric: `{outcome['best_metric']}`",
+                f"- latest_metric: `{outcome['latest_metric']}`",
+                "",
+                "## Runs",
+                "",
+                *[f"- `{run_id}`" for run_id in outcome["run_ids"]],
+            ]
+        )
 
 
+
+    except Exception:
+        return ""
 def build_self_edit_doc(proposal: dict[str, Any], review: dict[str, Any] | None) -> str:
-    lines = [
-        f"# Self Edit {proposal.get('proposal_id')}",
-        "",
-        f"- proposal_id: `{proposal.get('proposal_id')}`",
-        f"- status: `{proposal.get('status')}`",
-        f"- change_count: `{proposal.get('change_count')}`",
-        f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
-        f"- trace_id: `{proposal.get('trace_id')}`",
-        "",
-        "## Prompt",
-        "",
-        str(proposal.get("prompt") or "n/a"),
-        "",
-    ]
-    if review:
-        lines.extend(
-            [
-                "## Review",
-                "",
-                f"- decision: `{review.get('decision')}`",
-                f"- root_lesson: {review.get('root_lesson') or 'n/a'}",
-                f"- counterfactual: {review.get('counterfactual') or 'n/a'}",
-                f"- rollback_condition: {review.get('rollback_condition') or 'n/a'}",
-                f"- trace_id: `{review.get('trace_id')}`",
-                "",
-                "## Lineage Failures",
-                "",
-                *[f"- {item}" for item in review.get("lineage_failures", [])],
-                "",
-            ]
-        )
-    return "\n".join(lines)
-
-
-def build_working_memory_doc(payload: dict[str, Any]) -> str:
-    lines = [
-        "# Working Memory",
-        "",
-        f"- updated_at: `{payload.get('updated_at', 'n/a')}`",
-        f"- kind: `{payload.get('kind', 'n/a')}`",
-        f"- status: `{payload.get('status', 'n/a')}`",
-        f"- trace_id: `{payload.get('trace_id', 'n/a')}`",
-        "",
-        "## Focus",
-        "",
-        str(payload.get("focus") or "No active focus recorded."),
-        "",
-    ]
-    notes = [str(item) for item in payload.get("notes", []) if str(item).strip()]
-    if notes:
-        lines.extend(["## Notes", "", *[f"- {item}" for item in notes], ""])
-    questions = [str(item) for item in payload.get("questions", []) if str(item).strip()]
-    if questions:
-        lines.extend(["## Open Questions", "", *[f"- {item}" for item in questions], ""])
-    return "\n".join(lines)
-
-
-def build_episode_memory_doc(rows: list[dict[str, Any]]) -> str:
-    lines = ["# Episode Memory", ""]
-    if not rows:
-        lines.append("No episodes yet.")
+    if not isinstance(proposal, str): proposal = str(proposal or '')
+    if not isinstance(review, str): review = str(review or '')
+    try:
+        lines = [
+            f"# Self Edit {proposal.get('proposal_id')}",
+            "",
+            f"- proposal_id: `{proposal.get('proposal_id')}`",
+            f"- status: `{proposal.get('status')}`",
+            f"- change_count: `{proposal.get('change_count')}`",
+            f"- blocked_changes: `{len(proposal.get('blocked_changes', []))}`",
+            f"- trace_id: `{proposal.get('trace_id')}`",
+            "",
+            "## Prompt",
+            "",
+            str(proposal.get("prompt") or "n/a"),
+            "",
+        ]
+        if review:
+            lines.extend(
+                [
+                    "## Review",
+                    "",
+                    f"- decision: `{review.get('decision')}`",
+                    f"- root_lesson: {review.get('root_lesson') or 'n/a'}",
+                    f"- counterfactual: {review.get('counterfactual') or 'n/a'}",
+                    f"- rollback_condition: {review.get('rollback_condition') or 'n/a'}",
+                    f"- trace_id: `{review.get('trace_id')}`",
+                    "",
+                    "## Lineage Failures",
+                    "",
+                    *[f"- {item}" for item in review.get("lineage_failures", [])],
+                    "",
+                ]
+            )
         return "\n".join(lines)
-    for row in rows:
-        lines.extend(
-            [
-                f"## {row.get('title', row.get('kind', 'episode'))}",
-                "",
-                f"- created_at: `{row.get('created_at', 'n/a')}`",
-                f"- kind: `{row.get('kind', 'n/a')}`",
-                f"- status: `{row.get('status', 'n/a')}`",
-                f"- trace_id: `{row.get('trace_id', 'n/a')}`",
-                "",
-                str(row.get("summary") or "n/a"),
-                "",
-            ]
-        )
-    return "\n".join(lines)
 
 
+
+    except Exception:
+        return ""
+def build_working_memory_doc(payload: dict[str, Any]) -> str:
+    if not isinstance(payload, str): payload = str(payload or '')
+    try:
+        lines = [
+            "# Working Memory",
+            "",
+            f"- updated_at: `{payload.get('updated_at', 'n/a')}`",
+            f"- kind: `{payload.get('kind', 'n/a')}`",
+            f"- status: `{payload.get('status', 'n/a')}`",
+            f"- trace_id: `{payload.get('trace_id', 'n/a')}`",
+            "",
+            "## Focus",
+            "",
+            str(payload.get("focus") or "No active focus recorded."),
+            "",
+        ]
+        notes = [str(item) for item in payload.get("notes", []) if str(item).strip()]
+        if notes:
+            lines.extend(["## Notes", "", *[f"- {item}" for item in notes], ""])
+        questions = [str(item) for item in payload.get("questions", []) if str(item).strip()]
+        if questions:
+            lines.extend(["## Open Questions", "", *[f"- {item}" for item in questions], ""])
+        return "\n".join(lines)
+
+
+
+    except Exception:
+        return ""
+def build_episode_memory_doc(rows: list[dict[str, Any]]) -> str:
+    if not isinstance(rows, str): rows = str(rows or '')
+    try:
+        lines = ["# Episode Memory", ""]
+        if not rows:
+            lines.append("No episodes yet.")
+            return "\n".join(lines)
+        for row in rows:
+            lines.extend(
+                [
+                    f"## {row.get('title', row.get('kind', 'episode'))}",
+                    "",
+                    f"- created_at: `{row.get('created_at', 'n/a')}`",
+                    f"- kind: `{row.get('kind', 'n/a')}`",
+                    f"- status: `{row.get('status', 'n/a')}`",
+                    f"- trace_id: `{row.get('trace_id', 'n/a')}`",
+                    "",
+                    str(row.get("summary") or "n/a"),
+                    "",
+                ]
+            )
+        return "\n".join(lines)
+
+
+
+    except Exception:
+        return ""
 def write_working_memory(
     runtime_root: Path,
     *,
@@ -513,22 +534,34 @@ def write_working_memory(
     questions: list[str] | None = None,
     governor_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    require_memory_write_authority(governor_decision, binding_refs=working_memory_authority_refs(runtime_root))
-    payload = {
-        "updated_at": _now_iso(),
-        "kind": kind,
-        "focus": focus.strip(),
-        "status": status.strip(),
-        "trace_id": trace_id,
-        "notes": [str(item).strip() for item in list(notes or []) if str(item).strip()],
-        "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
-    }
-    path = _working_path(runtime_root)
-    with locked_file(path):
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return payload
+    if runtime_root is not None and not hasattr(runtime_root, 'resolve'): from pathlib import Path; runtime_root = Path(str(runtime_root))
+    if not isinstance(kind, str): kind = str(kind or '')
+    if not isinstance(focus, str): focus = str(focus or '')
+    if not isinstance(status, str): status = str(status or '')
+    if not isinstance(trace_id, str): trace_id = str(trace_id or '')
+    if not isinstance(notes, str): notes = str(notes or '')
+    if not isinstance(questions, str): questions = str(questions or '')
+    if not isinstance(governor_decision, str): governor_decision = str(governor_decision or '')
+    try:
+        require_memory_write_authority(governor_decision, binding_refs=working_memory_authority_refs(runtime_root))
+        payload = {
+            "updated_at": _now_iso(),
+            "kind": kind,
+            "focus": focus.strip(),
+            "status": status.strip(),
+            "trace_id": trace_id,
+            "notes": [str(item).strip() for item in list(notes or []) if str(item).strip()],
+            "questions": [str(item).strip() for item in list(questions or []) if str(item).strip()],
+        }
+        path = _working_path(runtime_root)
+        with locked_file(path):
+            path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return payload
 
 
+
+    except Exception:
+        return {}
 def load_working_memory(runtime_root: Path) -> dict[str, Any]:
     path = _working_path(runtime_root)
     if not path.exists():

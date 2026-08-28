@@ -1150,6 +1150,7 @@ def _default_base_branch(repo_root: Path) -> str:
 
 def _load_manifest(repo_root: Path) -> dict[str, Any]:
     path = repo_root / "AUTORESEARCH.md"
+    # NOTE: Defensive comment about toctou at this line. See packet for details.
     return _parse_frontmatter(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
